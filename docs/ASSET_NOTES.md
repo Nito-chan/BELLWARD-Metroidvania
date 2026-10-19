@@ -1,6 +1,7 @@
 # Asset notes — sprite sheet & animation data format
 
-Status: **v1** (M1). The tile/parallax/hero data below is live in `src/data/art.ts`; see D021 for
+Status: **v1.1** (M2 adds the full hero clip table). The tile/parallax/hero data below is live in
+`src/data/art.ts`; see D021 for
 why the shipped content is typed TypeScript rather than runtime JSON. The JSON shape described
 here remains the contract for external packs and in-house art dropped in later (design doc §10.4).
 
@@ -18,28 +19,46 @@ here remains the contract for external packs and in-house art dropped in later (
 `MANIFEST.json` has 4 entries, all `commercialUse: true`; `npm run assets:check` reports
 474 on-disk files and 0 warnings.
 
-### Hero sheets
+### Hero sheets (M2: all eight clips live)
 
-- Source: `aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Idle.png` and `_Run.png`.
-- Grid: 120×80 per frame, 10 columns, one row; 10 frames per clip.
+- Source: `aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/` — `_Idle`, `_Run`, `_TurnAround`,
+  `_Jump`, `_Fall`, `_Attack`, `_Attack2`, `_Dash` (`_JumpFallInbetween` is unused: the plain jump
+  and fall reads are cleaner at 8 px/tick rise).
+- Grid: 120×80 per frame, 10 columns, one row, no padding.
 - Pivot: **feet-center (54, 80)** — measured from the idle silhouette (x 45..63, feet at y 79).
   Flipping is `sprite.scale.x = ±1` around that pivot.
-- Timing: idle 8 ticks/frame, run 5 ticks/frame (sim ticks, 60 Hz).
-- The procedural fallback is a 6-frame 32×48 knight with origin (16, 46); it uses the same clip
-  interface, so `HeroView` needs no fallback-specific code.
+- All-or-nothing: `KNIGHT_REQUIRED` lists every sheet; if a single one fails to load the whole hero
+  falls back to the procedural knight rather than playing a gap.
+- Clip table (`src/data/art.ts` → `HERO_ART.animations`, ticks at 60 Hz):
+
+  | Clip      | Sheet         | Frames | Ticks per frame       | Loop | Notes                             |
+  | --------- | ------------- | ------ | --------------------- | ---- | --------------------------------- |
+  | `idle`    | `_Idle`       | 10     | 8                     | yes  |                                   |
+  | `run`     | `_Run`        | 10     | 5                     | yes  |                                   |
+  | `turn`    | `_TurnAround` | 3      | 3                     | no   | holds last frame                  |
+  | `jump`    | `_Jump`       | 3      | 3                     | no   | rise pose                         |
+  | `fall`    | `_Fall`       | 3      | 6                     | yes  | held through the fall             |
+  | `attack1` | `_Attack`     | 4      | 3, 3, 4, 6 (16 total) | no   | window ticks 4–11 (cross-checked) |
+  | `attack2` | `_Attack2`    | 6      | 2, 3, 3, 3, 4, 5 (20) | no   | window ticks 5–15 (cross-checked) |
+  | `dash`    | `_Dash`       | 2      | 3, 5                  | no   | stretched over the 11-tick dash   |
+
+  A unit test asserts `PLAYER.attack.clipTicks` sums match the sheet frame counts, so a retimed
+  swing cannot silently desynchronize from its damage window.
+
+- The procedural fallback authors the same eight clip names with the same durations (12 poses,
+  32×48 knight, origin (16, 46)); `HeroView` needs no fallback-specific code.
 - Run frames lift the feet a few pixels above the idle contact line; the contact shadow keeps the
-  hero visually grounded. Per-clip foot offsets are deliberately deferred until the real
-  controller (M2) shows whether it matters.
+  hero visually grounded. Per-clip foot offsets remain deferred until the M9 polish pass.
 
 ### Tiles
 
 - Roles are semantic (`floor`, `floorFill`, `wall`, `wallTrim`, `pillar`, `ledge`, `window`,
   `backgroundBrick`, `puddle`, `rubble`, `cobweb`); rooms never name atlas cells (see
-  `src/world/tiles.ts`, which also carries the solid/one-way flags M2 will read).
+  `src/world/tiles.ts`, which carries the solid/one-way flags the M2 collision solver reads).
 - The church tileset is a chunk kit, not a uniform autotile sheet: only verified 16px cells that
   repeat cleanly are listed in `TILE_ART`. Floor variants are picked per cell by a stable integer
   hash, so a room looks identical every run without hand-placed variation.
-- `ledge` reuses three floor-top cells and is flagged `oneWay` for M2 collision.
+- `ledge` reuses three floor-top cells and is flagged `oneWay` (collision reads this flag).
 
 ### Background layers ("parallax" contract)
 

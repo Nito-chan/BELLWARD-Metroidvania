@@ -218,6 +218,74 @@ the same logical keys.
 **Alternatives:** runtime JSON now (rejected: untyped and needs a schema validator before it buys
 anything); hybrid (revisit when content is authored outside the repo).
 
+## D022 — 2026-10-19 — Input is sampled once per fixed tick, with queued edges
+
+**Decision:** `InputManager` keeps `held` / `pressed` / `released` sets and is polled exactly once
+per fixed simulation tick (`Game.onTick → scene.update(tick, input.snapshot())`). Key events mutate
+that state between ticks; press/release edges are queued and consumed by the next snapshot, OS
+auto-repeat is ignored, window blur clears every held key, and the gamepad is polled inside
+`snapshot()`. The simulation never sees a DOM event.
+
+**Why:** the simulation stays a pure function of (config, tick index, input snapshots), which is what
+makes the controller unit-testable and replays deterministic. Queuing edges matters at 60 Hz: a tap
+that lands between two ticks would otherwise be dropped. An injectable pad reader keeps the manager
+DOM-free in tests while `navigator.getGamepads()` remains the default in the browser.
+
+**Alternatives:** reading `keydown` state directly inside the controller (rejected: couples the sim
+to the DOM and loses edge semantics); storing only an "is down" map (rejected: drops taps).
+
+## D023 — 2026-10-19 — Collision semantics: axis-separated sub-steps, one-way rules, corner forgiveness
+
+**Decision:** `moveAndCollide` resolves X then Y, each split into sub-steps of at most
+`PHYSICS.maxStep` (8 px). Out-of-bounds cells block on every side, so a room's border is its wall.
+One-way platforms block downward motion only when the body was above the platform's top edge at the
+start of the sub-step, and never while a drop-through is active; they never block sideways or upward
+motion. A body is grounded only on a _resting contact_ — feet within 0.5 px of a solid row's top
+edge and `vy >= 0`. A rising body that clips a ceiling corner by up to `PHYSICS.cornerCorrection`
+(6 px) is nudged sideways (preferred side = direction of travel) and keeps rising.
+
+**Why:** the axis order plus sub-stepping is the simplest scheme that cannot tunnel at any reachable
+speed (asserted at 4× the terminal fall speed) and never teleports a body through a floor while it
+is pushed horizontally. The two grounded guards were forced by a real bug: "is there a solid tile
+below the feet" is _true_ while the feet are inside a one-way platform during a rise, so the
+controller believed it had landed at y 303 and froze mid-jump. Drop-throughs are a controller
+concern (12 tick window, 40 px/s nudge) rather than a solver mode.
+
+**Alternatives:** swept AABB against a tile query (rejected: more code, identical result at these
+speeds); a separate one-way entity list (rejected: the tile-role table already encodes it).
+
+## D024 — 2026-10-19 — Player tuning is config data, cross-checked against the animation data
+
+**Decision:** every feel number lives in `src/config/player.ts` (size, ground/air accel + caps,
+friction/skid, the jump arc, dash burst/cooldown, attack clip ticks + active windows, buffers,
+coyote, drop-through) with the derived figures documented inline. `tests/unit/player.test.ts`
+asserts the derived behavior (apex 60–85 px, cut jump 10–45 px, skid, coyote expiry, input buffer,
+drop-through, dash cooldown, combo chain) and cross-checks `PLAYER.attack.clipTicks` against the
+authored `HERO_ART` clip lengths. The controller publishes a clip name plus a `restarted` flag and
+never touches the animator or the sprite.
+
+**Why:** the numbers _are_ the design, so they belong in one typed table where a reviewer sees them
+and a test proves them. Cross-checking the attack windows against the art data means a retimed swing
+cannot silently desynchronize from its hitbox window, and the view stays a pure consumer of poses.
+
+**Alternatives:** tuning in JSON (rejected for now, see D021); letting the controller drive frames
+(rejected: the animator stays a dumb, replay-stable frame clock).
+
+## D025 — 2026-10-19 — The hero pose contract, and all-or-nothing fallback for the packed knight
+
+**Decision:** `HeroView.setPose({x, y, facing, animation, restart, grounded})` is the only entry
+point; the contact shadow belongs to the hero view and shrinks/fades while airborne. The packed
+knight is used only when _all_ eight sheets in `KNIGHT_REQUIRED` load; otherwise the hero falls back
+to the procedural knight, which now authors 12 poses and the same clip names and durations.
+
+**Why:** a pose object keeps the view data-driven instead of an if-chain per state. Parenting the
+shadow to the pose fixed a latent M1 bug — the shadow was added to the scene container at the world
+origin and never followed the hero. All-or-nothing fallback avoids the worst case (a knight missing
+the dash or attack sheet) which would otherwise surface as a runtime throw during play.
+
+**Alternatives:** per-sheet fallback (rejected: half a knight is worse than a procedural one);
+shadow as a separate scene layer (rejected: it is part of the actor's silhouette).
+
 ---
 
 (append new entries at the bottom; never edit old ones — correct them with a new entry)

@@ -1,8 +1,9 @@
-# Controls (planned)
+# Controls
 
-Status: **planned defaults** — implemented by the InputManager in M2. This table is the contract
-the binding editor (M5+) and docs will follow; the live values ship through
-`InputManager.serialize()`.
+Status: **implemented (M2)**. These are the live defaults, sourced from `src/config/input.ts` and
+round-tripped by `InputManager.serialize()`; this table is the contract the binding editor (M5+)
+will edit. Keyboard events are matched on `KeyboardEvent.code` (physical key), so layouts like
+AZERTY still use the same physical positions.
 
 ## Keyboard (defaults)
 
@@ -22,13 +23,15 @@ the binding editor (M5+) and docs will follow; the live values ship through
 | pause    | Escape         |           |
 
 Note: the design doc's original list put heal on A and cast on S, which collide with A/S for
-movement; the collision is resolved here by moving heal to L and cast to I. Final key list is
-validated for feel in M2 — any change is logged in DECISIONS.md.
+movement; the collision is resolved here by moving heal to L and cast to I. The key list was
+validated in M2 with no changes; any future change is logged in DECISIONS.md.
 
 ## Gamepad (standard mapping)
 
 Left stick / D-pad = move; A = jump; X = attack; B = dash; Y = heal (hold); RB = cast;
-D-pad up = interact; Start = pause; Back = map.
+D-pad up = interact; Start = pause; Back = map. Axes use a 0.4 deadzone and are combined with the
+D-pad. Implemented against the standard mapping and unit-tested with an injected pad; not yet
+verified on physical hardware.
 
 ## Touch overlay
 

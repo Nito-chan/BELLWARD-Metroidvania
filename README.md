@@ -10,9 +10,13 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   debug overlay (F1), asset manifest validator, unit + E2E test harness.
 - **M1 — Art pipeline + renderer base: complete.** Asset fetcher and license archive, semantic
   tilemap/world model, packed art with procedural fallbacks, parallax, camera, animated hero, and
-  the first room: **The Belfry Terrace**. All gates green; the scripted walker is a stand-in for
-  M2 input.
-- Next: M2 — player controller, input mapping (`docs/CONTROLS.md`) and collision on the tile roles.
+  the first room: **The Belfry Terrace**.
+- **M2 — Input, player controller & collision: complete.** Deterministic 60 Hz player state machine
+  (idle/run/skid/jump/fall/attack/dash) with coyote time, input buffering, variable jump height and
+  a two-stage attack; tile collision with one-way platforms, drop-through and ceiling corner
+  correction; keyboard + gamepad bindings (`docs/CONTROLS.md`); camera look-ahead; the terrace now
+  has two climbable routes. All gates green.
+- Next: M3 — audio (Howler): music, ambience and the movement SFX set.
 
 ## Quick start
 
@@ -45,14 +49,17 @@ First-time E2E setup: `npx playwright install chromium`.
 
 ```
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
-src/config      tunable constants (no magic numbers in logic)
+src/config      tunable constants (input bindings, player feel, physics, render; no magic numbers)
 src/data        art keys/rects/clips and room definitions (content, no logic)
-src/world       semantic tile roles, tilemap and room model (M2 collision reads these)
+src/input       keyboard/gamepad manager and per-tick input snapshots
+src/physics     body model and the tile collision solver
+src/player      player state machine (movement, jump, attack, dash)
+src/world       semantic tile roles, tilemap and room model (collision reads these)
 src/render      art provider, procedural fallbacks, camera, layers, hero view, room scene
 src/debug       F1 overlay + debug state contract
 scripts         asset fetcher/validator, screenshot capture
-tests/unit      Vitest (fixed step, loop, bus, RNG, math, manifest, camera, tilemap, room, animator)
-tests/e2e       Playwright smoke (boot + packed art, patrol camera, frame rate, overlay)
+tests/unit      Vitest (core, world, input, collision, player, camera, animator, manifest)
+tests/e2e       Playwright smoke (boot + packed art, keyboard movement, jump, collision, fps, overlay)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

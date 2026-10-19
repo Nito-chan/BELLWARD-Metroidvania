@@ -154,3 +154,106 @@ the first playable test room.
 Player controller + input mapping (`docs/CONTROLS.md`): acceleration/friction, jump with coyote
 time and variable height, attack/dash placeholders, collision against the tile roles (solid and
 one-way), camera follow polish, and the first traversal gate for the metroidvania loop.
+
+---
+
+## M2 — Input, player controller & collision (2026-10-19)
+
+**Commit:** `96066b7` · **Status:** complete, all gates green.
+
+### Shipped
+
+- **Input (`src/config/input.ts`, `src/input/*`):** 12 `ACTIONS`, keyboard bindings keyed by
+  `KeyboardEvent.code` (the `docs/CONTROLS.md` contract), standard-mapping gamepad buttons/axes with
+  a 0.4 stick deadzone, and `InputManager` — DOM-free `handleKey(code, down)` / `blur()` /
+  `snapshot()` with single-fire press/release edges queued between ticks, auto-repeat ignored and an
+  injectable pad reader for tests. `serialize()` emits the versioned binding document the M5 binding
+  editor will round-trip.
+- **Tile collision (`src/physics/*`, `src/config/physics.ts`):** `Body` AABB and `moveAndCollide`,
+  axis-separated (X then Y) in ≤8 px sub-steps; out-of-bounds cells block on every side; one-way
+  platforms catch only downward motion that started above their top edge and stand down during a
+  drop-through; a resting-contact ground probe; 6 px ceiling corner correction. `Tilemap.isWall`
+  marks sideways blockers (one-way platforms are never walls).
+- **Player controller (`src/player/PlayerController.ts`, `src/config/player.ts`):** FSM
+  idle/run/skid/jump/fall/attack/dash. Ground/air acceleration with friction and a 140 px/s run cap,
+  560 px/s jump under 2100/2500 px/s² gravity (apex ≈70 px), variable height, apex float, coyote
+  time, jump/attack buffers, skid deceleration, a two-stage ground attack (16/20-tick clips, active
+  windows 4–11 and 5–15), a dash burst (300 px/s, 11 ticks, 24-tick cooldown) and down+jump
+  drop-through. Pure simulation: no Pixi, no DOM, no wall clock — a unit test runs two identically
+  scripted controllers and asserts frame-for-frame equality.
+- **View & camera:** `HeroView.setPose({x, y, facing, animation, restart, grounded})` with the
+  contact shadow now parented to the pose (airborne = smaller + fainter); camera look-ahead
+  (`CAMERA.lookAheadX` 28 px toward facing) with `focusOffsetY` moved into `CAMERA`; the scripted
+  patrol and the `DEMO` config block are deleted.
+- **Room:** the terrace gained the dais approach (two step blocks at x 672/688) and a three-beam
+  ascent up the left tower to the broken beam bridge, so the room now has two real traversal routes.
+  Tile count 440 → 449.
+- **Art:** six new knight sheets wired (turn, jump, fall, attack1, attack2, dash) with authored
+  per-frame durations; the packed hero is all-or-nothing (`KNIGHT_REQUIRED`). The procedural fallback
+  was extended to 12 poses with the same clip names and durations.
+- **Debug/E2E:** the scene snapshot's `hero` became `player` (x, y, vx, vy, state, animation, facing,
+  grounded, clipTick); the F1 overlay shows state/clip/velocity; the smoke suite now drives real
+  keyboard input.
+- **Docs:** DECISIONS D022–D025, CONTROLS.md status → implemented (key list validated in M2 with no
+  changes), ASSET_NOTES hero clip table, README status.
+
+### Gates (all green at commit)
+
+| Gate                   | Result                                                                      |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                       |
+| `npm run lint`         | clean, zero warnings                                                        |
+| `npm run test`         | 126/126 passed (13 files, ~5 s) — up from 85                                |
+| `npm run build`        | ✓ 287.28 kB JS / 84.92 kB gzip                                              |
+| `npm run test:e2e`     | 6/6 passed — 65.6 fps avg vs 45 floor                                       |
+| `npm run assets:check` | OK, 474 files, 0 warnings                                                   |
+| `npm run format:check` | clean                                                                       |
+| Screenshot             | `docs/screenshots/M2-terrace.png` (hero running, camera panned to the dais) |
+
+### E2E coverage (rewritten for real input)
+
+1. boots with packed art; the player stands idle on the walkway at y 320;
+2. keyboard walk: >60 px of travel with the camera following, `run` → `idle` on release, vx → 0;
+3. full jump sampled **inside the page every frame**: >10 airborne frames, apex 40–95 px, lands back
+   within 1 px;
+4. collision gate: a held run stops flush against the dais step (x ≈ 666) and clears it after a jump;
+5. frame rate while the player is moving (self-calibrating floor, D016);
+6. F1 overlay reports the player state/clip/velocity.
+
+### Findings & adjustments (recorded in DECISIONS)
+
+- **A naïve ground probe broke the jump (real bug).** "Is there a solid tile below the feet?" is
+  _true_ while the feet are inside a one-way platform during a rise, so the controller believed it
+  had landed at y 303 and froze mid-jump. The probe now requires a resting contact (feet within
+  0.5 px of the row's top edge) **and** `vy >= 0` (D023). Caught by the room test that jumps onto an
+  ascent beam.
+- **The first E2E jump test was wrong, not the game.** It polled from the test process and released
+  `Space` after the first sample, so the variable-height cut legitimately clipped the rise to ≈18 px
+  and the hero never reached the beam. Fixed by holding the button and sampling with rAF inside the
+  page (D024).
+- **Test fixtures needed real headroom.** Rooms are 96–160 px tall in the first fixtures, which
+  silently capped the jump apex at the room's top border. Fixtures now carry ≥128 px of clearance,
+  which is also a useful regression: the apex assertion would catch a "room height" mistake again.
+- **The M1 contact shadow never followed the hero** — it was added to the scene container at the
+  world origin. It is now part of the pose (D025).
+- **Screenshot tooling:** `npm run screenshot -- <path> --run` holds ArrowRight so milestone shots
+  show the controller in motion instead of the spawn pose.
+
+### Explicitly deferred / stubs
+
+- **Attacks deal no damage.** `attackActive` (the damage window) is emitted and unit-tested, but there
+  are no hitboxes, health or entities until M4.
+- **Dash and drop-through are ungated** — they exist for feel; the ability gate (item + door) arrives
+  with the map/items milestone.
+- **Heal / cast / interact / map / pause are bound but unused** — no system consumes them yet.
+- **Gamepad support is implementation-complete but hardware-unverified** (unit-tested with an injected
+  pad only; no controller was available).
+- **No audio, enemies, bosses, additional rooms, save/load or UI** (M3+); `howler` remains unused.
+- **Per-clip foot offsets** remain deferred: the run cycle lifts the feet a few pixels and the contact
+  shadow compensates. Revisit if it reads badly against M9's polish pass.
+
+### Next milestone preview (M3)
+
+Audio: a Howler-based sound manager (music/ambience for the terrace, SFX hooks for the movement set
+shipped here), a mix/volume model, and the already-downloaded music assets verified for license
+before use.
