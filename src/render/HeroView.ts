@@ -7,6 +7,20 @@ import { SpriteAnimator } from './SpriteAnimator';
 
 export type Facing = -1 | 1;
 
+/** One tick's worth of what the hero view needs to draw. */
+export type HeroPose = {
+  /** Feet-center, in world pixels. */
+  x: number;
+  y: number;
+  facing: Facing;
+  /** Clip name from the character's animation set. */
+  animation: string;
+  /** Restarts the clip even if it is already active (attack re-triggers). */
+  restart?: boolean;
+  /** When false, the contact shadow shrinks and fades to read as airborne. */
+  grounded?: boolean;
+};
+
 /**
  * World-space hero view: a single sprite whose texture is swapped from pre-sliced
  * frame textures. The animator is advanced by the scene's fixed-step update, never by
@@ -18,6 +32,7 @@ export class HeroView {
   private readonly textures = new Map<string, Texture>();
   private readonly animator: SpriteAnimator;
   private readonly sprite: Sprite;
+  private readonly shadow: Graphics;
   private facing: Facing = 1;
 
   constructor(provider: ArtProvider) {
@@ -40,10 +55,11 @@ export class HeroView {
       this.art.origin.x / this.art.sheet.frameWidth,
       this.art.origin.y / this.art.sheet.frameHeight,
     );
-    // A soft contact shadow keeps the hero grounded against busy stonework.
-    const shadow = new Graphics().ellipse(0, 0, 9, 3).fill(PALETTE.void);
-    shadow.alpha = 0.35;
-    this.view.addChild(shadow, this.sprite);
+    // A soft contact shadow keeps the hero grounded against busy stonework, and doubles
+    // as the airborne cue (it shrinks as the hero leaves the floor).
+    this.shadow = new Graphics().ellipse(0, 0, 9, 3).fill(PALETTE.void);
+    this.shadow.alpha = 0.35;
+    this.view.addChild(this.shadow, this.sprite);
   }
 
   get animation(): string {
@@ -51,13 +67,18 @@ export class HeroView {
   }
 
   /** Places the feet-center and switches clips; called once per fixed tick. */
-  setPose(x: number, y: number, facing: Facing, animation: string): void {
-    this.sprite.position.set(x, y);
-    if (facing !== this.facing) {
-      this.facing = facing;
-      this.sprite.scale.x = facing;
+  setPose(pose: HeroPose): void {
+    this.sprite.position.set(pose.x, pose.y);
+    this.shadow.position.set(pose.x, pose.y);
+    if (pose.facing !== this.facing) {
+      this.facing = pose.facing;
+      this.sprite.scale.x = pose.facing;
     }
-    this.animator.play(animation);
+    this.animator.play(pose.animation, pose.restart === true);
+
+    const grounded = pose.grounded !== false;
+    this.shadow.alpha = grounded ? 0.35 : 0.18;
+    this.shadow.scale.set(grounded ? 1 : 0.7);
   }
 
   /** Advances the frame clock by one fixed tick. */

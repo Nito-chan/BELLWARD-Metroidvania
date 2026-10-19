@@ -27,6 +27,12 @@ export const ART_URLS = {
   'bg.mid': 'assets/ansimuz-town/PNG/environment/layers/middleground.png',
   'hero.idle': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Idle.png',
   'hero.run': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Run.png',
+  'hero.turn': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_TurnAround.png',
+  'hero.jump': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Jump.png',
+  'hero.fall': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Fall.png',
+  'hero.attack1': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Attack.png',
+  'hero.attack2': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Attack2.png',
+  'hero.dash': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Dash.png',
 } as const;
 
 export type ArtKey = keyof typeof ART_URLS;
@@ -160,7 +166,36 @@ function knightClip(textureKey: ArtKey, frameCount: number, ticksPerFrame: numbe
   };
 }
 
-/** Packed Fantasy Knight art: 10-frame idle and run strips, 120x80 per frame. */
+/** One sheet, one row, explicit per-frame durations (used for one-shots). */
+function knightStrip(textureKey: ArtKey, ticks: readonly number[], loop: boolean): AnimationClip {
+  return {
+    textureKey,
+    loop,
+    frames: ticks.map((duration, frame) => ({ frame, ticks: duration })),
+  };
+}
+
+/**
+ * Sheets the packed hero needs. If any of these fails to load, the whole hero falls back
+ * to the procedural knight — a half-loaded knight would be missing clips at runtime.
+ */
+export const KNIGHT_REQUIRED: readonly ArtKey[] = [
+  'hero.idle',
+  'hero.run',
+  'hero.turn',
+  'hero.jump',
+  'hero.fall',
+  'hero.attack1',
+  'hero.attack2',
+  'hero.dash',
+];
+
+/**
+ * Packed Fantasy Knight art. Frame counts are measured from the sheets (M2):
+ * turn 3, jump 3, fall 3, attack 4, attack2 6, dash 2. One-shot clips hold their last
+ * frame; the controller decides when to switch. Attack durations must match
+ * `PLAYER.attack.clipTicks` — a unit test cross-checks both sides.
+ */
 export const HERO_ART: CharacterArt = {
   textureKey: 'hero.idle',
   sheet: KNIGHT_SHEET,
@@ -168,5 +203,11 @@ export const HERO_ART: CharacterArt = {
   animations: {
     idle: knightClip('hero.idle', 10, 8),
     run: knightClip('hero.run', 10, 5),
+    turn: knightStrip('hero.turn', [3, 3, 3], false),
+    jump: knightStrip('hero.jump', [3, 3, 3], false),
+    fall: knightStrip('hero.fall', [6, 6, 6], true),
+    attack1: knightStrip('hero.attack1', [3, 3, 4, 6], false),
+    attack2: knightStrip('hero.attack2', [2, 3, 3, 3, 4, 5], false),
+    dash: knightStrip('hero.dash', [3, 5], false),
   },
 };

@@ -1,21 +1,27 @@
+import { BellwardError } from '../../core/Errors';
 import type { RoomDefinition } from '../../world/Room';
 
 /**
  * The Belfry Terrace — the first room of "The Drowned Belfry".
  *
  * An open-air terrace at the top of the belfry: the drowned town's skyline fills the
- * parallax layers, a broken bell hangs above the walkway and a raised dais waits on
- * the right. The room is deliberately wider than the 640px viewport so the M1 camera
- * has somewhere to pan; M2 replaces the scripted walker with real input.
+ * parallax layers, a broken bell hangs above the walkway, and the room is deliberately
+ * wider than the 640px viewport so the camera has somewhere to pan.
  *
  * Layout is 60x24 tiles (960x384 px):
  *
  *   rows 0..11   open air between two four-tile stone towers
- *   row  12      a broken one-way beam (ledge) awaiting M2 platforming
- *   rows 13..15  open air
- *   row  16..19  raised dais (8 tiles wide) on the right
+ *   row  12      broken beam bridge (one-way ledge, 8 tiles)
+ *   row  14      ascent beam 3 (two tiles)
+ *   row  16      ascent beam 2 (two tiles) + the raised dais (8 tiles wide)
+ *   row  18      ascent beam 1 (two tiles) + dais step (1 tile)
+ *   row  19      dais step (2 tiles)
  *   row  20      walkway surface
  *   rows 21..23  structural fill
+ *
+ * The left tower's three beams climb 32 px at a time (walkway 320 → 288 → 256 → 224 →
+ * beam bridge 192); the dais steps climb from the walkway on the right. Both routes and
+ * the beam bridge's drop-through are exercised by the M2 movement tests.
  */
 
 const LEFT_WALL = '####';
@@ -26,6 +32,48 @@ const FILL_ROW = 'f'.repeat(60);
 const LEDGE_ROW = `${LEFT_WALL}${' '.repeat(16)}${'L'.repeat(8)}${' '.repeat(28)}${RIGHT_WALL}`;
 const DAIS_TOP = `${LEFT_WALL}${' '.repeat(40)}${'F'.repeat(8)}${' '.repeat(4)}${RIGHT_WALL}`;
 const DAIS_FILL = `${LEFT_WALL}${' '.repeat(40)}${'f'.repeat(8)}${' '.repeat(4)}${RIGHT_WALL}`;
+
+const ROOM_WIDTH = 60;
+
+/**
+ * Copies `base` and stamps glyphs at explicit column indexes. Indexing rows by hand
+ * would invite silent off-by-one holes; this fails loudly instead.
+ */
+function place(base: string, glyphs: readonly (readonly [number, string])[]): string {
+  const cells = base.split('');
+  if (cells.length !== ROOM_WIDTH) {
+    throw new BellwardError(`room row template has ${cells.length} cells, expected ${ROOM_WIDTH}`);
+  }
+  for (const [index, glyph] of glyphs) {
+    if (index < 0 || index >= cells.length) {
+      throw new BellwardError(
+        `room tile column ${index} is outside the row (${cells.length} tiles)`,
+      );
+    }
+    cells[index] = glyph;
+  }
+  return cells.join('');
+}
+
+/** Ascent beams climbing the left tower to the bridge. */
+const ASCENT_ROW_14 = place(OPEN_ROW, [
+  [18, 'L'],
+  [19, 'L'],
+]);
+const ASCENT_ROW_16 = place(DAIS_TOP, [
+  [14, 'L'],
+  [15, 'L'],
+]);
+const ASCENT_ROW_18 = place(DAIS_FILL, [
+  [10, 'L'],
+  [11, 'L'],
+  [43, 'F'],
+]);
+/** Walkway step blocks onto the dais (top at rows 19 and 18). */
+const STEP_ROW_19 = place(DAIS_FILL, [
+  [42, 'F'],
+  [43, 'F'],
+]);
 
 export const belfryTerrace: RoomDefinition = {
   id: 'belfry-terrace',
@@ -45,12 +93,12 @@ export const belfryTerrace: RoomDefinition = {
     OPEN_ROW,
     LEDGE_ROW,
     OPEN_ROW,
+    ASCENT_ROW_14,
     OPEN_ROW,
-    OPEN_ROW,
-    DAIS_TOP,
+    ASCENT_ROW_16,
     DAIS_FILL,
-    DAIS_FILL,
-    DAIS_FILL,
+    ASCENT_ROW_18,
+    STEP_ROW_19,
     WALK_ROW,
     FILL_ROW,
     FILL_ROW,

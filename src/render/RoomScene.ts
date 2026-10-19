@@ -1,14 +1,16 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { PALETTE } from '../config/palette';
-import { DEMO } from '../config/render';
-import { SIM, VIEW } from '../config/world';
+import { CAMERA } from '../config/render';
+import { VIEW } from '../config/world';
 import { BellwardError } from '../core/Errors';
 import type { Rng } from '../core/Rng';
 import type { SceneDebugState } from '../debug/DebugState';
+import type { InputSnapshot } from '../input/InputState';
+import { PlayerController } from '../player/PlayerController';
 import type { Room } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
 import { Camera } from './Camera';
-import { HeroView, type Facing } from './HeroView';
+import { HeroView } from './HeroView';
 import { ParallaxLayer } from './ParallaxLayer';
 import { PropLayer } from './PropLayer';
 import { TileLayer } from './TileLayer';
@@ -23,22 +25,19 @@ type Mote = {
 const MOTE_COUNT = 28;
 
 /**
- * M1 room scene: renders the belfry terrace and walks the hero along a scripted patrol.
- * The patrol is a camera/animation showcase only — M2 replaces it with the player
- * controller. Simulation state changes exclusively in update(); render() only samples
- * interpolated camera positions.
+ * Renders one room and drives its simulation: the player controller steps against the
+ * room's tilemap, the hero view follows the controller's pose, and the camera follows the
+ * hero with a look-ahead. Simulation state changes exclusively in update(); render()
+ * only samples the interpolated camera, so motion is smooth at any refresh rate.
  */
 export class RoomScene {
   readonly view = new Container();
   private readonly camera: Camera;
   private readonly heroView: HeroView;
+  private readonly player: PlayerController;
   private readonly backgrounds: ParallaxLayer[] = [];
   private readonly motes: Mote[] = [];
   private readonly world = new Container();
-  private heroX: number;
-  private readonly heroY: number;
-  private facing: Facing = 1;
-  private pauseTicksLeft = 0;
 
   constructor(
     private readonly room: Room,
@@ -46,9 +45,8 @@ export class RoomScene {
     rng: Rng,
   ) {
     this.camera = new Camera(room.bounds);
-    this.heroX = room.spawn.x;
-    this.heroY = room.spawn.y;
-    this.camera.snapTo(this.heroX, this.heroY + DEMO.focusOffsetY);
+    this.player = new PlayerController(room.spawn);
+    this.camera.snapTo(room.spawn.x, room.spawn.y + CAMERA.focusOffsetY);
 
     // A layer only travels (roomWidth - viewWidth) * factor pixels across the whole
     // room, so each background needs a short strip — not an infinite tiling shader.
@@ -97,12 +95,25 @@ export class RoomScene {
     this.view.addChild(moteLayer);
   }
 
-  /** Advances the simulation by one fixed tick. */
-  update(tickCount: number): void {
-    const moving = this.advancePatrol();
-    this.heroView.setPose(this.heroX, this.heroY, this.facing, moving ? 'run' : 'idle');
+  /** Advances the simulation by one fixed tick with this tick's input. */
+  update(tickCount: number, input: InputSnapshot): void {
+    this.player.update(input, this.room.tilemap);
+
+    const feet = this.player.feet;
+    this.heroView.setPose({
+      x: feet.x,
+      y: feet.y,
+      facing: this.player.facing,
+      animation: this.player.animation,
+      restart: this.player.restarted,
+      grounded: this.player.grounded,
+    });
     this.heroView.tick();
-    this.camera.update(this.heroX, this.heroY + DEMO.focusOffsetY);
+
+    this.camera.update(
+      feet.x + this.player.facing * CAMERA.lookAheadX,
+      feet.y + CAMERA.focusOffsetY,
+    );
     this.updateMotes(tickCount);
   }
 
@@ -116,6 +127,7 @@ export class RoomScene {
   }
 
   debugState(): SceneDebugState {
+    const feet = this.player.feet;
     return {
       roomId: this.room.definition.id,
       roomName: this.room.definition.name,
@@ -126,32 +138,18 @@ export class RoomScene {
         failures: [...this.art.failures],
       },
       camera: { x: this.camera.x, y: this.camera.y },
-      hero: {
-        x: this.heroX,
-        y: this.heroY,
-        animation: this.heroView.animation,
-        facing: this.facing,
+      player: {
+        x: feet.x,
+        y: feet.y,
+        vx: this.player.body.vx,
+        vy: this.player.body.vy,
+        state: this.player.state,
+        animation: this.player.animation,
+        facing: this.player.facing,
+        grounded: this.player.grounded,
+        clipTick: this.player.clipTick,
       },
     };
-  }
-
-  /** Returns true while the hero is walking. */
-  private advancePatrol(): boolean {
-    if (this.pauseTicksLeft > 0) {
-      this.pauseTicksLeft -= 1;
-      return false;
-    }
-    this.heroX += this.facing * DEMO.patrol.speed * SIM.dt;
-    if (this.heroX >= DEMO.patrol.maxX) {
-      this.heroX = DEMO.patrol.maxX;
-      this.facing = -1;
-      this.pauseTicksLeft = DEMO.patrol.pauseTicks;
-    } else if (this.heroX <= DEMO.patrol.minX) {
-      this.heroX = DEMO.patrol.minX;
-      this.facing = 1;
-      this.pauseTicksLeft = DEMO.patrol.pauseTicks;
-    }
-    return true;
   }
 
   private updateMotes(tickCount: number): void {

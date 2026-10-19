@@ -5,6 +5,7 @@ import {
   ART_URLS,
   BACKGROUND_ART,
   HERO_ART,
+  KNIGHT_REQUIRED,
   PROP_ART,
   TILE_ART,
   type ArtKey,
@@ -47,7 +48,8 @@ export class ArtProvider {
   ) {
     this.failures = failures;
     this.mode = packed.has('church.tiles') ? 'packed' : 'procedural';
-    const knightReady = packed.has('hero.idle') && packed.has('hero.run');
+    // The hero falls back as a whole: a knight missing clips would break at runtime.
+    const knightReady = KNIGHT_REQUIRED.every((key) => packed.has(key));
     this.hero = knightReady ? HERO_ART : procedural.hero;
   }
 

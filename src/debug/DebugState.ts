@@ -15,11 +15,21 @@ export type SceneDebugState = {
   };
   /** Smoothed camera top-left, in world pixels. */
   camera: { x: number; y: number };
-  hero: {
+  player: {
+    /** Feet-center, in world pixels. */
     x: number;
     y: number;
+    /** Velocity in pixels per second. */
+    vx: number;
+    vy: number;
+    /** Controller state (idle/run/skid/jump/fall/attack/dash). */
+    state: string;
+    /** Active animation clip. */
     animation: string;
     facing: -1 | 1;
+    grounded: boolean;
+    /** Ticks since the current clip started. */
+    clipTick: number;
   };
 };
 

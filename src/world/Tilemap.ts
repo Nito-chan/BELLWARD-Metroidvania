@@ -110,6 +110,15 @@ export class Tilemap {
     return role !== null && roleIsOneWay(role);
   }
 
+  /**
+   * True when the tile blocks sideways movement: solid, but not a one-way platform.
+   * The collision solver is the consumer; out-of-bounds handling stays in the solver.
+   */
+  isWall(tx: number, ty: number): boolean {
+    const role = this.roleAt(tx, ty);
+    return role !== null && TILE_ROLES[role].solid && !roleIsOneWay(role);
+  }
+
   /** Visits every non-empty tile in row-major order (stable rendering order). */
   forEachTile(visit: (tx: number, ty: number, role: TileRole) => void): void {
     for (let ty = 0; ty < this.height; ty += 1) {

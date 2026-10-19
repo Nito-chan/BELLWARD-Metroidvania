@@ -9,6 +9,9 @@ export default defineConfig({
       include: [
         'src/core/**',
         'src/world/**',
+        'src/input/**',
+        'src/physics/**',
+        'src/player/**',
         'src/render/Camera.ts',
         'src/render/SpriteAnimator.ts',
         'scripts/lib/**',

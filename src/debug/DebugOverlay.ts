@@ -44,12 +44,14 @@ export class DebugOverlay {
     ];
     if (state.scene) {
       const { scene } = state;
+      const player = scene.player;
       lines.push(
         `room       ${scene.roomName} (${scene.roomId})`,
         `tiles      ${scene.tiles}`,
         `art        ${scene.art.mode} (${scene.art.loaded.length} packed, ${scene.art.failures.length} fallback)`,
         `camera     ${scene.camera.x.toFixed(1)}, ${scene.camera.y.toFixed(1)}`,
-        `hero       ${scene.hero.animation} @ ${scene.hero.x.toFixed(1)} facing ${scene.hero.facing}`,
+        `player     ${player.state}/${player.animation} @ ${player.x.toFixed(1)},${player.y.toFixed(1)}`,
+        `velocity   ${player.vx.toFixed(0)}, ${player.vy.toFixed(0)} facing ${player.facing} ${player.grounded ? 'ground' : 'air'}`,
       );
     }
     lines.push(`errors     ${state.errors.length}`);

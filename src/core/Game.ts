@@ -6,6 +6,7 @@ import { SIM, VIEW, WORLD } from '../config/world';
 import { belfryTerrace } from '../data/rooms/belfry-terrace';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
+import { InputManager } from '../input/InputManager';
 import { ArtProvider } from '../render/ArtProvider';
 import { RoomScene } from '../render/RoomScene';
 import { createRoom } from '../world/Room';
@@ -35,6 +36,7 @@ export class Game {
   });
   private readonly rng = new Rng(WORLD.rngSeed);
   private readonly overlay = new DebugOverlay();
+  private readonly input = new InputManager();
   private readonly loop = new Loop({
     dt: SIM.dt,
     maxFrameTime: SIM.maxFrameTime,
@@ -91,6 +93,8 @@ export class Game {
 
     this.overlay.mount();
     window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
 
     this.ready = true;
     this.loop.start();
@@ -145,7 +149,7 @@ export class Game {
       this.events.emit('secondElapsed', { seconds: wholeSecond });
     }
     if (this.scene) {
-      this.scene.update(this.loop.stats.tickCount);
+      this.scene.update(this.loop.stats.tickCount, this.input.snapshot());
     }
   }
 
@@ -173,7 +177,19 @@ export class Game {
     if (event.key === 'F1') {
       event.preventDefault();
       this.overlay.toggle();
+      return;
     }
+    // Bound gameplay keys consume their default (arrows scroll, space scrolls, etc.).
+    if (this.input.handleKey(event.code, true)) event.preventDefault();
+  };
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    if (this.input.handleKey(event.code, false)) event.preventDefault();
+  };
+
+  /** Losing focus mid-keypress must not leave the hero running forever. */
+  private readonly onBlur = (): void => {
+    this.input.blur();
   };
 
   private recordError(message: string, cause?: unknown): void {

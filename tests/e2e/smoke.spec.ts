@@ -17,7 +17,7 @@ async function debugState(page: Page): Promise<GameDebugState> {
   });
 }
 
-test.describe('M1 smoke', () => {
+test.describe('M2 smoke', () => {
   test('boots into the belfry terrace with packed art', async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     page.on('console', (message) => {
@@ -37,11 +37,13 @@ test.describe('M1 smoke', () => {
     expect(scene).not.toBeNull();
     expect(scene?.roomId).toBe('belfry-terrace');
     expect(scene?.roomName).toBe('The Belfry Terrace');
-    expect(scene?.tiles).toBe(440);
+    expect(scene?.tiles).toBe(449);
     expect(scene?.art.mode).toBe('packed');
     expect(scene?.art.failures).toEqual([]);
-    expect(scene?.art.loaded).toHaveLength(6);
-    expect(scene?.hero.animation).toMatch(/idle|run/);
+    expect(scene?.art.loaded).toHaveLength(12);
+    expect(scene?.player.animation).toMatch(/idle|run/);
+    expect(scene?.player.grounded).toBe(true);
+    expect(scene?.player.y).toBeCloseTo(320, 0);
 
     const sample = await page.evaluate(() => {
       const game = window.__game;
@@ -53,33 +55,115 @@ test.describe('M1 smoke', () => {
     // Packed art plus the parallax skyline must produce far more than flat shapes.
     expect(sample.uniqueColors).toBeGreaterThan(24);
 
-    await testInfo.attach('m1-boot.png', {
+    await testInfo.attach('m2-boot.png', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
     expect(consoleErrors).toEqual([]);
   });
 
-  test('camera follows the scripted patrol', async ({ page }) => {
+  test('walks with the keyboard and the camera follows', async ({ page }) => {
     await bootGame(page);
     const before = await debugState(page);
-    await page.waitForTimeout(1_500);
-    const after = await debugState(page);
 
-    const heroBefore = before.scene?.hero.x ?? 0;
-    const heroAfter = after.scene?.hero.x ?? 0;
+    await page.keyboard.down('ArrowRight');
+    await page.waitForTimeout(1_200);
+    const running = await debugState(page);
+    await page.keyboard.up('ArrowRight');
+    await page.waitForTimeout(400);
+    const stopped = await debugState(page);
+
+    const playerBefore = before.scene?.player.x ?? 0;
+    const playerRunning = running.scene?.player.x ?? 0;
+    const playerStopped = stopped.scene?.player.x ?? 0;
     const cameraBefore = before.scene?.camera.x ?? 0;
-    const cameraAfter = after.scene?.camera.x ?? 0;
+    const cameraRunning = running.scene?.camera.x ?? 0;
 
-    expect(heroAfter).toBeGreaterThan(heroBefore + 40);
-    expect(cameraAfter).toBeGreaterThan(cameraBefore + 10);
-    // The animation depends on the exact tick the snapshot lands on (the patrol pauses at
-    // each end), so assert a valid patrol state rather than demanding mid-stride.
-    expect(after.scene?.hero.animation).toMatch(/idle|run/);
-    expect(after.errors).toEqual([]);
+    expect(playerRunning).toBeGreaterThan(playerBefore + 60);
+    expect(cameraRunning).toBeGreaterThan(cameraBefore + 10);
+    expect(playerStopped).toBeGreaterThan(playerRunning);
+    expect(running.scene?.player.animation).toBe('run');
+    expect(running.scene?.player.facing).toBe(1);
+    expect(stopped.scene?.player.animation).toBe('idle');
+    expect(Math.abs(stopped.scene?.player.vx ?? 99)).toBeLessThan(1);
+    expect(running.errors).toEqual([]);
   });
 
-  test('runs the simulation at a stable frame rate', async ({ page }, testInfo) => {
+  test('jumps to a readable height and lands back on the ground', async ({ page }) => {
+    await bootGame(page);
+    const ground = await debugState(page);
+    const groundY = ground.scene?.player.y ?? 0;
+    expect(ground.scene?.player.grounded).toBe(true);
+
+    // Hold the button for the whole arc; the sampler runs inside the page so it sees
+    // every frame (polling from the test process is too slow to catch a 0.5 s jump).
+    await page.keyboard.down('Space');
+    const arc = await page.evaluate(
+      () =>
+        new Promise<{ minY: number; airborne: number; endY: number; grounded: boolean }>(
+          (resolve) => {
+            const game = window.__game;
+            if (!game) throw new Error('window.__game is not available (DEV build required)');
+            const start = game.debugState().scene?.player.y ?? 0;
+            let minY = start;
+            let airborne = 0;
+            const deadline = performance.now() + 900;
+            const tick = (): void => {
+              const player = game.debugState().scene?.player;
+              if (player) {
+                minY = Math.min(minY, player.y);
+                if (!player.grounded) airborne += 1;
+              }
+              if (performance.now() >= deadline) {
+                resolve({
+                  minY,
+                  airborne,
+                  endY: player?.y ?? start,
+                  grounded: player?.grounded ?? false,
+                });
+                return;
+              }
+              requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          },
+        ),
+    );
+    await page.keyboard.up('Space');
+
+    expect(arc.airborne).toBeGreaterThan(10);
+    expect(groundY - arc.minY).toBeGreaterThan(40);
+    expect(groundY - arc.minY).toBeLessThan(95);
+    expect(arc.grounded).toBe(true);
+    expect(Math.abs(arc.endY - groundY)).toBeLessThan(1);
+    expect((await debugState(page)).errors).toEqual([]);
+  });
+
+  test('the dais step blocks the hero until he jumps it', async ({ page }) => {
+    await bootGame(page);
+
+    await page.keyboard.down('ArrowRight');
+    await page.waitForTimeout(3_000);
+    const blocked = await debugState(page);
+    const blockedX = blocked.scene?.player.x ?? 0;
+    // Tile 42 (x=672) is the step face: the run stops flush against it.
+    expect(blockedX).toBeGreaterThan(660);
+    expect(blockedX).toBeLessThan(669);
+    expect(blocked.scene?.player.grounded).toBe(true);
+    expect(Math.abs(blocked.scene?.player.vx ?? 99)).toBeLessThan(1);
+
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(350);
+    await page.keyboard.up('Space');
+    await page.waitForTimeout(900);
+    const climbed = await debugState(page);
+    await page.keyboard.up('ArrowRight');
+
+    expect(climbed.scene?.player.x ?? 0).toBeGreaterThan(690);
+    expect(climbed.errors).toEqual([]);
+  });
+
+  test('runs the simulation at a stable frame rate while moving', async ({ page }, testInfo) => {
     // First: what can this environment pace at all? (software-composited headless
     // often cannot reach 60; the render must come close to the machine's ceiling.)
     await page.goto('about:blank');
@@ -100,11 +184,12 @@ test.describe('M1 smoke', () => {
     console.log(`[smoke] bare RAF ceiling=${bareFps.toFixed(1)} fps`);
 
     await bootGame(page);
-
+    await page.keyboard.down('ArrowRight');
     const before = await debugState(page);
     const sampleSeconds = 2.5;
     await page.waitForTimeout(sampleSeconds * 1000);
     const after = await debugState(page);
+    await page.keyboard.up('ArrowRight');
 
     const frames = after.frameCount - before.frameCount;
     const averageFps = frames / sampleSeconds;
@@ -118,10 +203,9 @@ test.describe('M1 smoke', () => {
 
     const simulated = after.simTime - before.simTime;
     expect(simulated).toBeGreaterThanOrEqual(sampleSeconds * 0.75);
-
     expect(after.errors).toEqual([]);
 
-    await testInfo.attach('m1-running.png', {
+    await testInfo.attach('m2-running.png', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
@@ -138,6 +222,8 @@ test.describe('M1 smoke', () => {
     await expect(overlay).toContainText('belfry-terrace');
     await expect(overlay).toContainText('art');
     await expect(overlay).toContainText('camera');
+    await expect(overlay).toContainText('player');
+    await expect(overlay).toContainText('ground');
 
     await page.keyboard.press('F1');
     await expect(overlay).toBeHidden();

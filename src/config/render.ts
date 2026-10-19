@@ -26,6 +26,10 @@ export const CAMERA = {
   deadzone: { x: 40, y: 24 },
   /** Exponential smoothing applied once per fixed tick (0 = frozen, 1 = instant). */
   smoothing: 0.14,
+  /** The focus leads the hero's facing direction so the camera shows where you are going. */
+  lookAheadX: 28,
+  /** The camera focuses slightly above the hero's feet. */
+  focusOffsetY: -10,
 } as const;
 
 export const PARALLAX = {
@@ -33,22 +37,4 @@ export const PARALLAX = {
   far: 0.2,
   mid: 0.5,
   near: 0.8,
-} as const;
-
-/**
- * M1 showcase scene parameters. The scripted patrol exists only to prove the camera,
- * parallax and animation pipeline; M2's real player controller replaces it entirely.
- */
-export const DEMO = {
-  patrol: {
-    /** Leftmost / rightmost feet position, in world pixels. */
-    minX: 96,
-    maxX: 680,
-    /** Walk speed in pixels per second. */
-    speed: 90,
-    /** Idle pause at each end, in simulation ticks. */
-    pauseTicks: 90,
-  },
-  /** The camera focuses slightly above the hero's feet. */
-  focusOffsetY: -10,
 } as const;
