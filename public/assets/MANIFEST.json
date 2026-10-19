@@ -1,4 +1,53 @@
 {
   "manifestVersion": 1,
-  "assets": []
+  "assets": [
+    {
+      "name": "Fantasy Knight — Free Pixelart Animated Character",
+      "kind": "character-sprite-sheets",
+      "path": "aamatniekss-knight",
+      "author": "aamatniekss (Namatnieks)",
+      "sourceUrl": "https://aamatniekss.itch.io/fantasy-knight-free-pixelart-animated-character",
+      "license": "Custom-Free-Commercial",
+      "licenseUrl": "https://aamatniekss.itch.io/fantasy-knight-free-pixelart-animated-character",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "Fantasy Knight by aamatniekss — https://aamatniekss.itch.io/fantasy-knight-free-pixelart-animated-character. Included in this repository with the author’s permission (see comments, 2026); not redistributed as a standalone asset pack."
+    },
+    {
+      "name": "GothicVania — Church Pack",
+      "kind": "tileset+sprites+backgrounds",
+      "path": "ansimuz-church",
+      "author": "Luis Zuno (ansimuz)",
+      "sourceUrl": "https://opengameart.org/content/gothicvania-church-pack",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "GothicVania Church Pack by Luis Zuno (ansimuz) — CC0 — https://opengameart.org/content/gothicvania-church-pack"
+    },
+    {
+      "name": "GothicVania — Town Pack",
+      "kind": "tileset+props+backgrounds",
+      "path": "ansimuz-town",
+      "author": "Luis Zuno (ansimuz)",
+      "sourceUrl": "https://opengameart.org/content/gothicvania-town",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "GothicVania Town by Luis Zuno (ansimuz) — CC0 — https://opengameart.org/content/gothicvania-town"
+    },
+    {
+      "name": "Warped Caves — Pixel Art Pack",
+      "kind": "tileset+props+backgrounds",
+      "path": "ansimuz-caves",
+      "author": "Luis Zuno (ansimuz)",
+      "sourceUrl": "https://opengameart.org/content/warped-caves-pixel-art-pack",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "Warped Caves by Luis Zuno (ansimuz) — CC0 — https://opengameart.org/content/warped-caves-pixel-art-pack"
+    }
+  ]
 }

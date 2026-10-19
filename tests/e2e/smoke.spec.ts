@@ -17,8 +17,8 @@ async function debugState(page: Page): Promise<GameDebugState> {
   });
 }
 
-test.describe('M0 smoke', () => {
-  test('boots with no errors and renders a non-blank canvas', async ({ page }, testInfo) => {
+test.describe('M1 smoke', () => {
+  test('boots into the belfry terrace with packed art', async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') consoleErrors.push(message.text());
@@ -33,6 +33,16 @@ test.describe('M0 smoke', () => {
     expect(state.renderer).toContain('webgl');
     expect(state.errors).toEqual([]);
 
+    const scene = state.scene;
+    expect(scene).not.toBeNull();
+    expect(scene?.roomId).toBe('belfry-terrace');
+    expect(scene?.roomName).toBe('The Belfry Terrace');
+    expect(scene?.tiles).toBe(440);
+    expect(scene?.art.mode).toBe('packed');
+    expect(scene?.art.failures).toEqual([]);
+    expect(scene?.art.loaded).toHaveLength(6);
+    expect(scene?.hero.animation).toMatch(/idle|run/);
+
     const sample = await page.evaluate(() => {
       const game = window.__game;
       if (!game) throw new Error('window.__game is not available');
@@ -40,13 +50,33 @@ test.describe('M0 smoke', () => {
     });
     expect(sample.width).toBe(640);
     expect(sample.height).toBe(360);
-    expect(sample.uniqueColors).toBeGreaterThan(8);
+    // Packed art plus the parallax skyline must produce far more than flat shapes.
+    expect(sample.uniqueColors).toBeGreaterThan(24);
 
-    await testInfo.attach('m0-boot.png', {
+    await testInfo.attach('m1-boot.png', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
     expect(consoleErrors).toEqual([]);
+  });
+
+  test('camera follows the scripted patrol', async ({ page }) => {
+    await bootGame(page);
+    const before = await debugState(page);
+    await page.waitForTimeout(1_500);
+    const after = await debugState(page);
+
+    const heroBefore = before.scene?.hero.x ?? 0;
+    const heroAfter = after.scene?.hero.x ?? 0;
+    const cameraBefore = before.scene?.camera.x ?? 0;
+    const cameraAfter = after.scene?.camera.x ?? 0;
+
+    expect(heroAfter).toBeGreaterThan(heroBefore + 40);
+    expect(cameraAfter).toBeGreaterThan(cameraBefore + 10);
+    // The animation depends on the exact tick the snapshot lands on (the patrol pauses at
+    // each end), so assert a valid patrol state rather than demanding mid-stride.
+    expect(after.scene?.hero.animation).toMatch(/idle|run/);
+    expect(after.errors).toEqual([]);
   });
 
   test('runs the simulation at a stable frame rate', async ({ page }, testInfo) => {
@@ -91,7 +121,7 @@ test.describe('M0 smoke', () => {
 
     expect(after.errors).toEqual([]);
 
-    await testInfo.attach('m0-running.png', {
+    await testInfo.attach('m1-running.png', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
@@ -105,6 +135,9 @@ test.describe('M0 smoke', () => {
     await page.keyboard.press('F1');
     await expect(overlay).toBeVisible();
     await expect(overlay).toContainText('fps');
+    await expect(overlay).toContainText('belfry-terrace');
+    await expect(overlay).toContainText('art');
+    await expect(overlay).toContainText('camera');
 
     await page.keyboard.press('F1');
     await expect(overlay).toBeHidden();

@@ -33,14 +33,14 @@ and what is explicitly deferred — nothing here hides a stub.
 
 ### Gates (all green at commit)
 
-| Gate                        | Result                                                                              |
-| --------------------------- | ----------------------------------------------------------------------------------- |
-| `npm run typecheck`         | clean                                                                                |
-| `npm run lint`              | clean, zero warnings                                                                 |
-| `npm run test`              | 50/50 passed (6 files, ~1.7 s)                                                       |
-| `npm run build`             | ✓ 729 modules, 292 kB JS / 87 kB gzip, 2.2 s                                         |
-| `npm run test:e2e`          | 3/3 passed — 62.8 fps avg vs 45 floor, `uniqueColors > 8`, sim tracks wall clock      |
-| `npm run assets:check`      | OK, 0 warnings (manifest empty by design)                                            |
+| Gate                   | Result                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                            |
+| `npm run lint`         | clean, zero warnings                                                             |
+| `npm run test`         | 50/50 passed (6 files, ~1.7 s)                                                   |
+| `npm run build`        | ✓ 729 modules, 292 kB JS / 87 kB gzip, 2.2 s                                     |
+| `npm run test:e2e`     | 3/3 passed — 62.8 fps avg vs 45 floor, `uniqueColors > 8`, sim tracks wall clock |
+| `npm run assets:check` | OK, 0 warnings (manifest empty by design)                                        |
 
 ### Findings & adjustments (recorded in DECISIONS)
 

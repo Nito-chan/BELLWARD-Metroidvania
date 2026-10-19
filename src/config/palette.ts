@@ -16,6 +16,9 @@ export const PALETTE = {
   blood: 0x9e3b3b,
   bone: 0xd9d2c0,
   moss: 0x5f7f4f,
+  /** Multiplicative tint that pushes the warm parallax art toward the belfry's cool night. */
+  duskFar: 0xcdd6e6,
+  duskMid: 0xb9c6dc,
 } as const;
 
 export type PaletteName = keyof typeof PALETTE;

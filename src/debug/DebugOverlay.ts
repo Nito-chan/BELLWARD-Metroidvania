@@ -41,8 +41,18 @@ export class DebugOverlay {
       `ticks      ${state.tickCount} (${state.simTime.toFixed(2)} s)`,
       `canvas     ${state.canvas.width}x${state.canvas.height}`,
       `renderer   ${state.renderer}`,
-      `errors     ${state.errors.length}`,
     ];
+    if (state.scene) {
+      const { scene } = state;
+      lines.push(
+        `room       ${scene.roomName} (${scene.roomId})`,
+        `tiles      ${scene.tiles}`,
+        `art        ${scene.art.mode} (${scene.art.loaded.length} packed, ${scene.art.failures.length} fallback)`,
+        `camera     ${scene.camera.x.toFixed(1)}, ${scene.camera.y.toFixed(1)}`,
+        `hero       ${scene.hero.animation} @ ${scene.hero.x.toFixed(1)} facing ${scene.hero.facing}`,
+      );
+    }
+    lines.push(`errors     ${state.errors.length}`);
     if (state.errors.length > 0) {
       lines.push('', state.errors[0] ?? '');
     }

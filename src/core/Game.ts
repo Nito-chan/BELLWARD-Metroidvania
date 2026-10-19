@@ -1,10 +1,14 @@
 import { Application, Rectangle } from 'pixi.js';
 import { DEBUG } from '../config/debug';
 import { PALETTE } from '../config/palette';
+import { RENDER } from '../config/render';
 import { SIM, VIEW, WORLD } from '../config/world';
+import { belfryTerrace } from '../data/rooms/belfry-terrace';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
-import { DemoScene } from '../render/DemoScene';
+import { ArtProvider } from '../render/ArtProvider';
+import { RoomScene } from '../render/RoomScene';
+import { createRoom } from '../world/Room';
 import { BellwardError, formatError } from './Errors';
 import { EventBus } from './EventBus';
 import { Loop } from './Loop';
@@ -39,7 +43,7 @@ export class Game {
     onError: (error: unknown) => this.recordError('simulation frame failed', error),
   });
 
-  private scene: DemoScene | null = null;
+  private scene: RoomScene | null = null;
   private ready = false;
   private lastWholeSecond = 0;
   private overlayFrameCounter = 0;
@@ -64,6 +68,10 @@ export class Game {
     // The Loop drives rendering explicitly; Pixi's own ticker must stay out of it.
     this.app.ticker.stop();
 
+    // Keep the batch shader cheap: it loops over this many texture lookups per pixel.
+    // Must be set before the first render, while the batcher is still unbuilt (D018).
+    this.app.renderer.limits.maxBatchableTextures = RENDER.maxBatchableTextures;
+
     const mount = document.getElementById('app');
     if (!mount) {
       throw new BellwardError('index.html is missing the #app mount element');
@@ -71,7 +79,11 @@ export class Game {
     mount.appendChild(this.app.canvas);
     this.app.canvas.setAttribute('tabindex', '0');
 
-    this.scene = new DemoScene(this.rng.fork());
+    this.scene = new RoomScene(
+      createRoom(belfryTerrace),
+      await ArtProvider.load(),
+      this.rng.fork(),
+    );
     this.app.stage.addChild(this.scene.view);
 
     window.addEventListener('resize', this.onResize);
@@ -97,6 +109,7 @@ export class Game {
       simTime: this.loop.stats.simTime,
       smoothedFps: this.loop.stats.smoothedFps,
       renderer: this.ready ? this.app.renderer.name : 'none',
+      scene: this.scene?.debugState() ?? null,
       errors: [...this.errors],
     };
   }
@@ -136,7 +149,10 @@ export class Game {
     }
   }
 
-  private onRender(_alpha: number): void {
+  private onRender(alpha: number): void {
+    if (this.scene) {
+      this.scene.render(alpha);
+    }
     this.app.render();
     this.overlayFrameCounter += 1;
     if (this.overlay.visible && this.overlayFrameCounter >= DEBUG.overlayUpdateEveryFrames) {

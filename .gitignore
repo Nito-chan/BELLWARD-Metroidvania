@@ -13,5 +13,6 @@ blob-report/
 
 # Local / editor / OS
 *.local
+.cache/
 .DS_Store
 Thumbs.db

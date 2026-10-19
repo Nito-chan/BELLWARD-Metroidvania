@@ -146,6 +146,78 @@ too weak where 60 is achievable).
 pipeline proof until M1's real `Renderer` + test room replaces it. It is listed in PROGRESS.md
 as temporary, not a silent stub.
 
+## D018 — 2026-10-19 — Render budget guardrails: 2-texture batches, no room bakes, strip parallax
+
+**Decision:** Three permanent guardrails, all measured rather than assumed:
+
+1. `RENDER.maxBatchableTextures = 2`, assigned immediately after `app.init()` and before the
+   first render (Pixi builds its batch shader lazily on that first render).
+2. Static layers stay as individual sprites (440 tiles, 9 props). No `renderer.generateTexture`
+   room bakes.
+3. Parallax layers are a row of plain sprites covering `viewport width + max camera shift`, not
+   `TilingSprite`.
+
+**Why:** With Pixi defaults the full M1 scene measured ~15 fps on headless SwiftShader at
+640×360. A raw WebGL2 benchmark in the same browser drew 4 blended fullscreen quads at 60 fps,
+so this was not a hardware fill-rate ceiling. Pixi's batch fragment shader evaluates
+`maxBatchableTextures` texture selects for every pixel; the default 16 makes full-screen quads a
+shader-loop benchmark. Measured: cap 2 → 60 fps, cap 4 → ~54 fps, cap 1 → ~51 fps (draw-call
+overhead overtakes the shader win at 1). Baking made things worse, not better: a baked tile quad
+measured 46 fps vs 60 fps for the 440 unbaked tile sprites, and adding two baked prop quads
+dropped the scene to 24 then 15 fps — large alpha quads cost more than many small ones.
+
+**Alternatives:** lowering the E2E floor (rejected — the scene clears the existing floor now);
+pre-compositing rooms into RenderTextures (rejected by the measurements above); dropping
+parallax or the ambient wash (rejected — core to the art direction).
+
+**Revisit:** if a future scene needs many textures in one batch, re-measure; the cap trades draw
+calls for cheap fragments and 2 is deliberately conservative.
+
+## D019 — 2026-10-19 — Background layers are data: source crop + world-space anchor
+
+**Decision:** `BackgroundArtData` describes each layer with `texture`, optional `rect`, `factor`,
+`scale`, `tint`, `anchor: 'top' | 'bottom'` and `anchorY` (a world y). The town sheets are
+384×288: the far layer crops rows 0..230 (clouds + mountain tops) and pins its top to world y 0;
+the mid layer uses the full sheet (transparent above its rooftops) and pins its bottom to world
+y 380 — 60 px below the walkway surface at y 320 — so the ground shadow stays hidden behind the
+terrace and only the skyline shows.
+
+**Why:** At 2× the sheets cover the screen but the town reads as adjacent and the bell loses its
+silhouette against buildings. At 1× pinned to the top, the sheet's bottom leaves a void band.
+Anchoring in world space keeps the composition stable across camera heights and removes magic
+pixel offsets from the scene code.
+
+**Alternatives:** a full-screen sky gradient behind the layers (rejected: another fullscreen
+blended pass on software WebGL); cropping the skyline at its first opaque row (rejected: it cut
+the tallest spires flat).
+
+## D020 — 2026-10-19 — Camera E2E asserts motion and a valid clip, not a mid-stride frame
+
+**Decision:** The patrol camera test asserts the hero advanced >40 px, the camera >10 px, and the
+hero's clip is `idle|run`, instead of requiring exactly `run`.
+
+**Why:** The snapshot lands on an arbitrary simulation tick and the scripted patrol pauses at
+both ends, so `idle` is a legitimate state at that instant. The earlier assertion failed exactly
+this way once boot slowed. The boot test already covers clip validity.
+
+**Alternatives:** waiting a fixed number of ticks before asserting (rejected: couples the test to
+timing and would fail the same way under load).
+
+## D021 — 2026-10-19 — Content data is typed TypeScript, not runtime JSON (M1)
+
+**Decision:** Rooms, art rects and animation clips live in `src/data/*.ts` as typed constant data.
+Room glyph rows are validated at runtime (unknown glyph, missing legend, unknown prop/background
+throw); everything keyed by `ArtKey` / `TileRole` / `PropKey` is checked at build time. The JSON
+sheet format in ASSET_NOTES remains the contract for _external_ content; no JSON loader exists yet.
+
+**Why:** Every rect and key is compile-checked, there is no parsing/validation code for data we
+own, and content ships inside the bundle with no extra fetch path. ASCII rows are already a
+readable data format, and the type system enforces that the packed and procedural providers cover
+the same logical keys.
+
+**Alternatives:** runtime JSON now (rejected: untyped and needs a schema validator before it buys
+anything); hybrid (revisit when content is authored outside the repo).
+
 ---
 
 (append new entries at the bottom; never edit old ones — correct them with a new entry)

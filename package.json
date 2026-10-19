@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "assets:check": "tsx scripts/assets-check.ts",
     "assets:check:strict": "tsx scripts/assets-check.ts --strict",
+    "fetch-assets": "tsx scripts/fetch-assets.ts",
     "screenshot": "tsx scripts/capture-screenshot.ts",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "check:all": "npm run check && npm run test:e2e"
@@ -37,6 +38,7 @@
     "@vitest/coverage-v8": "5.0.5",
     "eslint": "10.13.0",
     "eslint-config-prettier": "10.1.8",
+    "extract-zip": "2.0.1",
     "globals": "17.13.0",
     "prettier": "3.9.10",
     "tsx": "4.23.15",

@@ -3,6 +3,10 @@
 Assets that `scripts/fetch-assets.ts` could not (or must not) fetch automatically.
 Currently: **none.**
 
+M1 status: all four visual packs (church, town, caves, knight — 352 files) download and unpack
+automatically via `npm run fetch-assets`. Each pack's verbatim license is written next to the
+files as `LICENSE.txt`, and `npm run assets:check` verifies the manifest against disk.
+
 Rules for anything listed here:
 
 - The fetch script prints `SKIPPED` for these entries and continues; the game always runs with
