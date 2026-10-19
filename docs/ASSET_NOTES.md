@@ -48,8 +48,8 @@ here remains the contract for external packs and in-house art dropped in later (
 | `far` | town `background.png` (384×288)                                | rows 0..230 (clouds + mountain tops) | 0.2    | top pinned to world y 0      |
 | `mid` | town `middleground.png` (384×288, transparent above the roofs) | full sheet                           | 0.5    | bottom pinned to world y 380 |
 
-- Layers scroll as a strip of plain sprites covering `640 + maxShift` px; at these factors a
-  960px-wide room needs one sprite per layer (D018).
+- Layers scroll as a short strip of plain sprites covering `640 + maxShift` px; this 960px-wide
+  room uses 2 sprites for `far` and 3 for `mid` (D018).
 - Tints: `duskFar` / `duskMid`. The extra `deepWater` wash at 12 % is a full-screen ambient layer,
   not part of the parallax art.
 - The mid layer's base sits 60 px below the walkway so its painted ground shadow stays hidden;

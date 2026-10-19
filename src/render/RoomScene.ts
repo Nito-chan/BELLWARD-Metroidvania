@@ -51,7 +51,7 @@ export class RoomScene {
     this.camera.snapTo(this.heroX, this.heroY + DEMO.focusOffsetY);
 
     // A layer only travels (roomWidth - viewWidth) * factor pixels across the whole
-    // room, so each background needs one strip — not an infinite tiling shader.
+    // room, so each background needs a short strip — not an infinite tiling shader.
     const panRange = Math.max(0, room.bounds.w - VIEW.width);
     for (const key of room.definition.backgrounds) {
       const background = art.background(key);

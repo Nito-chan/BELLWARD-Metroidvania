@@ -10,8 +10,9 @@ import type { BackgroundArt } from './ArtProvider';
  * quads there are.
  *
  * The strip only needs to cover the viewport plus the layer's maximum travel across
- * the room, so a narrow pan room needs exactly one sprite per layer. `maxShiftX` is the
- * farthest the pattern can slide, in screen pixels: (roomWidth - viewWidth) * factor.
+ * the room, so it is a short row of sprites rather than an infinite tiling shader.
+ * `maxShiftX` is the farthest the pattern can slide, in screen pixels:
+ * (roomWidth - viewWidth) * factor.
  */
 export class ParallaxLayer {
   readonly view = new Container();
