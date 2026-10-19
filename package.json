@@ -1,0 +1,48 @@
+{
+  "name": "bellward",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "BELLWARD — a souls-like 2D metroidvania vertical slice (working title).",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "assets:check": "tsx scripts/assets-check.ts",
+    "assets:check:strict": "tsx scripts/assets-check.ts --strict",
+    "screenshot": "tsx scripts/capture-screenshot.ts",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "check:all": "npm run check && npm run test:e2e"
+  },
+  "dependencies": {
+    "howler": "2.2.4",
+    "pixi.js": "8.22.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@types/howler": "2.2.13",
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

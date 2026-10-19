@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+blob-report/
+*.lcov
+
+# Local / editor / OS
+*.local
+.DS_Store
+Thumbs.db
