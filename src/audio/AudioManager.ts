@@ -181,12 +181,28 @@ export class AudioManager {
     this.writeMix();
   }
 
-  /** Flips the master mute, persists it, and returns the new state. */
-  toggleMute(): boolean {
-    this.muted = !this.muted;
+  /** Read-only copy of the three faders for the settings UI. */
+  getMix(): AudioMix {
+    return { ...this.volumes };
+  }
+
+  /** True while master mute is engaged. */
+  isMuted(): boolean {
+    return this.muted;
+  }
+
+  /** Sets master mute idempotently, persists it, and returns the state. */
+  setMuted(muted: boolean): boolean {
+    if (this.muted === muted) return this.muted;
+    this.muted = muted;
     this.backend.mute(this.muted);
     this.writeMix();
     return this.muted;
+  }
+
+  /** Flips the master mute, persists it, and returns the new state. */
+  toggleMute(): boolean {
+    return this.setMuted(!this.muted);
   }
 
   /** Read-only snapshot for the F1 overlay and the E2E suite. */

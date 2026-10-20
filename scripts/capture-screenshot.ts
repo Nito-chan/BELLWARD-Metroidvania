@@ -8,7 +8,14 @@
  *      npm run screenshot -- docs/screenshots/M2-terrace.png --run   (hero running right)
  *      npm run screenshot -- docs/screenshots/M3-audio.png --run --overlay
  *      npm run screenshot -- docs/screenshots/M4-combat.png --combat  (mid-fight frame)
+ *      npm run screenshot -- docs/screenshots/M5-pause.png --menu      (pause overlay)
+ *      npm run screenshot -- docs/screenshots/M5-bindings.png --controls
+ *      npm run screenshot -- docs/screenshots/M5-sound.png --settings
  *      (--overlay presses F1 and captures the whole page, so the DOM debug panel shows)
+ *      (--menu opens the pause overlay and captures the whole page)
+ *      (--controls opens the pause overlay, then the bindings screen)
+ *      (--settings opens the pause overlay, then the sound screen)
+ *      (--small captures any menu screen at the 640x360 E2E viewport)
  *      (--combat walks into the nearest parishioner and shoots on the first impact)
  *
  * Depends on the DEV-only `window.__game` handle, hence the dev server. Uses the same
@@ -23,6 +30,12 @@ const args = process.argv.slice(2);
 const runShot = args.includes('--run');
 const overlayShot = args.includes('--overlay');
 const combatShot = args.includes('--combat');
+const menuShot =
+  args.includes('--menu') || args.includes('--controls') || args.includes('--settings');
+const controlsShot = args.includes('--controls');
+const settingsShot = args.includes('--settings');
+/** Menus are normally captured at 1280x720; --small checks the 640x360 E2E viewport. */
+const smallShot = args.includes('--small');
 const outputPath = resolve(
   args.find((value) => !value.startsWith('--')) ?? 'docs/screenshots/current.png',
 );
@@ -31,7 +44,9 @@ const settleMs = 1200;
 async function main(): Promise<void> {
   const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
   try {
-    const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
+    const page = await browser.newPage({
+      viewport: menuShot && !smallShot ? { width: 1280, height: 720 } : { width: 640, height: 360 },
+    });
     const response = await page.goto(url).catch(() => null);
     if (!response || !response.ok()) {
       throw new Error(`could not reach ${url} — start the dev server first (npm run dev)`);
@@ -89,10 +104,22 @@ async function main(): Promise<void> {
         })
         .catch(() => console.warn('screenshot: no impact frame observed; capturing anyway'));
     }
-    await page.waitForTimeout(combatShot ? 40 : settleMs); // hold the impact if we caught it
+    if (menuShot) {
+      await page.keyboard.press('Escape');
+      await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 5_000 });
+      if (controlsShot) {
+        await page.getByRole('button', { name: 'Controls', exact: true }).click();
+        await page.getByRole('dialog', { name: 'Bindings' }).waitFor({ timeout: 5_000 });
+      }
+      if (settingsShot) {
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('dialog', { name: 'Sound' }).waitFor({ timeout: 5_000 });
+      }
+    }
+    await page.waitForTimeout(menuShot ? 320 : combatShot ? 40 : settleMs);
     await mkdir(dirname(outputPath), { recursive: true });
-    // The overlay is DOM, so it only appears in a whole-page shot.
-    const target = overlayShot ? page : page.locator('canvas');
+    // DOM overlays only appear in a whole-page shot; gameplay uses the canvas alone.
+    const target = overlayShot || menuShot ? page : page.locator('canvas');
     await target.screenshot({ path: outputPath });
     if (runShot) await page.keyboard.up('ArrowLeft');
     console.log(`screenshot: saved ${outputPath}`);

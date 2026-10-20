@@ -1,11 +1,5 @@
-import {
-  ACTIONS,
-  INPUT,
-  KEY_BINDINGS,
-  PAD_AXES,
-  PAD_BUTTONS,
-  type ActionName,
-} from '../config/input';
+import { ACTIONS, INPUT, type ActionName } from '../config/input';
+import { defaultBindings, type Bindings } from './bindings';
 import type { InputSnapshot } from './InputState';
 
 /** The slice of the Gamepad API the manager reads, so tests can inject fake pads. */
@@ -17,6 +11,8 @@ export type PadReading = {
 export type InputManagerOptions = {
   /** Pad source; defaults to `navigator.getGamepads()`. */
   getPad?: () => PadReading;
+  /** Initial bindings; defaults to the shipped document. */
+  bindings?: Bindings;
 };
 
 /**
@@ -35,11 +31,26 @@ export class InputManager {
   private readonly keysDown = new Set<string>();
   private readonly padHeld = new Set<ActionName>();
   private readonly boundCodes = new Set<string>();
+  private bindings: Bindings;
 
   constructor(private readonly options: InputManagerOptions = {}) {
-    for (const codes of Object.values(KEY_BINDINGS)) {
-      for (const code of codes) this.boundCodes.add(code);
-    }
+    this.bindings = options.bindings ?? defaultBindings();
+    this.rebuildBoundCodes();
+  }
+
+  /** Read-only live document for the settings UI and the debug snapshot. */
+  getBindings(): Bindings {
+    return this.bindings;
+  }
+
+  /**
+   * Swaps in a new binding document. Held keys are released first so a remap can never
+   * leave an action stuck down; the caller decides whether to persist it.
+   */
+  setBindings(bindings: Bindings): void {
+    this.blur();
+    this.bindings = bindings;
+    this.rebuildBoundCodes();
   }
 
   /** True when `code` is bound to an action; the DOM layer suppresses its default. */
@@ -57,7 +68,7 @@ export class InputManager {
     if (down) {
       if (this.keysDown.has(code)) return true;
       this.keysDown.add(code);
-      for (const action of actionsBoundTo(code)) {
+      for (const action of this.actionsBoundTo(code)) {
         if (!this.held.has(action)) {
           this.held.add(action);
           this.pendingPressed.add(action);
@@ -67,7 +78,7 @@ export class InputManager {
     }
 
     if (!this.keysDown.delete(code)) return true;
-    for (const action of actionsBoundTo(code)) {
+    for (const action of this.actionsBoundTo(code)) {
       if (!this.isKeyHeld(action) && !this.padHeld.has(action) && this.held.delete(action)) {
         this.pendingReleased.add(action);
       }
@@ -85,6 +96,17 @@ export class InputManager {
     }
   }
 
+  /** Drops all input state. Used when a menu opens or closes and the sim is frozen. */
+  reset(): void {
+    this.held.clear();
+    this.pressed.clear();
+    this.released.clear();
+    this.pendingPressed.clear();
+    this.pendingReleased.clear();
+    this.keysDown.clear();
+    this.padHeld.clear();
+  }
+
   /** Takes this tick's snapshot; pressed/released edges are consumed by the call. */
   snapshot(): InputSnapshot {
     this.applyPad();
@@ -99,15 +121,22 @@ export class InputManager {
 
   /** Serialized bindings for the binding editor / settings UI (M5). */
   serialize(): string {
-    return JSON.stringify({
-      version: INPUT.bindingFormatVersion,
-      keyboard: KEY_BINDINGS,
-      gamepad: { buttons: PAD_BUTTONS, axes: PAD_AXES },
-    });
+    return JSON.stringify(this.bindings);
+  }
+
+  private rebuildBoundCodes(): void {
+    this.boundCodes.clear();
+    for (const codes of Object.values(this.bindings.keyboard)) {
+      for (const code of codes) this.boundCodes.add(code);
+    }
+  }
+
+  private actionsBoundTo(code: string): ActionName[] {
+    return ACTIONS.filter((action) => this.bindings.keyboard[action].includes(code));
   }
 
   private isKeyHeld(action: ActionName): boolean {
-    for (const code of KEY_BINDINGS[action]) {
+    for (const code of this.bindings.keyboard[action]) {
       if (this.keysDown.has(code)) return true;
     }
     return false;
@@ -119,7 +148,7 @@ export class InputManager {
     const now = new Set<ActionName>();
     if (pad) {
       for (const action of ACTIONS) {
-        if (padActionActive(pad, action)) now.add(action);
+        if (this.padActionActive(pad, action)) now.add(action);
       }
     }
 
@@ -151,24 +180,19 @@ export class InputManager {
       axes: Array.from(pad.axes),
     };
   }
-}
 
-/** Every action a keyboard code is bound to (bindings may double up, e.g. ArrowUp/W). */
-function actionsBoundTo(code: string): ActionName[] {
-  return ACTIONS.filter((action) => KEY_BINDINGS[action].includes(code));
-}
-
-function padActionActive(pad: NonNullable<PadReading>, action: ActionName): boolean {
-  const buttons = PAD_BUTTONS[action];
-  if (buttons) {
-    for (const index of buttons) {
-      if (pad.buttons[index] === true) return true;
+  private padActionActive(pad: NonNullable<PadReading>, action: ActionName): boolean {
+    const buttons = this.bindings.gamepad.buttons[action];
+    if (buttons) {
+      for (const index of buttons) {
+        if (pad.buttons[index] === true) return true;
+      }
     }
+    const axis = this.bindings.gamepad.axes[action];
+    if (axis) {
+      const value = pad.axes[axis.axis] ?? 0;
+      return axis.dir < 0 ? value <= -INPUT.stickDeadzone : value >= INPUT.stickDeadzone;
+    }
+    return false;
   }
-  const axis = PAD_AXES[action];
-  if (axis) {
-    const value = pad.axes[axis.axis] ?? 0;
-    return axis.dir < 0 ? value <= -INPUT.stickDeadzone : value >= INPUT.stickDeadzone;
-  }
-  return false;
 }

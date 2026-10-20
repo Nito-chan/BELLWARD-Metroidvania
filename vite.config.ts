@@ -6,6 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Playwright writes reports under the project root; without this Vite sees the HTML
+    // churn as an app change and can reload the page mid-test.
+    watch: {
+      ignored: ['**/playwright-report/**', '**/test-results/**', '**/dist/**'],
+    },
   },
   preview: {
     port: 5173,

@@ -1,0 +1,266 @@
+/**
+ * Owns the pause overlay: opening/closing, focus handoff, keyboard capture, gamepad
+ * polling and the bridge between the pure MenuModel and the DOM view.
+ *
+ * The simulation is frozen by Game while this is open; the menu's own rAF keeps gamepad
+ * navigation alive independently of the fixed-tick loop.
+ */
+import './menu.css';
+import type { MenuDebugState } from '../../debug/DebugState';
+import type { ActionName } from '../../config/input';
+import type { Bindings } from '../../input/bindings';
+import { MenuModel } from './MenuModel';
+import { MenuPad, type MenuDirection } from './MenuPad';
+import { MenuView } from './MenuView';
+import { ACTION_ORDER, bindingFocusId } from './menuContent';
+import type { MenuAudio } from './menuTypes';
+
+export type MenuSystemOptions = {
+  bindings: Bindings;
+  audio: MenuAudio;
+  applyBindings: (next: Bindings) => void;
+  /** Called after the menu hides itself; Game resumes the loop here. */
+  onClose: () => void;
+};
+
+const NATIVE_RANGE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+
+export class MenuSystem {
+  private readonly model: MenuModel;
+  private readonly view: MenuView;
+  private readonly pad: MenuPad;
+  private openValue = false;
+
+  constructor(private readonly options: MenuSystemOptions) {
+    this.model = new MenuModel({
+      bindings: options.bindings,
+      audio: options.audio,
+      applyBindings: options.applyBindings,
+    });
+    this.view = new MenuView({
+      onCommand: (command) => this.onCommand(command),
+      onVolume: (bus, value) => this.model.setVolume(bus, value),
+    });
+    this.pad = new MenuPad({
+      captureKind: () => this.model.capture?.kind ?? null,
+      onCaptureCancel: () => {
+        const capture = this.model.capture;
+        this.model.cancelCapture();
+        this.syncView(
+          capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined,
+        );
+      },
+      onCaptureButton: (index) => {
+        const capture = this.model.capture;
+        this.model.usePadButton(index);
+        this.syncView(
+          capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined,
+        );
+      },
+      onPause: () => this.requestClose(),
+      onBack: () => this.handleBack(),
+      onConfirm: () => this.view.activateFocused(),
+      onDirection: (direction) => this.applyDirection(direction),
+    });
+  }
+
+  get isOpen(): boolean {
+    return this.openValue;
+  }
+
+  mount(): void {
+    this.view.mount();
+    document.addEventListener('keydown', this.onKeyDown, { capture: true });
+  }
+
+  open(): void {
+    if (this.openValue) return;
+    this.openValue = true;
+    this.model.open();
+    this.view.show();
+    this.setGameInert(true);
+    this.view.render(this.model, null, true);
+    this.pad.start();
+  }
+
+  close(): void {
+    if (!this.openValue) return;
+    this.openValue = false;
+    this.pad.stop();
+    this.model.close();
+    this.view.hide();
+    this.setGameInert(false);
+  }
+
+  debugState(): MenuDebugState {
+    return {
+      open: this.openValue,
+      screen: this.model.screen,
+      capture: this.model.capture,
+      status: this.model.status,
+      focus: this.openValue ? this.view.focusId() : null,
+      bindings: this.model.bindings,
+    };
+  }
+
+  private requestClose(): void {
+    this.close();
+    this.options.onClose();
+  }
+
+  private onCommand(command: string): void {
+    if (!this.openValue) return;
+
+    if (command === 'resume') {
+      this.requestClose();
+      return;
+    }
+    if (command === 'settings' || command === 'controls') {
+      this.model.navigate(command);
+      this.view.render(this.model, null, true);
+      return;
+    }
+    if (command === 'back') {
+      this.handleBack();
+      return;
+    }
+    if (command === 'mute') {
+      this.model.toggleMute();
+      this.syncView('settings:mute');
+      return;
+    }
+    if (command === 'reset') {
+      this.model.requestReset();
+      this.syncView('controls:reset');
+      return;
+    }
+    if (command === 'cancel-capture') {
+      const capture = this.model.capture;
+      this.model.cancelCapture();
+      this.syncView(
+        capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined,
+      );
+      return;
+    }
+    if (command.startsWith('bind:')) {
+      const [prefix, action, kind, slotText] = command.split(':');
+      if (
+        prefix !== 'bind' ||
+        !isAction(action) ||
+        (kind !== 'key' && kind !== 'pad') ||
+        slotText === undefined
+      ) {
+        return;
+      }
+      const slot = Number(slotText);
+      if (!Number.isInteger(slot) || slot < 0) return;
+      this.model.beginCapture(action, kind, slot);
+      this.view.render(this.model, bindingFocusId(action, kind, slot), false);
+    }
+  }
+
+  private handleBack(): void {
+    const capture = this.model.capture;
+    const result = this.model.back();
+    if (result === 'closed') {
+      this.requestClose();
+      return;
+    }
+    if (result === 'changed') {
+      this.view.render(this.model, null, true);
+      return;
+    }
+    this.syncView(capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined);
+  }
+
+  private syncView(focusId?: string): void {
+    this.view.render(this.model, focusId ?? this.view.focusId(), false);
+  }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (!this.openValue) return;
+    const code = event.code;
+
+    if (this.model.capture) {
+      const capture = this.model.capture;
+      if (event.repeat) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (code === 'Escape') {
+        this.model.cancelCapture();
+        this.syncView(bindingFocusId(capture.action, capture.kind, capture.slot));
+      } else if (capture.kind === 'key') {
+        this.model.useKey(code);
+        this.syncView(bindingFocusId(capture.action, capture.kind, capture.slot));
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement &&
+      target.type === 'range' &&
+      NATIVE_RANGE_KEYS.has(code)
+    ) {
+      return;
+    }
+
+    switch (code) {
+      case 'Escape':
+        this.handleBack();
+        break;
+      case 'ArrowUp':
+      case 'KeyW':
+        this.view.moveFocus('up');
+        break;
+      case 'ArrowDown':
+      case 'KeyS':
+        this.view.moveFocus('down');
+        break;
+      case 'ArrowLeft':
+      case 'KeyA':
+        this.view.moveFocus('left');
+        break;
+      case 'ArrowRight':
+      case 'KeyD':
+        this.view.moveFocus('right');
+        break;
+      case 'Enter':
+      case 'Space':
+        if (!event.repeat) this.view.activateFocused();
+        break;
+      case 'Tab':
+        this.view.trapTab(event.shiftKey);
+        break;
+      default:
+        break;
+    }
+
+    // Modal: no gameplay key, browser scroll or F-key reaches the page underneath.
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  private applyDirection(direction: MenuDirection): void {
+    if (direction === 'left' || direction === 'right') {
+      const steps = direction === 'left' ? -1 : 1;
+      if (this.view.stepFocusedRange(steps)) return;
+    }
+    this.view.moveFocus(direction);
+  }
+
+  private setGameInert(inert: boolean): void {
+    const app = document.getElementById('app');
+    if (!app) return;
+    if (inert) app.setAttribute('inert', '');
+    else app.removeAttribute('inert');
+  }
+}
+
+function isAction(value: string | undefined): value is ActionName {
+  return value !== undefined && (ACTION_ORDER as readonly string[]).includes(value);
+}

@@ -32,6 +32,8 @@ export const INPUT = {
   gamepadIndex: 0,
   /** Version of the serialized binding document (the M5 binding editor reads this). */
   bindingFormatVersion: 1,
+  /** localStorage key for the persisted binding document. Reads/writes are try/catch. */
+  storageKey: 'bellward.bindings.v1',
 } as const;
 
 /** Keyboard bindings per action, primary first. Rebinding is a data change only. */

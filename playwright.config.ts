@@ -6,7 +6,9 @@ export default defineConfig({
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
-  timeout: 30_000,
+  // Headless SwiftShader plus real audio decode is slow; assertions stay simulation-based,
+  // but each test gets a wall-clock budget that does not race that decode.
+  timeout: 60_000,
   use: {
     baseURL: 'http://localhost:5173',
     // Native resolution: no software compositing upscale under SwiftShader.

@@ -1,5 +1,18 @@
 /** The read-only debug snapshot. This is the contract E2E tests and the F1 overlay use. */
 import type { AudioDebugState } from '../audio/AudioManager';
+import type { Bindings } from '../input/bindings';
+import type { CaptureTarget, MenuScreen } from '../ui/menu/menuTypes';
+
+/** Pause overlay snapshot: screen, capture target, focus and the live binding document. */
+export type MenuDebugState = {
+  open: boolean;
+  screen: MenuScreen | null;
+  capture: CaptureTarget | null;
+  status: string;
+  /** data-focus-id of the focused menu control, or null when nothing inside is focused. */
+  focus: string | null;
+  bindings: Bindings;
+};
 
 /** Room/art snapshot for the active scene. */
 export type SceneDebugState = {
@@ -86,6 +99,8 @@ export type GameDebugState = {
   scene: SceneDebugState | null;
   /** Audio director snapshot: mix, unlock gate, current track, load failures. */
   audio: AudioDebugState;
+  /** Pause overlay snapshot; bindings are visible even while the menu is closed. */
+  menu: MenuDebugState;
   /** Captured runtime errors; empty in a healthy session. */
   errors: string[];
 };

@@ -326,6 +326,24 @@ describe('AudioManager', () => {
     expect(saved.muted).toBe(false);
   });
 
+  it('sets mute idempotently for the settings switch and returns a copy of the mix', () => {
+    const backend = new FakeBackend();
+    const audio = makeAudio(backend);
+
+    expect(audio.setMuted(true)).toBe(true);
+    const calls = backend.muteCalls.length;
+    expect(audio.setMuted(true)).toBe(true);
+    expect(backend.muteCalls).toHaveLength(calls);
+    expect(audio.isMuted()).toBe(true);
+
+    const mix = audio.getMix();
+    mix.master = 0.1;
+    expect(audio.getMix().master).toBe(AUDIO.defaults.master);
+
+    expect(audio.setMuted(false)).toBe(false);
+    expect(audio.isMuted()).toBe(false);
+  });
+
   it('restores a saved mix and falls back to defaults for corrupt data', () => {
     const storage = new MapStorage();
     storage.setItem(

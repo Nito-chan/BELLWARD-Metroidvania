@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIONS } from '../../src/config/input';
+import { setKeyboardBinding, defaultBindings } from '../../src/input/bindings';
 import { InputManager, type PadReading } from '../../src/input/InputManager';
 
 function managerWithPad(): { input: InputManager; setPad: (pad: PadReading) => void } {
@@ -129,5 +130,34 @@ describe('InputManager', () => {
       expect(Array.isArray(keyboard[action])).toBe(true);
       expect((keyboard[action] as string[]).length).toBeGreaterThan(0);
     }
+  });
+
+  it('uses supplied bindings and swaps them live', () => {
+    const rebound = setKeyboardBinding(defaultBindings(), 'jump', 0, 'KeyQ').bindings;
+    const input = new InputManager({ bindings: rebound });
+
+    expect(input.handleKey('KeyU', true)).toBe(false);
+    expect(input.handleKey('KeyQ', true)).toBe(true);
+    expect(input.snapshot().pressed.has('jump')).toBe(true);
+    expect(JSON.parse(input.serialize()).keyboard.jump).toEqual(['KeyQ', 'Space']);
+
+    input.handleKey('KeyQ', false);
+    input.setBindings(defaultBindings());
+    expect(input.snapshot().held.has('jump')).toBe(false);
+    expect(input.handleKey('Space', true)).toBe(true);
+  });
+
+  it('resets every input set without emitting release edges', () => {
+    const { input, setPad } = managerWithPad();
+    input.handleKey('ArrowLeft', true);
+    setPad({ buttons: [true], axes: [0, 0] });
+    input.snapshot();
+
+    input.reset();
+    setPad(null);
+    const after = input.snapshot();
+    expect(after.held.size).toBe(0);
+    expect(after.pressed.size).toBe(0);
+    expect(after.released.size).toBe(0);
   });
 });

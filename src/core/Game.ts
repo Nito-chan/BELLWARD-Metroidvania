@@ -10,6 +10,8 @@ import { belfryTerrace } from '../data/rooms/belfry-terrace';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
+import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
+import { MenuSystem } from '../ui/menu/MenuSystem';
 import { ArtProvider } from '../render/ArtProvider';
 import { RoomScene } from '../render/RoomScene';
 import { createRoom } from '../world/Room';
@@ -39,8 +41,6 @@ export class Game {
   });
   private readonly rng = new Rng(WORLD.rngSeed);
   private readonly overlay = new DebugOverlay();
-  private readonly input = new InputManager();
-  /** Audio stays silent until the first user gesture; everything is queued before that. */
   private readonly audio = new AudioManager(new HowlerBackend(), { rng: this.rng.fork() });
   private readonly loop = new Loop({
     dt: SIM.dt,
@@ -49,12 +49,35 @@ export class Game {
     render: (alpha: number) => this.onRender(alpha),
     onError: (error: unknown) => this.recordError('simulation frame failed', error),
   });
+  private bindings: Bindings;
+  private readonly input: InputManager;
+  private readonly menu: MenuSystem;
 
   private scene: RoomScene | null = null;
   private art: ArtProvider | null = null;
   private ready = false;
   private lastWholeSecond = 0;
   private overlayFrameCounter = 0;
+  /** Suppress the pause edge that closes a menu on the first resumed tick. */
+  private pauseLatch = false;
+  /** Physical pause keys currently down; survives an InputManager reset. */
+  private readonly pauseKeysDown = new Set<string>();
+
+  constructor() {
+    this.bindings = loadBindings();
+    this.input = new InputManager({ bindings: this.bindings });
+    this.menu = new MenuSystem({
+      bindings: this.bindings,
+      audio: this.audio,
+      applyBindings: (next) => {
+        this.bindings = next;
+        this.pauseKeysDown.clear();
+        this.input.setBindings(next);
+        saveBindings(next);
+      },
+      onClose: () => this.resumeFromMenu(),
+    });
+  }
 
   /** Initializes the renderer, mounts the canvas, starts the loop. Throws on failure. */
   async boot(): Promise<void> {
@@ -94,6 +117,9 @@ export class Game {
     this.onResize();
 
     this.overlay.mount();
+    this.menu.mount();
+    window.addEventListener('keydown', this.onPauseKeyDown, true);
+    window.addEventListener('keyup', this.onPauseKeyUp, true);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
@@ -123,6 +149,7 @@ export class Game {
       renderer: this.ready ? this.app.renderer.name : 'none',
       scene: this.scene?.debugState() ?? null,
       audio: this.audio.debugState(),
+      menu: this.menu.debugState(),
       errors: [...this.errors],
     };
   }
@@ -152,17 +179,42 @@ export class Game {
   }
 
   private onTick(): void {
+    if (this.menu.isOpen) return;
+    const snapshot = this.input.snapshot();
+
+    if (this.pauseLatch) {
+      if (this.pauseKeysDown.size === 0 && !snapshot.held.has('pause')) this.pauseLatch = false;
+    } else if (snapshot.pressed.has('pause')) {
+      this.openMenu();
+      return;
+    }
+
     const wholeSecond = Math.floor(this.loop.stats.tickCount * SIM.dt);
     if (wholeSecond > this.lastWholeSecond) {
       this.lastWholeSecond = wholeSecond;
       this.events.emit('secondElapsed', { seconds: wholeSecond });
     }
     if (this.scene) {
-      const events = this.scene.update(this.loop.stats.tickCount, this.input.snapshot());
+      const events = this.scene.update(this.loop.stats.tickCount, snapshot);
       for (const event of events) this.audio.onPlayerEvent(event);
       if (this.scene.resetRequested) this.resetScene();
     }
     this.audio.tick(this.loop.stats.tickCount);
+  }
+
+  /** Freezes the simulation but keeps rendering the scene behind the overlay. */
+  private openMenu(): void {
+    this.input.reset();
+    this.loop.pause();
+    this.menu.open();
+  }
+
+  /** Resumes from the pause overlay without letting a held pause input re-open it. */
+  private resumeFromMenu(): void {
+    this.pauseLatch = true;
+    this.input.reset();
+    this.loop.resume();
+    this.app.canvas.focus();
   }
 
   /** Builds a fresh room: used at boot and again after the player dies. */
@@ -204,7 +256,16 @@ export class Game {
     this.app.canvas.style.height = `${VIEW.height * scale}px`;
   };
 
+  private readonly onPauseKeyDown = (event: KeyboardEvent): void => {
+    if (this.bindings.keyboard.pause.includes(event.code)) this.pauseKeysDown.add(event.code);
+  };
+
+  private readonly onPauseKeyUp = (event: KeyboardEvent): void => {
+    this.pauseKeysDown.delete(event.code);
+  };
+
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (this.menu.isOpen || event.defaultPrevented) return;
     if (event.key === 'F1') {
       event.preventDefault();
       this.overlay.toggle();
@@ -222,12 +283,14 @@ export class Game {
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
+    if (this.menu.isOpen || event.defaultPrevented) return;
     if (this.input.handleKey(event.code, false)) event.preventDefault();
   };
 
   /** Losing focus mid-keypress must not leave the hero running forever. */
   private readonly onBlur = (): void => {
     this.input.blur();
+    this.pauseKeysDown.clear();
   };
 
   /**

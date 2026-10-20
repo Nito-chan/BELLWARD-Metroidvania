@@ -68,6 +68,11 @@ export class DebugOverlay {
       `mix        master ${audio.volumes.master.toFixed(2)} music ${audio.volumes.music.toFixed(2)} sfx ${audio.volumes.sfx.toFixed(2)}`,
       `music      ${audio.music ?? '-'}${audio.musicPlaying ? ' (playing)' : ''}  last-sfx ${audio.lastSfx ? `${audio.lastSfx.key}@${audio.lastSfx.tick}` : '-'}`,
     );
+    const { menu } = state;
+    lines.push(
+      `menu       ${menu.open ? `${menu.screen ?? '-'}${menu.capture ? ` capture ${menu.capture.action}.${menu.capture.kind}` : ''}` : 'closed'}${menu.focus ? ` focus ${menu.focus}` : ''}`,
+    );
+    if (menu.open && menu.status) lines.push(`menu-note  ${menu.status}`);
     if (audio.failed.length > 0) {
       lines.push(`audio-load ${audio.failed.join(', ')}`);
     }
