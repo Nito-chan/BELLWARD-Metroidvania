@@ -557,4 +557,92 @@ rendering); keeping the 30 s default (rejected: menu teardown alone could exceed
 
 ---
 
-(append new entries at the bottom; never edit old ones — correct them with a new entry)
+## D039 — 2026-10-20 — Bosses are data-driven phases and patterns on the shared Enemy body
+
+**Decision:** A boss is a `BossDef` (intro/death clocks, gate, reward name, ordered phases) plus a
+catalog of reusable `BossPatternDef` rows. `Boss` extends `Enemy` for body, collision, hit flash,
+grounding and the common hit contract; it adds only phase transitions, pattern execution, the
+Bellbearer gate and a typed `BossEvent` stream. Phase pattern selection is a pure weighted roll with
+cooldowns, min/max range filters and anti-repeat, executed by `BossPatternState`. Pattern kinds
+(`charge`, `dash`, `sweep`, `slam`, `dive`, `rain`, `fan`, `ring`, `teleport`) map data to fixed
+simulation behaviour; projectile spawn helpers stay pure so tests can assert positions and counts.
+Fairness constants (minimum telegraph and idle gaps, ward-break radius) are asserted in content tests
+rather than left to review by eye.
+
+**Why:** Three bosses with seven phases and fifteen patterns would have become three copies of the
+same collision, hit and movement code. A shared body plus content rows keeps every number tunable in
+`src/config`, makes a phase a data edit rather than a branch edit, and lets unit tests exercise every
+threshold and pattern without Pixi, audio or the loop. The event stream keeps rendering and audio out
+of the simulation.
+
+**Alternatives:** three bespoke boss classes (rejected: duplicated physics and hit handling);
+imperative per-boss update methods (rejected: phase edits become control-flow edits); random pattern
+choice without cooldowns (rejected: repeated unpunishable patterns and non-reproducible tests).
+
+## D040 — 2026-10-20 — The Bellbearer's shield needs a player-baited wall charge; first clears are permanent for the run
+
+**Decision:** The Bellbearer's `bellShield` blocks all damage and sword deflections until a charge
+impacts a wall **and the player is within 64 px of that impact**. A far wall hit does not break the
+ward. A break enters the post-gate phase, emits a ward-break/phase pair, and staggers the boss for
+`wardBreakStunTicks`. A first defeat records a sigil, raises the mask ceiling by one, fills the new
+mask, unlocks the arena's return door and marks the room claimed. Re-entering a claimed arena creates
+no boss and no lock. M6 keeps the sigil set in memory; persistence is M7.
+
+**Why:** The first implementation let the arena-wide charge hit the far wall and solve its own gate
+before the player understood the puzzle. The radius makes the break a deliberate bait: the player
+must stay near the wall, survive the charge and punish the stagger. Claiming the room prevents a
+defeated boss from returning on every door traversal, which would make the reward feel temporary and
+the return path a chore. The one-mask reward gives the fight a run-level consequence without adding
+an ability system yet.
+
+**Alternatives:** break on any wall hit (rejected: the boss solves the puzzle itself); a scripted
+cutscene break (rejected: removes the fight's central decision); respawning bosses on re-entry
+(rejected: undermines the sigil and the door); persisting sigils now (deferred to M7's save contract).
+
+## D041 — 2026-10-20 — Boss tells are geometric and screen-space; the HUD spells out the gate
+
+**Decision:** `BossView` draws procedural art plus archetype-aware warnings: a swept lane for
+charge/dash, a target ring and player marker for slam/dive, player-centred vertical lanes for rain,
+and spokes/rings for fan/ring. The ward is a body-sized bell-rim aura, not a generic shield icon. The
+screen-space `BossHud` shows name, phase pips, phase name and an explicit `WARDED` label; intro,
+phase and reward `Banner`s use the simulation clock. Boss events translate to eight existing CC0 SFX;
+the Bellbearer requests `bossAbyss`, the other arenas request `bossCitadel`. No new assets or licences
+were added.
+
+**Why:** A boss pattern is a commitment, so the player must be able to read where it will land, not
+just that something is charging. Drawing the actual lane/ring/rain columns makes the fairness
+constants legible during play. Spelling out `WARDED` avoids the common souls-like failure where a
+player assumes their damage is broken. Procedural boss art kept M6 shippable without introducing
+unlicensed or unapproved art.
+
+**Alternatives:** a single generic flash for every pattern (rejected: unreadable in a three-boss
+milestone); authored boss sheets (deferred: no approved packs and no time to commission art);
+relying on bar color alone for the ward (rejected: not readable for color-vision differences).
+
+## D042 — 2026-10-20 — Boss E2E asserts outcomes, not short-lived FSM states; captures freeze the frame
+
+**Decision:** Boss Playwright coverage uses the debug contract and simulation outcomes: HP, phase
+number/name, ward flag, alive flag, sigil, max masks and `exitLocked`. It does not poll for a phase or
+stagger state, whose hold can be shorter than one IPC round trip. After the ward break it retries the
+real damage call in-page until the legal hit sticks, rather than asserting one instantaneous call.
+Door traversal goes through `walkLeftToRoom`, which releases movement inside the page.
+`debugLoadRoom` resets held input so a key from the previous room cannot leak into the next. Boss
+screenshots wait two rendered frames, open the pause menu to freeze ticks, hide the DOM menu, and
+capture only the canvas; `--boss-room=<id>` now implies `--boss`. Phase/pattern timing and every
+transition remain unit-tested.
+
+**Why:** The first boss suite flaked on transient states even though the simulation was correct: a
+poll can arrive after the phase hold ended or after `stagger` became `idle`. Outcomes are stable and
+still fail if the gate, reward or door logic regresses. The screenshot path had a real capture bug:
+SwiftShader writes slower than a boss pattern, so an idle player could die and reset the room before
+the PNG was saved, producing an intro frame instead of the selected telegraph. Freezing through the
+existing pause flow uses the real loop semantics and needs no extra debug API.
+
+**Alternatives:** widening phase holds for tests (rejected: changes gameplay to suit the harness);
+sleeping longer (rejected: still loses the frame under load); adding a DEV freeze API (rejected: the
+pause flow already freezes exactly the simulation and keeps rendering); screenshotting the whole page
+(rejected: the pause overlay covers the arena).
+
+---
+
+(appended M6; append new entries at the bottom — never edit old ones — correct them with a new entry)

@@ -627,3 +627,137 @@ in-game menu pass that can be opened without stopping the deterministic simulati
 The Bellbearer mini-boss and two pattern bosses: arena rooms, boss health/phase UI, telegraphed
 attack patterns, boss audio and rewards, all on the existing deterministic combat and FSM
 foundations.
+
+---
+
+## M6 — Bosses of the Drowned Belfry (2026-10-20)
+
+**Commit:** `c802f7f` — **Status:** complete, all gates green.
+
+### Shipped
+
+- **Boss contract and content (`src/config/bossTypes.ts`, `bosses.ts`, `src/enemies/Boss.ts`):**
+  three encounters, seven phases and fifteen telegraphed patterns. `Boss` extends the shared
+  `Enemy` body/FSM instead of duplicating physics; phases, thresholds, speed scales, pattern pools,
+  cooldowns, damage and projectile data all live in typed content. `BossPatternState` owns the
+  deterministic weighted roll, distance filters, cooldowns, anti-repeat memory and rain-shot
+  accounting. Every telegraph is at least 22 ticks; idle gaps stay within the authored fairness
+  bounds, both asserted by content tests.
+- **Three fights:** **The Bellbearer** (16 HP, 2 phases) teaches the guarded charge — its bell shield
+  blocks all damage until a wall charge shatters it near the player. **Warden Moss** (26 HP, 2 phases)
+  controls space with sweeps, shockwaves, spore rain, a wall-stunned dash and a radial burst. **The
+  Bell Thief** (32 HP, 3 phases) escalates from coin fans to teleport strikes, dives, rings and bell
+  rain. Pattern archetypes cover charge, dash, sweep, slam, dive, rain, fan, ring and teleport.
+- **Arena content (`src/data/rooms/*`):** a new enemy-free hub, **The Bell Nave**, connects the
+  terrace to three 60×24 arenas. Bosses spawn at x=560 so they are visible from the player's x=120
+  entry; two one-way shelves (low 42–49, high 45–51) provide vertical play without creating a safe
+  rain camp. The return door is locked while the boss lives. Room labels moved to x=72 so names are
+  not clipped.
+- **Presentation:** procedural boss art (no new licensed assets), a shared `BossView` with a
+  body-sized ward aura, swept charge/dash lanes, player-centred rain lanes and slam/dive target
+  markers; screen-space `BossHud` with phase pips and a spell-out of `WARDED`; intro, phase and reward
+  `Banner`s; a three-sigil HUD row; and screen-reader announcements. The boss HUD lingers through the
+  death fade, then clears.
+- **Rewards and re-entry:** a first clear records a sigil, raises the mask ceiling by one and fills
+  the new mask. Claimed arenas are skipped for the rest of the run — no boss respawn, and the return
+  door is already open. M6 keeps sigils in memory; M7 owns persistence.
+- **Audio:** eight boss SFX built from already-approved CC0 packs, plus the two existing alcakrab
+  loops (`bossAbyss` for the Bellbearer, `bossCitadel` for the other two). No new downloads and no
+  manifest changes.
+- **Debug and tests:** `SceneBossDebugState` (hp/max, phase/count/name, ward, pattern, telegraph,
+  hidden, x/y, death clock), `exitLocked`, run sigils and `maxHp`; DEV hooks for room load, damage,
+  ward break and defeat. `debugLoadRoom()` resets held input so a test cannot carry a run key between
+  rooms. Nineteen boss unit tests cover pattern selection, every phase threshold, the wall-stun and
+  near-player ward break, rain-shot caps and boss defeat; five Playwright tests cover the nave,
+  gate/reward/door flow, Warden phase, Bell Thief final phase and the live Warden boss loop.
+- **Docs/tooling:** four M6 captures cover the warded Bellbearer, the Warden phase, the Bell Thief's
+  second phase and the first-clear reward with six masks and the sigil row. Screenshots freeze the
+  simulation through the pause flow before capturing the canvas, so the chosen boss frame or phase
+  banner survives SwiftShader's slow screenshot path. The `--boss-room=<id>` flag now implies a boss
+  capture. `docs/PROGRESS.md` and `docs/DECISIONS.md` record the milestone.
+
+### Gates (all green at commit)
+
+| Gate                   | Result                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                                           |
+| `npm run lint`         | clean, zero warnings                                                                            |
+| `npm run test`         | 234/234 passed (20 files, ~6.5 s) — up from 206 (+28)                                           |
+| `npm run build`        | ✓ 825 modules, 440.80 kB JS / 128.03 kB gzip, 12.83 kB CSS / 3.40 kB gzip                       |
+| `npm run test:e2e`     | 19/19 passed (7.1 min), 5 boss tests incl. the live Warden loop                                 |
+| `npm run assets:check` | OK, 662 files, 0 warnings                                                                       |
+| `npm run format:check` | clean                                                                                           |
+| Screenshots            | `M6-bellbearer.png`, `M6-warden-phase.png`, `M6-bellthief.png`, `M6-reward.png` — frozen frames |
+
+### E2E coverage added
+
+1. **The Bell Nave** opens all three arenas; each loads its boss kind, phase 0, music and 5 masks,
+   with no scene errors.
+2. **Bellbearer gate:** 99 damage is blocked while warded; breaking the ward enters phase 1 and
+   removes the guard; a real hit lands; defeat records the sigil, raises max masks to 6 and unlocks
+   the door; walking back to the nave preserves the reward; re-entering the claimed arena has no boss
+   and an open door.
+3. **Warden Moss** crosses its phase threshold, reports `The Overgrowth`, and later shows a live
+   wind-up telegraph; the exact phase hold and pattern FSM stay in unit tests because the transition
+   is shorter than reliable Playwright polling.
+4. **Bell Thief** crosses both thresholds and reaches `The Last Silence` (3 phases), with no errors.
+5. **Boss audio:** the Warden arena requests `bossCitadel` and waits for the loop to actually play
+   after the first gesture, with no failed audio keys.
+
+### Adjustments & findings
+
+- **The ward gate could solve itself.** The Bellbearer's arena-wide charge hit a far wall and broke
+  its own shield on the first pattern. The break now requires the player to be within
+  `BOSS_FAIRNESS.wardBreakRadius` (64 px) of the impact, so only a baited wall charge counts; the
+  player's near-wall punish is the actual puzzle.
+- **Claimed bosses kept returning.** The first reward implementation rebuilt the arena with a living
+  boss because the scene carried claim state separately. `RoomScene` now skips boss creation when the
+  room's sigil is claimed; the arena is silent and the exit is open on re-entry.
+- **Rain shot semantics were ambiguous.** `shots` now means the total shots in one active window,
+  with `shotIntervalTicks` controlling cadence and `patternShots` capping the loop. This is the
+  contract the unit tests and the Warden telegraph share.
+- **Transient FSM states are not E2E assertions.** Phase and stagger holds are only a few ticks; a
+  Playwright poll can miss them even when the simulation is correct. Boss E2E asserts outcomes (hp,
+  phase, ward, reward, door) and snapshots a live wind-up in one page task; exact transition timing
+  stays in unit tests. The first damage call after a ward break is retried in-page until the legal
+  hit lands, so a slow frame spanning the stagger cannot produce a false failure. Door returns release
+  movement with `walkLeftToRoom` because a spawn can overlap its own trigger.
+- **Arena framing changed for readability.** The first capture pass had the old ledge columns and
+  labels close enough to the edge to clip. Boss spawns, shelves and label positions were retuned so
+  the encounter and room name read from the entry; the intro banner and phase HUD arrived after that
+  pass.
+- **Screenshot capture lost the frame it was aiming at.** SwiftShader writes a frame slower than a
+  boss pattern; by save time the idle player could die, reset the room or phase back to intro. Boss
+  shots now wait two rendered frames, open the pause menu to freeze ticks, hide the DOM menu and
+  capture the canvas. This is diagnostics-only; gameplay and determinism are untouched.
+- **Trace capture delayed WebAudio resume in the M2 keyboard smoke.** The test's 20 s window was
+  occasionally shorter than headless trace + SwiftShader allowed, even though the context did resume
+  on the next frames. It now uses the same 45 s window as the dedicated audio tests, under a 90 s test
+  budget; product audio behavior is unchanged.
+- **Size debt paid down.** `PlayerController` fell from 496 to 301 non-empty lines by extracting
+  pose, combat, dash, jump, reaction, motion and sensor modules. `RoomScene` fell from 485 to 304 by
+  extracting the backdrop, motes, exit gate, combat feedback, scene debug snapshot and boss spawn.
+  `Boss` gained `BossPatternState`, placement helpers and an event type module; all remain covered by
+  the full unit suite.
+
+### Explicitly deferred / stubs
+
+- **Save/load, benches, the map and persistent sigils are M7+.** A run's sigils and mask ceiling
+  live in memory; a reload starts the terrace over.
+- **Boss art is procedural.** The encounter renderer has no authored boss sheets; the existing
+  approved packs are reused for effects and boss SFX. Replacing procedural silhouettes with authored
+  art later requires only new art keys and manifest entries.
+- **No fog gates, arena intro cutscenes or mid-fight checkpoints.** The return door is the only
+  spatial lock; death rebuilds the room at full health and resets the boss.
+- **Two shared boss loops cover three fights.** There is no per-boss theme, phase-layer music or
+  ducking; the loop is requested on room entry and crossfades with the normal room track.
+- **No unique sigil abilities.** Each first clear only raises the mask ceiling; ability gates remain
+  later milestones.
+- **Gamepad boss play is covered by the shared input path but not separately E2E-tested on hardware.**
+- **The 12-room region is not complete.** M6 ships five rooms (terrace, nave, three arenas); the
+  remaining region, benches and fast travel arrive later.
+
+### Next milestone preview (M7)
+
+Save/load and benches: persist run position, masks, sigils and room state; add a bench checkpoint
+and respawn path; and introduce the map/region loop around the five M6 rooms.
