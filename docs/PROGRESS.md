@@ -761,3 +761,125 @@ foundations.
 
 Save/load and benches: persist run position, masks, sigils and room state; add a bench checkpoint
 and respawn path; and introduce the map/region loop around the five M6 rooms.
+
+---
+
+## M7 — Run persistence, benches and the region map (2026-10-20)
+
+**Commit:** `c7210e2` — **Status:** complete, all gates green.
+
+### Shipped
+
+- **Versioned run save (`src/save/runSave.ts`, `RunProgress.ts`, `src/config/save.ts`):** one
+  `bellward.save.v1` document stores current room, validated spawn, HP, owned sigils, charted rooms
+  and checkpoint bench id. Parsing is all-or-nothing: unknown rooms/benches/sigils, duplicate values,
+  an unclear standing point, bad HP, an unvisited current room or a future version starts a fresh run.
+  Storage access is guarded; a blocked read or write never breaks play. Mask ceilings come from the
+  same sigil count used by the reward system.
+- **Run lifecycle (`src/core/RunSession.ts`):** the composition root now delegates scene construction,
+  room/spawn tracking, progression, autosaves, rest, respawn and map snapshots. A valid resume rebuilds
+  the saved room entry without rewriting storage. Room entry, first boss clears, rests and deaths write
+  `room`, `reward`, `bench` and `respawn` respectively; a fresh boot writes `boot`.
+- **Benches (`src/config/bench.ts`, `src/data/benches.ts`, `Benches` in room data):** data-driven rest
+  points with stable ids, validated floor markers, validated spawn offsets and a validated interaction
+  range around the seat. **The Weeping Stone** stands in the terrace and **The Bell-Keeper's Rest** in
+  the nave, both with procedural stone-bench art. A range-based prompt names the bench; pressing
+  interact fully heals, rebuilds the room clean, sets the checkpoint, writes the save and shows a
+  `RESTED` arrival banner. The screen reader hears the bench name and the save promise once per
+  approach.
+- **Death and resume semantics:** reload returns to the last saved room entry with the saved masks,
+  sigils and charted rooms. Death returns to the last rested bench (or the terrace before any rest) at
+  full masks and rebuilds the room. Claimed bosses stay claimed: their arena has no boss and its return
+  door is open after reload.
+- **Region map (`src/ui/map/`, menu model/view/CSS):** an accessible DOM chart in the existing
+  focus-trapped pause dialog, opened by `map` (M by default) or the pause **Map** entry. It freezes the
+  simulation, shows charted count, claimed sigils, current room, last rest and a legend, and derives
+  deduplicated routes from the authored exit graph. Unknown room and boss names never enter the DOM;
+  the current chamber is `aria-current="location"`. Only Back is focusable; `Escape` or the live map
+  key closes it, and the footer's close hint is generated from the current binding instead of a
+  hard-coded M.
+- **Interaction/debug surface:** `scene.bench` (id/name/in range), `run` facts (room, sigils, max HP,
+  visited rooms, checkpoint) and `save` facts (key/version/present/loaded/last successful write) join
+  the F1 overlay and DEV contract. `debugLoadRoom(roomId, spawn?)` now accepts a validated spawn.
+  `debugKillPlayer()` and `debugProtectPlayer()` support real-path death and deterministic phase probes.
+- **Tests and docs:** 21 new unit tests cover the save schema, validation matrix, storage failures and
+  progression, bench/save-room validation, map model/layout and the debug i-frame contract; three new
+  Playwright flows cover rest → save → map → reload, death to the checkpoint, and sigil/mask persistence
+  with a silent claimed arena. `docs/CONTROLS.md`, `README.md` and D043–D047 document the live contract.
+
+### Gates (all green at commit)
+
+| Gate                          | Result                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `npm run typecheck`           | clean                                                                                          |
+| `npm run lint`                | clean, zero warnings                                                                           |
+| `npm run test`                | 255/255 passed (22 files, ~7 s) — up from 234 (+21)                                            |
+| `npm run build`               | ✓ 837 modules, 457.21 kB JS / 132.99 kB gzip, 16.98 kB CSS / 4.22 kB gzip                      |
+| `npm run test:e2e`            | 22/22 passed (8.6 min), including the three M7 persistence flows                               |
+| `npm run assets:check:strict` | OK, 662 files, 0 warnings                                                                      |
+| `npm run format:check`        | clean                                                                                          |
+| Screenshots                   | `M7-bench.png` (live rest prompt) and `M7-map.png` (fully charted, one sigil, nave checkpoint) |
+
+### E2E coverage added
+
+1. **Rest → save → chart → reload:** the hero starts in the terrace bench range, rests through the
+   real interact key, the save reports `bench`, the map shows 1/5 charted, 0/3 sigils, the current node,
+   four hidden names and the correct last-rest copy. The map fits the 640×360 dialog. Opening it again
+   through the pause menu and closing with Back returns to the run; reload resumes on the terrace bench
+   spawn with the same checkpoint and masks.
+2. **Death returns to the checkpoint:** after resting in the nave, the test loads the terrace, confirms
+   spawn invulnerability expired, kills the hero through the damage path and waits for the rebuilt nave.
+   The respawn is at the nave bench spawn, not the room that killed the hero, and the save reason is
+   `respawn`; a reload then resumes there.
+3. **Sigils and masks persist:** defeating the Bellbearer records the sigil and raises the mask ceiling
+   to six; after reload the sigil, max HP and charted rooms remain, and re-entering the arena creates no
+   boss. The saved reward HP is not assumed to be full because damage taken before the kill is real.
+
+### Adjustments & findings
+
+- **The first nave bench was behind a boss door.** At x=360 it could only be reached from the room
+  spawn by crossing the Bellbearer trigger. It moved to x=104 with a x=64 respawn, west of the first
+  door; the terrace entry spawns at x=80 and every arena return spawns at x=120, both inside its range.
+  This makes the hub checkpoint reachable without solving a fight and still leaves the door labels clear.
+- **Resume and respawn had to be different facts.** A single last-room field made closing the tab either
+  lose progress (bench-only) or make death free (entry-only). The save now stores the entry, while the
+  checkpoint bench is a separate durable field; D044 records the split.
+- **A corrupted save must not be repaired field-by-field.** Early validation accepted partial records
+  and could produce a checkpoint outside the charted set. Loading now rejects the whole document and
+  starts fresh; the next boot/room write replaces it with a valid run.
+- **The map's first node layout crowded its own cards.** The arena cards at the old vertical offsets
+  clipped labels and the REST badge at 640×360. The layout now uses y=17/50/83 with terrace/nave at
+  y=50, and the navigation test asserts the whole dialog stays inside 640×360.
+- **A successful save is not a failed attempt.** `lastWrite` now records the reason of the most recent
+  successful write; `present` remains false when storage rejects the first write, and the run stays
+  playable in memory. The unit suite covers the distinction.
+- **E2E needed a valid spawn, not a longer walk.** `debugLoadRoom` gained an optional spawn validated by
+  the same standing-point check as production. That removed a slow, IPC-sensitive 280 px walk from the
+  bench flow without bypassing the rest interaction. M6's phase probes also call the DEV-only i-frame
+  protection so a SwiftShader stall cannot replace a phase assertion with a death reset.
+- **Size debt paid down where M7 grew it.** Extracting `RunSession` and `BenchInteraction` brought
+  `Game.ts` from 436 to 309 non-empty lines and `RoomScene.ts` from 372 to 344. `RunSession` is 164 and
+  `BenchInteraction` 54. `RoomScene` remains 44 lines over the soft guideline and keeps the boss,
+  combat and presentation orchestration; further splitting is a polish-pass task, not a hidden stub.
+- **No new art or licences.** Benches, map marks and prompts are procedural/CSS; the asset inventory
+  stays at 662 files with zero strict-mode warnings.
+
+### Explicitly deferred / stubs
+
+- **Seven of the twelve region rooms are not built.** The chart shows the five existing chambers; the
+  rest of the region, new exits and traversal abilities are later milestones.
+- **One automatic slot, no manual save management.** There is no save-slot UI, rename/export/import,
+  cloud sync, manual delete or migration beyond rejecting version mismatches.
+- **No mid-boss checkpoint or boss-phase persistence.** Saving happens at room entry/reward/rest, so a
+  reload during a fight restarts that arena from the beginning at the saved mask count.
+- **Benches do not fast-travel, upgrade or offer a menu.** Rest is a heal/rebuild/checkpoint interaction.
+- **The map has no zoom, pan, pins or fog-of-war.** It lists the authored rooms and hides unknown names;
+  future rooms need only data, exits and a layout entry.
+- **No authored bench/map art and no touch pass.** Both use procedural/CSS presentation; mobile controls
+  remain M10 scope.
+- **No souls-style currency loss or enemy respawn timer.** Death restores masks and resets the room;
+  enemies already return on every clean rebuild.
+
+### Next milestone preview (M8)
+
+Not started. Scope will be confirmed before any M8 code is written; this run ends at the M7 gate.

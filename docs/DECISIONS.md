@@ -645,4 +645,114 @@ pause flow already freezes exactly the simulation and keeps rendering); screensh
 
 ---
 
-(appended M6; append new entries at the bottom — never edit old ones — correct them with a new entry)
+## D043 — 2026-10-20 — A run save stores durable facts only; validation is all-or-nothing
+
+**Decision:** A run persists to `localStorage['bellward.save.v1']` as a versioned document containing
+the current room, a validated standing spawn, current masks, claimed sigils, charted rooms and the
+checkpoint bench id. Enemies, projectiles, hitstop, boss phase timers and pickup state are deliberately
+excluded: every room rebuilds clean, exactly as it does on a door transition. `loadRunSave()` validates
+the whole document — known room, clear standing point, unique known sigils, unique known visited rooms
+that include the current room, integer HP within the sigil-derived ceiling, and a checkpoint bench in a
+charted room. Any failure, including a future version, returns `null` and boots a fresh run. A valid
+resume is not rewritten at boot; fresh boots, room entries, rests, first boss clears and respawns write.
+Storage `getItem`/`setItem` calls are guarded; a blocked write is reported but never breaks play.
+
+**Why:** Autosaving a whole scene would preserve half-finished attacks, dead enemies and boss phase
+timers that the deterministic rebuild contract does not expect. Durable facts are enough to continue a
+metroidvania run and are straightforward to validate. All-or-nothing loading prevents an impossible
+state such as HP above the mask ceiling or a checkpoint in an unvisited room; discarding a bad document
+is safer than repairing it field-by-field. Version 1 gives later milestones an explicit migration
+point. Not rewriting on resume keeps the save's room entry stable until the player actually moves.
+
+**Alternatives:** full-scene snapshots (rejected: timers, pools and transient enemy state are not
+durable content); salvage valid fields from a corrupt document (rejected: can create inconsistent runs);
+multiple slots or cloud saves (deferred); save on every tick or hurt (rejected: storage churn, no
+gameplay value); localStorage access without guards (rejected: private mode and embedded browsers can
+throw).
+
+## D044 — 2026-10-20 — Resume position and respawn checkpoint are separate; benches rebuild the room
+
+**Decision:** The room entry autosave is the reload position. The bench checkpoint is only the death
+return point. Death respawns at the last bench at full masks, or at the terrace if no bench has been
+rested at. Resting at a bench sets the checkpoint, fully heals, rebuilds the current room clean and
+autosaves; it does not teleport to another room. Benches are data-driven room content with stable ids,
+a procedural prop and a validated spawn. The nave bench sits at x=104, west of the Bellbearer door, so
+it can be reached from the terrace and from every arena return without entering another fight.
+
+**Why:** Reloading at the last bench would erase legitimate progress every time the tab closes; dying
+at the saved room entry would make death nearly free. Splitting the two positions preserves both
+conveniences and consequences. Rebuilding on rest clears enemies and projectiles, matching the
+souls-like reset without introducing a second persistence path. The first nave bench placement (x=360)
+was behind a boss door: walking to it from the room spawn triggered the Bellbearer arena. Moving it
+west makes the checkpoint reachable without solving a fight first.
+
+**Alternatives:** reload always at the checkpoint (rejected: loses progress and makes exploration
+hostile); respawn at the room that killed the player (rejected: no checkpoint consequence); heal in
+place without rebuilding (rejected: dead enemies remain, inconsistent with room resets); put the nave
+bench in the central hub (rejected: all approaches cross a door trigger).
+
+## D045 — 2026-10-20 — The region chart is a DOM pause screen generated from room exits and run facts
+
+**Decision:** The map is an accessible DOM screen inside the existing focus-trapped pause dialog,
+opened by the `map` action (M by default) or the pause menu's **Map** entry. Opening it freezes the
+fixed simulation through the same pause path and keeps rendering/audio alive. Nodes come from all
+authored rooms and the current layout; routes are deduplicated from each room's exit graph rather than
+hand-maintained. The chart shows charted count, current location, claimed sigils, last rest and a
+legend. Unknown rooms keep their names and boss names out of the DOM. The chart is an ordered list with
+`aria-current="location"` on the current chamber; only Back is focusable. Escape or the live map key
+closes the map, and the footer hint is rendered from that same binding; **Back** returns directly to
+the run.
+
+**Why:** A canvas map would duplicate the menu's focus, screen-reader and responsive work. Deriving
+routes from exits prevents the chart from drifting when rooms are added. Hiding unknown names preserves
+discovery while still showing the region's shape. Reusing the pause flow means the deterministic loop
+freezes with no new menu system, and deriving both the close key and its footer hint from the same
+binding keeps a remapped map truthful.
+
+**Alternatives:** canvas/Pixi map (rejected: no DOM semantics, duplicated focus handling); a
+hand-authored map graph (rejected: drift from room content); reveal every room immediately (rejected:
+removes exploration); a separate always-running overlay (rejected: simulation would continue under it).
+
+## D046 — 2026-10-20 — M7 E2E reloads the real browser and seeds positions through a DEV spawn
+
+**Decision:** The persistence suite boots the real app, rests through a real interact key, reloads the
+page and asserts the resulting room/spawn/masks/sigils/map state. `debugLoadRoom(roomId, spawn?)` now
+accepts a validated standing point so a bench test starts in range without a 280 px walk; the rest
+interaction itself is still real input. Death coverage waits for spawn i-frames to expire, calls the
+real damage path, and waits for the rebuilt room. Reward coverage defeats the boss immediately through
+the existing DEV hook. M6 phase probes call `debugProtectPlayer()` first so a headless frame stall cannot
+turn a phase assertion into a fifth-hit death; protection is DEV-only. The persistence describe gets a
+90 s budget because each full reload re-decodes the score under SwiftShader.
+
+**Why:** A fake storage unit test cannot catch boot ordering, scene rebuild or real `localStorage`
+behavior. Walking to the terrace bench took long enough to approach the default test budget and was
+sensitive to IPC latency; seeding a valid spawn tests the interaction rather than locomotion. The
+optional debug spawn also gives future room probes a safe entry without bypassing room validation.
+Protecting i-frames isolates the boss FSM tests from headless timing without changing gameplay.
+
+**Alternatives:** keep the in-page walking helper (rejected: slow and sensitive to keyup latency);
+import `RunProgress` into a page stub (rejected: no real boot/reload proof); assert transient boss
+states (rejected: flaky, already documented in D042); raise the global timeout (rejected: hides slow
+tests instead of removing the walk).
+
+## D047 — 2026-10-20 — RunSession owns the run lifecycle; BenchInteraction owns rest presentation
+
+**Decision:** `Game` remains the composition root for the renderer, loop, input, menus and audio, but
+delegates the continuous run to `RunSession`: scene construction, room/spawn tracking, progression,
+autosave, rest, respawn and the map snapshot. `RoomScene` keeps gameplay and exposes the one-tick
+`consumeBenchRest()` request; `BenchInteraction` owns bench range, focus, prompt and announcement state.
+The scene's arrival banner stays above the HUD so rest/respawn announcements survive the rebuild.
+
+**Why:** M7 pushed `Game` from 335 to 436 non-empty lines and `RoomScene` past 370. Moving the run
+lifecycle out brought `Game` to 309 and `RoomScene` to 344 while creating a single place to reason about
+save/respawn ordering. Rest UI is now independent of combat and can be unit-tested through its small
+surface if needed. The split preserves the contract that only the composition root talks to every
+subsystem.
+
+**Alternatives:** leave the god object (rejected: violates the size guideline and mixes menu, run and
+scene concerns); put saving inside `RoomScene` (rejected: scene should not know storage or checkpoints);
+make a generic event-driven persistence service (rejected: unnecessary indirection for one run).
+
+---
+
+(appended M7; append new entries at the bottom — never edit old ones — correct them with a new entry)

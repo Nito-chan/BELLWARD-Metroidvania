@@ -1,9 +1,9 @@
 # Controls
 
-Status: **implemented (M2; utility keys M3; menus and binding editor M5)**. These are the live
-defaults, sourced from `src/config/input.ts` and round-tripped by the binding editor; this table is
-the contract that editor edits. Keyboard events are matched on `KeyboardEvent.code` (physical key),
-so layouts like AZERTY still use the same physical positions.
+Status: **implemented (M2; utility keys M3; menus and binding editor M5; map, benches and run saves
+M7)**. These are the live defaults, sourced from `src/config/input.ts` and round-tripped by the
+binding editor; this table is the contract that editor edits. Keyboard events are matched on
+`KeyboardEvent.code` (physical key), so layouts like AZERTY still use the same physical positions.
 
 ## Keyboard (defaults)
 
@@ -52,6 +52,7 @@ it closes.
 | Adjust a volume      | Left/Right, Home/End, PageUp/PageDown | Left stick / D-pad      |
 | Cancel a capture     | Escape                                | Select                  |
 | Back one screen      | Escape                                | B / Select              |
+| Close the map        | Escape or the live `map` key          | B / Select              |
 | Close the menu       | Escape from Pause                     | Start (outside capture) |
 | Leave the focus trap | Tab / Shift+Tab                       | —                       |
 
@@ -69,6 +70,27 @@ use some of them (Escape = pause, Start = pause, D-pad = movement/interact) and 
 those. New captures cannot introduce a cross-action duplicate; the pre-existing default pair
 `ArrowUp` for both `up` and `interact` is grandfathered. The `pause` action can be remapped for
 gameplay, but the menu's own keys above stay fixed.
+
+## Benches, saves and the region map
+
+**Resting.** Walk within a bench's range and the screen prompt names it; press `interact` (E, or
+ArrowUp by default). Resting fully restores every mask, rebuilds the room clean, sets that bench as
+the respawn checkpoint, writes the run and shows a `RESTED` banner. The terrace and Bell Nave each
+have a bench. The nave bench sits west of the Bellbearer door, so it is reachable from the terrace
+spawn and every arena return without crossing a fight.
+
+**Persistence.** A run saves on first boot, each room entry, each rest, each first boss clear and
+each respawn. Reloading resumes at the last saved room entry with saved masks, sigils, charted rooms
+and checkpoint; death instead returns to the last bench (or the terrace if none). Claimed bosses stay
+claimed and their arenas stay silent. The document is versioned at `bellward.save.v1`; an invalid,
+partial or future-versioned record is discarded whole and a fresh run starts. Unavailable storage
+never interrupts play, but progress cannot be written.
+
+**Map.** Press `map` (M by default) or choose **Map** in the pause menu. The simulation freezes while
+the DOM chart is open. It shows charted rooms, current location, claimed sigils and the last rest;
+routes come from the authored room exits, and unknown rooms keep their names hidden. `Escape` or the
+current map key closes it; **Back** returns straight to the run. The map key is rebindable, and the
+close hint follows the live binding. Gamepad Back opens it.
 
 ## Gamepad (standard mapping)
 
