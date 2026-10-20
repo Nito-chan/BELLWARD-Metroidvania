@@ -462,4 +462,99 @@ come from rendering too); a debug single-step API (unnecessary complexity for tw
 
 ---
 
+## D035 — 2026-10-20 — Pause and settings are accessible DOM overlays; only the simulation freezes
+
+**Decision:** The pause, sound and controls screens are DOM overlays (`MenuView` / `MenuSystem`)
+layered over the Pixi canvas, not Pixi-drawn UI; the HUD stays in Pixi. Opening the menu calls
+`Loop.pause()` (fixed ticks stop, rendering continues), clears input state and marks `#app` inert.
+The overlay root uses `hidden` when closed. `Game` tracks physical pause keys across the input reset
+and keeps a `pauseLatch` until they are released, so the closing pause input (including an OS
+auto-repeat) cannot immediately reopen the menu or leak into gameplay after close. Music keeps
+playing while paused; the bell ambience is scheduled on the simulation clock and therefore pauses
+with it. In the controls screen, Reset defaults is pinned in the footer beside Back so both actions
+remain visible at 640×360; the binding table scrolls independently.
+
+**Why:** DOM gives the menu native focus order, real dialog semantics, keyboard-operable range
+inputs, crisp text at every scale and reliable Playwright access without spending the two-texture
+batch budget. Freezing only the simulation keeps pause deterministic while the frozen scene remains
+visible; hiding the closed overlay and making the canvas inert prevent focus traps and accidental
+gameplay input. The latch fixes a real held-Escape bug found in E2E: the keydown that closed the
+menu was sampled again as a pause press immediately after resume.
+
+**Alternatives:** Pixi-drawn menus (rejected: focus, labels, range semantics and screen-reader
+support would all be rebuilt by hand); stopping the render loop entirely (rejected: the pause frame
+would freeze the browser/GPU path and pad polling would stop); leaving input live under the overlay
+(rejected: movement and attack would react behind the dialog).
+
+## D036 — 2026-10-20 — Bindings are a versioned, all-or-nothing document; edits reject conflicts
+
+**Decision:** The editable document lives at `localStorage['bellward.bindings.v1']`, version 1, with
+two keyboard slots and up to two gamepad-button slots per action plus the existing analog-axis
+bindings. Loading validates the complete action set, slot counts, unique keys, button ranges and
+axis fields; a corrupt, partial or future-versioned document is discarded as a whole with a warning
+and the shipped defaults are used. Saves are wrapped in `try/catch` and blocked storage only disables
+persistence. Edits return a new document; a keyboard code or pad button already used by another
+action is rejected and reported, leaving the current document untouched. Reset defaults is
+deliberately two-step: the first press arms it, the second restores every shipped binding, and
+navigating away, closing the menu or starting a capture disarms it.
+
+**Why:** Booting into half a control scheme is worse than losing a customization. All-or-nothing
+validation makes malformed storage fail at one boundary instead of producing unpredictable gameplay.
+Conflict rejection keeps one input from silently triggering two actions. The two-step reset avoids a
+destructive one-click action next to Back while remaining keyboard/gamepad friendly.
+
+**Alternatives:** merging partial documents (rejected: silent mixed defaults); allowing duplicate
+bindings (rejected: ambiguous input and untestable priority rules); a modal confirmation dialog
+(rejected: extra focus state and a second overlay for one destructive action). The shipped defaults
+still contain `ArrowUp` for both `up` and `interact`; that pair predates the editor, is accepted by
+shape validation, and can be restored by reset, but a new capture cannot introduce another
+cross-action duplicate.
+
+## D037 — 2026-10-20 — Menu inputs are reserved; the binding editor only edits gameplay actions
+
+**Decision:** `Escape`, `Tab`, `F1`, bare modifiers, `Select`/`Start` and the D-pad (buttons 8, 9,
+12–15) are reserved and cannot be newly captured. Outside capture, Start closes the menu from any
+screen; Escape or B/Back goes back one screen (and closes from Pause); arrows/WASD move focus,
+Enter/Space activate, and Tab/Shift+Tab wrap inside the dialog. During keyboard capture Escape
+cancels; during pad capture Select cancels; any other reserved input is ignored with a status
+message. Native range keys (`ArrowLeft/Right`, Home, End, PageUp/Down) go to the focused slider;
+Up/Down move between rows, and volume changes are live. The `pause` action itself remains rebindable
+for gameplay, but the menu's own navigation keys are not.
+
+**Why:** A player who remaps every action must still be able to leave the menu. Reserving system
+inputs guarantees that escape hatch, and keeping native range behavior avoids surprising keyboard
+users. The focus trap and `aria-modal` dialog make the overlay behave like a real modal rather than a
+visual layer over live controls.
+
+**Alternatives:** allowing menu keys to be rebound (rejected: a bad capture can make the menu
+unusable); intercepting every key for spatial navigation (rejected: breaks native slider semantics);
+relying on pointer input for reset/back (rejected: controller and keyboard parity).
+
+## D038 — 2026-10-20 — Timing-critical E2E drives DOM input in-page and observes state in-page
+
+**Decision:** Playwright keeps a generous `60_000 ms` default test budget, but no timing assertion
+depends on wall-clock sleeps or rAF frame counts. The walking test waits for distance and camera
+movement and accepts an `idle|run` snapshot instead of demanding a mid-stride clip. The melee E2E
+lands three light strikes through a `strikeNearestParishioner` helper that dispatches real
+`KeyboardEvent`s inside the page at the strike moment; stage-two chaining stays unit-tested. The
+i-frame/death E2E runs the approach, first-hurt capture, death and rebuild observation in one page
+task (`takeHitsUntilDeath`). The menu focus-trap test wraps from Back with Tab/Shift+Tab in two
+presses instead of tabbing twelve times. Vite watch ignores `playwright-report`, `test-results` and
+`dist` so writing a report cannot reload the game mid-test.
+
+**Why:** Headless SwiftShader plus audio decode made per-command IPC latency (~100 ms) longer than
+the light swing's 7-tick (117 ms) damage window. The old 24-press wall-clock loop, the separate
+first-hurt/death waits and the 12-step focus loop all flaked under the full-suite load even though
+the game logic was correct. Dispatching events inside the page still exercises the game's real
+window keydown/keyup handlers and fixed-tick `InputManager`; only the pacing moves to the browser
+task, where it belongs. Simulation-clock assertions remain the source of truth. A full suite now
+passes reliably and is faster (the menu focus test fell from ~90 s to under 15 s standalone).
+
+**Alternatives:** fixed sleeps and longer waits (rejected: hides regressions and still flakes);
+widening the attack window or lowering damage for tests (rejected: changes gameplay for the harness);
+disabling audio in combat tests (rejected: loses integration coverage and the stall can also come from
+rendering); keeping the 30 s default (rejected: menu teardown alone could exceed it on this VM).
+
+---
+
 (append new entries at the bottom; never edit old ones — correct them with a new entry)

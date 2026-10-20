@@ -448,7 +448,9 @@ combat sounds already wired through the event buffer.
 1. **Boot contract:** four enemies in spawn order with full HP, player 5/5 and not dead, zero
    projectiles, 18 packed textures, no fallbacks.
 2. **Melee kill:** walk into the nearest parishioner, chain stage one into stage two (1 + 2 damage),
-   and confirm the room drops to three enemies with no page errors.
+   and confirm the room drops to three enemies with no page errors. _M5 update: this test now lands
+   three light hits through an in-page helper for headless timing; stage-two chaining is covered
+   deterministically in the unit suite (D038)._
 3. **Damage, i-frames and death:** take a hit (HP down, invulnerability running), let the parishioner
    finish the hero, verify the death flag, then verify the room rebuilds at spawn with HP 5/5 and
    four restored enemies. The i-frame invariant is asserted on the simulation clock (the four
@@ -498,3 +500,130 @@ combat sounds already wired through the event buffer.
 Menus and the input binding editor: pause/settings/volume screens on top of the existing input
 serialization and audio mix, keyboard and gamepad remapping with conflict detection, and a first
 in-game menu pass that can be opened without stopping the deterministic simulation loop.
+
+---
+
+## M5 — Pause, settings and the binding editor (2026-10-20)
+
+**Commit:** `746f3dd` · **Status:** complete, all gates green.
+
+### Shipped
+
+- **Pause flow (`src/ui/menu/*`):** a focused DOM modal with three screens — Pause, Sound and
+  Controls. Pause freezes fixed ticks while rendering and music continue, resets held input on
+  open/close, marks `#app` inert, traps Tab/Shift+Tab, restores focus on close and hides the root
+  with `hidden` when idle. A `pauseLatch` prevents the Escape/Start press that closed the menu from
+  reopening it or leaking into gameplay (D035). `MenuSystem` owns the lifecycle and gamepad polling;
+  `MenuModel` is a pure screen/capture/status/reset state machine; `MenuView` renders DOM only.
+- **Sound screen:** master, music and effects sliders (0–100 in 5% steps), keyboard and gamepad
+  adjustment, a live percentage, and a Silence all switch. Changes apply immediately and persist
+  through `AudioManager`'s existing `bellward.audio.v1` record; no new audio assets.
+- **Binding editor:** all 12 gameplay actions, two keyboard slots and the primary pad-button slot
+  per action, keyboard/gamepad capture, slot navigation, conflict detection with the owning action
+  named, Escape/Select cancellation, screen-reader descriptions and a two-step Reset defaults.
+  Bindings are a versioned, validated, all-or-nothing document at `bellward.bindings.v1`; corrupt,
+  partial or future records fall back to the shipped defaults; storage failures are non-fatal but
+  warned (D036). Reserved menu/system inputs cannot be captured, while the defaults that use them
+  remain restorable by reset (D037).
+- **Input and loop integration:** `InputManager` now accepts instance bindings plus
+  `setBindings`/`getBindings`/`reset`; `Game` loads bindings before boot, persists accepted edits,
+  pauses/resumes the loop around the menu, and exposes the menu state through `debugState()`.
+  `DebugOverlay` shows the open screen, focus id, capture target and latest status. Volume/mute
+  updates are reflected live; music keeps playing while paused and the simulation-clock bell ambience
+  pauses.
+- **Layout and accessibility:** dialog semantics (`role="dialog"`, `aria-modal`, labelled title),
+  visible focus, reduced-motion-safe transitions, status live region, `inert` canvas, responsive panel
+  at 640×360 and 1280×720. Reset defaults is pinned beside Back in the controls footer so it stays
+  discoverable when the binding list scrolls; the body scrolls independently. Targets are
+  keyboard-first; the dedicated touch pass is M10.
+- **Tests and docs:** 27 new unit tests cover the model, binding validation/conflicts/labels and
+  audio mix; a four-test M5 Playwright suite covers pause determinism, audio persistence, rebinding
+  with reload and focus/layout. `docs/CONTROLS.md` is now the menu/binding contract; D035–D038 record
+  the architecture, persistence, reserved-input and E2E decisions.
+- **Maintainability:** extracted `MenuPad` (gamepad loop/edge/direction repeat), `screenBuilders`
+  (pause/settings/controls DOM) and `bindingLabels` (formatting) after the first implementation.
+  `MenuSystem` is 266 lines, `MenuView` 237, `bindings` 258 — all back under the ~300-line guideline.
+
+### Gates (all green at commit)
+
+| Gate                   | Result                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                                    |
+| `npm run lint`         | clean, zero warnings                                                                     |
+| `npm run test`         | 206/206 passed (18 files, ~6.3 s) — up from 179 (+27)                                    |
+| `npm run build`        | ✓ 794 modules, 386.33 kB JS / 113.05 kB gzip, 12.70 kB CSS / 3.36 kB gzip                |
+| `npm run test:e2e`     | 14/14 passed (3.7 min), 63.2 fps avg vs 45 floor; menu block 1.5 min standalone          |
+| `npm run assets:check` | OK, 662 files, 0 warnings                                                                |
+| `npm run format:check` | clean                                                                                    |
+| Screenshots            | `M5-pause.png`, `M5-sound.png`, `M5-bindings.png` — final pinned-footer layout inspected |
+
+### E2E coverage added
+
+1. **Pause freeze and resume:** open on the terrace, confirm `tickCount` freezes while `frameCount`
+   keeps advancing and the dialog stays open, then resume and confirm ticks advance and focus returns
+   to the canvas.
+2. **Sound persistence:** adjust master with the keyboard and mute with the pointer, confirm the live
+   debug state, reload, and confirm the mix survives.
+3. **Binding editor:** rebind jump to a free key, verify it applies in play, attempt a conflicting
+   key and see it rejected with the owner named, confirm a reserved key is refused without closing
+   capture, then reload and verify persistence.
+4. **Focus and small viewport:** Tab/Shift+Tab stays inside the dialog (wrap from Back), Escape backs
+   out one screen, and the controls screen fits 640×360 with Reset/Back reachable via the pinned
+   footer.
+
+### Adjustments & findings
+
+- **Held pause input needed a latch.** The Escape keydown that closes the dialog is still held when
+  the simulation resumes. `Game` tracks physical pause keys across the input reset, and
+  `pauseLatch` consumes the closing press and any OS auto-repeat until release; the E2E test
+  dispatches a repeat keydown and confirms the menu stays closed. Input is reset on both
+  transitions and focus returns to the canvas (D035).
+- **The full suite exposed pacing assumptions in older smoke tests.** The M4 melee test's 24
+  wall-clock key presses and the death test's separate waits could miss 7-tick damage windows and the
+  100-tick rebuild under headless IPC latency. Combat/death helpers now dispatch real DOM keyboard
+  events and observe first-hurt/death/rebuild inside one page task; stage-two chaining remains
+  covered deterministically in unit tests (D038). The walking assertion now accepts `idle|run` and
+  waits on distance/camera, and the menu focus test wraps from Back in two presses instead of twelve.
+- **Playwright report writes were reloading the dev server.** Vite watched `playwright-report/`,
+  `test-results/` and `dist/`; writing a report during a run could trigger an HMR reload and kill the
+  page. These paths are now ignored. The global Playwright timeout is 60 s (menu/combat blocks get
+  explicit 90 s; the audio block keeps 120 s because headless audio remains slow).
+- **The 640×360 layout hid Reset below the scroll.** The first small-viewport screenshot showed only
+  five binding rows and no reset action. Moving Reset into the pinned footer with Back fixed both
+  discoverability and keyboard reachability; the table still scrolls and the footer stays visible.
+- **DOM menus were the right trade.** Native focus, labels and range behavior came for free; the cost
+  is two UI systems (Pixi HUD, DOM menus), accepted because the HUD stays in the render loop while
+  menus must be accessible and crisp at CSS scale. The closed overlay uses `hidden`, and alpha-zero
+  Pixi overlays remain hidden (D033).
+- **Gamepad menu support is code-complete but hardware-unverified.** Polling, edge detection,
+  repeat, capture filtering and focus movement are implemented; the menu-pad path has no automated
+  coverage and this machine has no controller. Keyboard and pointer paths are covered by E2E.
+- **No new assets or licences.** The manifest remains 662 files with 0 warnings; menus use the
+  existing fonts/CSS and the existing audio mix, so M5 changes no asset provenance.
+
+### Explicitly deferred / stubs
+
+- **Bosses and the Bellbearer are still M6.** No boss room, pattern FSM or boss health bar yet; the
+  two boss loops remain lazily registered and unplayed.
+- **Save/load, benches and the map are still later milestones (M7+).** Bindings and audio persist,
+  but room state, health, currency and position do not.
+- **No menu sound effects** (focus/confirm/back) yet; M9 polish owns UI audio. Music continues while
+  paused, but there is no pause-specific mix/ducking.
+- **No gameplay settings beyond audio:** no screen-shake toggle, key-repeat tuning, deadzone slider,
+  language selector or remapping of analog axes. The second pad-button slot exists in the data model
+  but the editor exposes the primary slot only.
+- **Gamepad menu behavior is not verified on physical hardware**, and screen-reader behavior is based
+  on native dialog/focus semantics without a manual NVDA/VoiceOver pass.
+- **The editor cannot capture Escape, Tab, F1, bare modifiers, Select, Start or D-pad.** This is
+  deliberate (D037); reset restores those defaults.
+- **Known size debt remains in older files:** `PlayerController.ts` (496 non-empty / 563 total lines)
+  and `RoomScene.ts` (312 / 343) are still above the ~300 guideline and are scheduled for the M9
+  polish pass.
+- **Headless audio is still slow:** the audio E2E block keeps its 120 s timeout and 45 s live-music
+  wait.
+
+### Next milestone preview (M6)
+
+The Bellbearer mini-boss and two pattern bosses: arena rooms, boss health/phase UI, telegraphed
+attack patterns, boss audio and rewards, all on the existing deterministic combat and FSM
+foundations.

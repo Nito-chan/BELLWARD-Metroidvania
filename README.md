@@ -27,7 +27,11 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   validated spawn pipeline; a shared character renderer, wind-up telegraphs, a combat HUD and
   procedural fallbacks for every enemy/effect. Death rebuilds the room while art and music stay
   warm. All gates green.
-- Next: M5 — menus and the input binding editor (pause/settings/volume), followed by the bosses.
+- **M5 — Pause, settings and the binding editor: complete.** An accessible DOM pause flow over the
+  deterministic loop: pause, master/music/effects mix with mute, and a keyboard/gamepad binding
+  editor with conflict detection, two-step reset and versioned persistence. Opening the menu freezes
+  ticks, keeps rendering/music alive and traps focus inside the dialog. All gates green.
+- Next: M6 — the Bellbearer mini-boss and two pattern bosses.
 
 ## Quick start
 
@@ -60,21 +64,21 @@ First-time E2E setup: `npx playwright install chromium`.
 
 ```
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
-src/config      tunable constants (input, player, combat, enemies, physics, render, audio; no magic numbers)
+src/config      tunable constants (input, player, combat, enemies, physics, render, audio, menu; no magic numbers)
 src/data        art keys/rects/clips, enemy/effect sheets, room definitions and sound/track catalogs
-src/input       keyboard/gamepad manager and per-tick input snapshots
+src/input       keyboard/gamepad manager, per-tick snapshots and the versioned binding document
 src/physics     body model and the tile collision solver
 src/player      player state machine, vitals, i-frames, attack windows and sound events
 src/enemies     shared FSM plus the melee and caster behaviors, and the spawn factory
 src/combat      damage resolver, projectile pool and shared hitbox geometry
-src/ui          combat HUD (health pips, damage flash, death fade)
+src/ui          combat HUD plus the pause/sound/controls DOM menu
 src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
 src/world       semantic tile roles, tilemap and room model, including validated enemy spawns
 src/render      art provider, procedural fallbacks, camera, shared character/enemy views, FX, room scene
 src/debug       F1 overlay + debug state contract
-scripts         asset fetcher/validator, screenshot capture (--run / --combat / --overlay)
-tests/unit      Vitest (core, world, input, collision, player, camera, animator, combat, enemies, audio, manifest)
-tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate, combat/death)
+scripts         asset fetcher/validator, screenshot capture (--run / --combat / --overlay / --menu / --settings / --controls)
+tests/unit      Vitest (core, world, input, bindings, menus, collision, player, camera, animator, combat, enemies, audio, manifest)
+tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate, combat/death, menus)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```
