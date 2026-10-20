@@ -363,6 +363,103 @@ replays and the determinism tests) untouched by ambience timing.
 scene RNG for bell spacing (rejected: ambience would perturb gameplay randomness); a settings menu
 as the only mute path (deferred to M5; the key is the minimum a player needs today).
 
+## D030 — 2026-10-20 — Combat resolves in one deterministic pass; swing ids gate repeat hits
+
+**Decision:** `CombatSystem.resolve(player, enemies, projectiles, tilemap)` runs every tick in a
+fixed order: the player's open swing first, then each enemy's melee or contact box, then live
+projectiles. The player's swing carries an `attackId`; each enemy remembers the last swing that hit
+it, so a multi-tick active window can only damage it once. Enemy melee is tested before contact, and
+contact is skipped for that enemy while its melee box overlaps, so a single attack cannot charge both.
+All damage goes through `PlayerVitals.damage()` / `Enemy.takeDamage()`; i-frames are the only gate,
+and a killing blow removes the enemy before it can retaliate in the same tick. Health, i-frames,
+hurt stun and death live in `PlayerVitals` rather than the locomotion FSM. The per-tick
+`CombatEvent` list (not the view) is the single source for sparks, shake, audio and the HUD.
+
+**Why:** One ordered resolver is deterministic, testable with plain objects, and makes simultaneous
+trades explainable. Swing ids solve the "same swing hits on every active tick" problem without
+per-enemy cooldown guesswork. Splitting vitals keeps the player state machine about movement, and
+remaining damage numbers stay in `config/combat.ts` / `config/enemies.ts`.
+
+**Alternatives:** a physics engine (rejected: heavy, nondeterministic contacts); per-entity overlap
+callbacks (rejected: order and double-hit ownership become implicit); a per-enemy damage cooldown
+(rejected: it would make a long swing inconsistent and is harder to read in the debug state).
+
+## D031 — 2026-10-20 — Three enemy verbs, data-driven FSMs, validated room spawns and whole-kind art
+
+**Decision:** M4 ships exactly three kinds — the slow **parishioner**, the lunging **ghoul** and the
+rooted **Cinder Adept** — on a shared FSM (`Enemy` base with `MeleeEnemy` and `Adept` behaviors).
+Every speed, range, damage, wind-up, active/recover window, stagger duration and cast projectile
+value lives in `ENEMIES`. Spawns are room data and `createRoom()` validates kind, solid ground, body
+clearance, patrol bounds and that the spawn lies inside its beat; bad level data fails at boot with
+a readable error. The terrace placements (150/270, the ghoul at 380 on the bridge, the adept at 872)
+leave the M2 corridor 420–660 empty. Packed enemy art is all-or-nothing per kind (`ENEMY_REQUIRED`);
+one missing sheet falls back to that kind's procedural art instead of a missing clip at runtime.
+
+**Why:** The trio teaches the three verbs the vertical slice needs: read and punish, dodge a
+committed burst, and close distance under fire. Typed tables make retuning one line and the unit
+suite can drive every FSM without Pixi. Validation turns floating enemies and broken patrols into
+startup failures rather than invisible bugs. The corridor constraint protects the existing movement
+suite by construction.
+
+**Alternatives:** behavior trees or per-enemy scripts (deferred until there are enough kinds to
+justify the machinery); random or hand-tuned only placements (rejected: untestable and error-prone);
+per-clip art fallback (rejected: an FSM can request a clip the fallback lacks).
+
+## D032 — 2026-10-20 — Death rebuilds the scene; the art provider and music survive
+
+**Decision:** On the killing hit the player enters `dead`; after `COMBAT.player.deathTicks` (100)
+`RoomScene` asks `Game.resetScene()`. That constructs the room again from its data definition with a
+fresh RNG fork, reuses the already loaded `ArtProvider`, creates a new player (with spawn i-frames),
+fresh enemies and a fresh projectile pool, and leaves the `AudioManager` and current track untouched.
+The HUD death fade is driven by `deathElapsed`, so the reset only happens after the screen is black.
+
+**Why:** Rooms are pure data by design, so rebuilding is the shortest correct respawn and cannot
+leave stale state (dead enemies, open swings, live projectiles, hitstop). Reusing the art provider
+avoids re-downloading and re-decoding 18 textures on every death, and leaving audio alone keeps the
+track continuous — dying should not stop the music in a souls-like. The same path is used at boot,
+so respawn is not a second, less-tested code path.
+
+**Alternatives:** mutating the live scene (rejected: easy to miss a component); reloading the page
+(rejected: loses audio and pays the full boot); respawning from a save (no save system until a later
+milestone).
+
+## D033 — 2026-10-20 — Zero-alpha overlays are hidden, not merely transparent
+
+**Decision:** The HUD's full-screen damage and death quads set `visible = false` whenever their
+alpha is zero, and their setters cache the last level so a steady frame does no work. Character hit
+flashes do the same (`visible` tracks the flash). The ambient wash and all other authored overlays
+are unchanged.
+
+**Why (measured):** The first complete M4 E2E run reported 42.0 fps against a 45 fps floor in the
+moving-frame test. The only new full-screen layers were the two transparent HUD quads; hiding them
+when unused restored 67.6 fps in the same test, and the final two full runs measured 68.0 and
+60.0 fps. SwiftShader still rasterizes an alpha-0 quad, so "invisible" must mean `visible = false`.
+This preserves the D018 two-texture batch cap and keeps the headless performance gate meaningful.
+
+**Alternatives:** removing the damage flash or death fade (rejected: both are required readability
+and tone); one shared overlay (rejected: damage and death can overlap and need different colors);
+filters (rejected: more expensive on the software rasterizer).
+
+## D034 — 2026-10-20 — E2E time-sensitive checks read simulation records, not wall time or rAF frames
+
+**Decision:** The player records `jumpPeakY` (current airtime) and `lastJumpPeakY` (last completed
+upward jump); the trace starts only on upward motion, so the initial settle into the floor is not a
+jump. Both are exposed in `SceneDebugState` and the F1 overlay. The jump E2E asserts the recorded
+apex rise (40–95 px) after landing instead of counting airborne animation frames. The i-frame E2E
+records the first-hit `tickCount`, waits for death, and asserts the elapsed ticks are at least
+`remainingHp × COMBAT.player.invulnerableTicks`; it no longer sleeps 300 ms and assumes no second hit.
+
+**Why:** The loop is fixed-step and catches up after a main-thread stall. During the first-gesture
+audio decode or a SwiftShader hitch, several simulation ticks can run in one rendered frame, so a rAF
+sampler can see one airborne frame out of a whole jump and a wall-clock sleep can span multiple
+i-frame windows. Both tests flaked (airborne 1 vs expected >10; HP 3 after a 300 ms wait) while the
+unit suite proved the underlying physics. Measuring on the simulation clock tests the game instead of
+the scheduler, and the apex bound still fails if the jump height actually regresses.
+
+**Alternatives:** longer waits and lower thresholds (rejected: hides real regressions and still
+flakes); disabling audio in movement tests (rejected: loses integration coverage and the stall can
+come from rendering too); a debug single-step API (unnecessary complexity for two assertions).
+
 ---
 
 (append new entries at the bottom; never edit old ones — correct them with a new entry)

@@ -310,15 +310,15 @@ before use.
 
 ### Gates (all green at commit)
 
-| Gate                   | Result                                                                     |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `npm run typecheck`    | clean                                                                      |
-| `npm run lint`         | clean, zero warnings                                                       |
-| `npm run test`         | 144/144 passed (14 files, ~4.7 s) — up from 126                            |
-| `npm run build`        | ✓ 762 modules, 330.70 kB JS / 96.94 kB gzip (Howler adds ~43 kB)           |
-| `npm run test:e2e`     | 8/8 passed — 70.8 fps avg vs 45 floor, 2.4 min (audio startup dominates)   |
-| `npm run assets:check` | OK, 662 files, 0 warnings                                                  |
-| `npm run format:check` | clean                                                                      |
+| Gate                   | Result                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                                                    |
+| `npm run lint`         | clean, zero warnings                                                                                     |
+| `npm run test`         | 144/144 passed (14 files, ~4.7 s) — up from 126                                                          |
+| `npm run build`        | ✓ 762 modules, 330.70 kB JS / 96.94 kB gzip (Howler adds ~43 kB)                                         |
+| `npm run test:e2e`     | 8/8 passed — 70.8 fps avg vs 45 floor, 2.4 min (audio startup dominates)                                 |
+| `npm run assets:check` | OK, 662 files, 0 warnings                                                                                |
+| `npm run format:check` | clean                                                                                                    |
 | Screenshot             | `docs/screenshots/M3-audio.png` (overlay: context running, `terrace (playing)`, `last-sfx footstep@644`) |
 
 ### E2E coverage added
@@ -377,3 +377,124 @@ Combat and the first enemies: hitboxes and damage windows on the existing two-st
 and i-frames for the player, three data-driven enemy types with FSMs and pooled projectiles, and the
 combat sounds already wired through the event buffer.
 
+---
+
+## M4 — Combat, three enemies & the death loop (2026-10-20)
+
+**Commit:** `754994a` · **Status:** complete, all gates green.
+
+### Shipped
+
+- **Player survivability (`PlayerVitals`, `PlayerController`):** five masks, 60-tick invulnerability
+  after a hit, 30-tick spawn protection, a 16-tick hurt reaction with knockback and a
+  face-the-attacker turn, `hurt` / `death` sound events, and a 100-tick death clock. Both existing
+  attack clips now open real damage windows; `attackId` identifies a swing so it damages each enemy
+  at most once even though the window spans several ticks (D030). A simulation-recorded
+  `jumpPeakY` / `lastJumpPeakY` also gives the debug contract a stall-proof jump apex (D034).
+- **Combat resolver (`src/combat/*`):** one fixed-order pass per tick — player swing, then each
+  enemy's melee or contact, then projectiles. Strict AABB/circle math, no per-hit allocations,
+  4-tick hitstop, shake request, pooled impact sparks and death bursts, and a `CombatEvent` stream
+  that the scene turns into audio and FX. Enemy melee and contact are mutually exclusive in the
+  same tick, and i-frames gate every damage source. The projectile pool is a fixed 12 slots; a full
+  pool recycles its shortest-lived shot rather than dropping a cast.
+- **Three enemies, data-driven (`src/enemies/*`, `src/config/enemies.ts`):**
+  - **Parishioner** — slow walker that claws in place; the readable first fight.
+  - **Ghoul** — fast chase with a committed 2-damage lunge on the beam bridge; refuses to lunge off
+    a ledge.
+  - **Cinder Adept** — rooted caster with a 30-tick cast; the fireball leaves at tick 18, and any
+    hit before that cancels the cast.
+
+  They share the FSM `idle / patrol / chase / windup / active / recover / stagger / dead`, expose a
+  normalised telegraph to the view, and read every speed, range, damage and duration from
+  `ENEMIES`. The adept's fireball has its own pooled lifetime, tile collision and player hit.
+
+- **Room content and validation:** the terrace now has four spawns — two parishioners at x=150 and
+  x=270, the ghoul at x=380 on the beam bridge, and the adept at x=872 in the far pocket. The
+  spawn corridor 420–660 stays clear, so every M2 traversal test still passes unchanged.
+  `createRoom()` rejects an unknown kind, a spawn with no ground, a body overlapping a wall, an
+  inverted or out-of-room patrol beat, and a spawn outside its own beat.
+- **Rendering:** `CharacterView` is now shared by the hero and every enemy (frame-clock animation,
+  slicing, flipping, contact shadow, hit flash); `EnemyView` adds the wind-up telegraph;
+  `EffectsLayer` pools 24 sparks and 3 death bursts; `ProjectileView` owns one sprite per pool slot;
+  `Hud` draws five health pips plus damage and death overlays. `HeroView` is a thin wrapper, so the
+  hero art and animation output are unchanged. Packed boot art grew from 12 to 18 textures
+  (parishioner idle/walk, ghoul, adept, death burst, fireball), all with procedural fallbacks.
+- **Audio:** six new CC0 SFX (`enemyHurt`, `enemyDie`, `playerHurt`, `cast`, `fireball`,
+  `fireballHit`); the total `PlayerEvent` map gained `hurt` and `death`, so the compiler still
+  refuses a simulation event with no sound. Everything routes through `AudioManager` (D026–D029).
+- **Death and respawn:** death fades the screen for 100 ticks, then `Game` rebuilds the room from
+  its data definition with a fresh RNG fork. The loaded `ArtProvider`, the audio manager and the
+  playing track survive; enemies return at full health and the new hero gets spawn i-frames (D032).
+- **Debug, tests and tooling:** the F1 overlay adds vitals, live foes, shots, hitstop and jump arc;
+  `window.__game.debugState()` exposes the same contract. New coverage: 14 combat tests, 13 enemy
+  FSM tests, camera-shake decay, room enemy-spawn validation, jump-apex recording, and two M4 E2E
+  scenarios. `npm run screenshot -- <path> --combat` drives a real fight and captures the frame.
+
+### Gates (all green at commit)
+
+| Gate                   | Result                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                                             |
+| `npm run lint`         | clean, zero warnings                                                                              |
+| `npm run test`         | 179/179 passed (16 files, ~3.2 s) — up from 144 (+35)                                             |
+| `npm run build`        | ✓ 782 modules, 360.55 kB JS / 105.35 kB gzip (up 29.85 kB / 8.41 kB)                              |
+| `npm run test:e2e`     | 10/10 passed (1.8 min), 68.0 fps avg vs 45 floor; a second full run passed at 60.0 fps            |
+| `npm run assets:check` | OK, 662 files, 0 warnings                                                                         |
+| `npm run format:check` | clean                                                                                             |
+| Screenshot             | `docs/screenshots/M4-combat.png` — hero engaging the parishioner, HUD at 5/5, ghoul on the bridge |
+
+### E2E coverage added
+
+1. **Boot contract:** four enemies in spawn order with full HP, player 5/5 and not dead, zero
+   projectiles, 18 packed textures, no fallbacks.
+2. **Melee kill:** walk into the nearest parishioner, chain stage one into stage two (1 + 2 damage),
+   and confirm the room drops to three enemies with no page errors.
+3. **Damage, i-frames and death:** take a hit (HP down, invulnerability running), let the parishioner
+   finish the hero, verify the death flag, then verify the room rebuilds at spawn with HP 5/5 and
+   four restored enemies. The i-frame invariant is asserted on the simulation clock (the four
+   remaining hits need four full 60-tick windows), not wall time.
+
+### Adjustments & findings
+
+- **Zero-alpha full-screen overlays were a real frame-rate cost.** The first M4 E2E run measured
+  42.0 fps (floor 45) after adding full-screen damage and death quads that were merely transparent.
+  Hiding them when their alpha is zero — and caching the HUD setters — restored 67.6 fps in the same
+  test. Final runs: 68.0 and 60.0 fps (D033).
+- **Two E2E timing flakes, both measurement bugs, not gameplay bugs.** The i-frame check used a
+  300 ms wall-clock wait, but after a main-thread stall the fixed-step loop catches up several ticks
+  per rendered frame; the sim clock is the only honest clock. The jump check counted airborne
+  rAF frames and saw 1 instead of >10 during an audio-decode stall. It now reads the apex the
+  simulation recorded (D034); 6/6 repeats and two full suites passed.
+- **Procedural death burst aligned to eight frames** (frames 1–8 of the packed sheet) instead of
+  nine, so fallback timing matches packed timing exactly.
+- **One dead tuning key removed:** `COMBAT.enemy.contactDamage` was never read; per-kind
+  `ENEMIES[kind].contactDamage` is the single source of truth.
+- **Enemy art falls back as a whole kind**, not per clip: a partial sheet would otherwise leave the
+  FSM requesting a missing animation. `ENEMY_REQUIRED` lists the sheets each kind needs.
+- **The camera shake is sampled by the camera view, not written into the follow position**, so it
+  decays to exactly zero and never leaves the camera offset after a fight.
+
+### Explicitly deferred / stubs
+
+- **Bosses, the Bellbearer and the second pattern boss are not in this milestone** (M6). The boss
+  music loops are still registered but unplayed.
+- **No menus, pause, settings or volume UI yet** (M5). `B` mute remains the only mix control.
+- **No bench, save/load, map or additional rooms yet** — they belong to the later world/save
+  milestones; death respawns by rebuilding the current room, not from persistent state.
+- **Heal, cast, interact and map inputs are still bindings without a consumer.** Attack is the only
+  combat verb; no poise, damage numbers, attack-cancel, parry or grab.
+- **Enemies do not jump, pathfind or chase across gaps**, and the adept casts without a line-of-sight
+  check; projectiles collide with tiles and the player only. The ghoul's ledge guard is the
+  deliberately simple counterweight.
+- **No loot, currency, XP or upgrade economy**; a kill only removes the enemy and plays its burst.
+- **Known size debt:** `PlayerController.ts` 496 lines and `RoomScene.ts` 312 lines exceed the
+  ~300-line guideline. Both are heavily covered and cohesive; extraction is planned for the M9
+  polish pass rather than risking the M4 gate.
+- **Headless audio remains slow:** the E2E audio block keeps its 120 s timeout and the 45 s
+  live-music wait; tightening them would only re-introduce VM flakes.
+
+### Next milestone preview (M5)
+
+Menus and the input binding editor: pause/settings/volume screens on top of the existing input
+serialization and audio mix, keyboard and gamepad remapping with conflict detection, and a first
+in-game menu pass that can be opened without stopping the deterministic simulation loop.

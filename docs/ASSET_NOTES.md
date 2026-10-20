@@ -1,9 +1,9 @@
 # Asset notes — sprite sheet & animation data format
 
-Status: **v1.1** (M2 adds the full hero clip table). The tile/parallax/hero data below is live in
-`src/data/art.ts`; see D021 for
-why the shipped content is typed TypeScript rather than runtime JSON. The JSON shape described
-here remains the contract for external packs and in-house art dropped in later (design doc §10.4).
+Status: **v1.2** (M4 adds the enemy and effect tables). The tile/parallax/hero/enemy data below is
+live in `src/data/art.ts`, `src/data/enemies.ts` and `src/data/effects.ts`; see D021 for why the
+shipped content is typed TypeScript rather than runtime JSON. The JSON shape described here remains
+the contract for external packs and in-house art dropped in later (design doc §10.4).
 
 ## M1 — what actually ships
 
@@ -134,6 +134,42 @@ unit suite re-checks that every URL exists on disk and is covered by a manifest 
 
 Only SFX are preloaded at boot. A music track is registered (downloaded + decoded) the first time a
 room requests it, so players who never reach a boss never download the boss loops (D027).
+
+## M4 — enemies and effects
+
+No new packs were downloaded: M4 reuses the already-licensed CC0 ansimuz Church and Town packs for
+all three enemies and both effects. `assets:check` still reports 662 files and 0 warnings; the
+MANIFEST needs no new entry.
+
+### Enemy sheets (`src/data/enemies.ts`)
+
+| Kind          | Sheet                                                           | Grid                 | Pivot (feet) | Clips (ticks/frame)                                    |
+| ------------- | --------------------------------------------------------------- | -------------------- | ------------ | ------------------------------------------------------ |
+| `parishioner` | town `PNG/spritesheets/bearded-idle.png` + `bearded-walk.png`   | 40×47, 5 / 6 columns | (20, 47)     | idle 0–4 @ 10; walk 0–5 @ 6; hurt 0–2 @ 4 (idle sheet) |
+| `ghoul`       | church `SPRITES/burning-ghoul/spritesheet/v2/burning-ghoul.png` | 57×60, 16 columns    | (28, 60)     | idle 0,4,8,12 @ 9; walk 0–15 @ 4; hurt 0,5,10 @ 4      |
+| `adept`       | church `SPRITES/wizard/spritesheet/wizard.png`                  | 81×66, 15 columns    | (40, 66)     | idle 0–4 @ 10; cast 5–14 @ 3 (one-shot); hurt 0–3 @ 4  |
+
+- The parishioner is the town walker (the same sheet family as the NPCs) and claws in place; the
+  ghoul's 16-frame fire walk becomes both its chase and its 2-damage lunge; the adept's cast clip is
+  the telegraph and releases at tick 18 of the 30-tick wind-up.
+- As with the hero, fallback is **all-or-nothing per kind**: `ENEMY_REQUIRED` lists every sheet the
+  kind needs (`parishioner` needs both idle and walk). One failure swaps that whole kind to the
+  procedural art in `src/render/procedural/enemies.ts` (40×52 strip; same clip names and durations).
+- Frame sizes, columns and pivots were measured from the sheets; `CharacterView` slices them with
+  `sliceFrame` and flips around the feet pivot, so no per-sheet code exists.
+
+### Effect sheets (`src/data/effects.ts`)
+
+| Key          | Sheet                                               | Grid             | Clip / timing                      | Anchor / scale  |
+| ------------ | --------------------------------------------------- | ---------------- | ---------------------------------- | --------------- |
+| `enemyDeath` | church `SPRITES/fx/enemy-death/.../enemy-death.png` | 81×66, 9 columns | frames 1–8, 3 ticks each, one-shot | (0.5, 0.55), 1  |
+| `fireball`   | church `SPRITES/fx/fireball/.../fireball.png`       | 26×26, 3 columns | frames 0–2, 4 ticks each, looping  | (0.5, 0.5), 0.8 |
+
+- Frame 0 of the death sheet is a leftover caster pose; the burst starts at frame 1 and runs eight
+  frames. The procedural fallback draws the same eight-frame burst and three-frame orb at the same
+  durations, so a zero-asset build plays identically (D031).
+- Effects are independent of characters: they have no hurt flash or shadow, and each packed effect
+  can fall back on its own.
 
 ## Goals
 

@@ -21,7 +21,13 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   gesture, a deterministic distant-bell ambience, and simulation events (jump, land grades,
   footsteps, skid, attacks, dash) driving CC0 sound effects. The terrace now has its own track; the
   boss loops are downloaded only when a boss room asks for them. All gates green.
-- Next: M4 — combat & enemies: hitboxes, health, damage windows and the first enemy types.
+- **M4 — Combat, three enemies & the death loop: complete.** A deterministic combat resolver with
+  swing ids, hitstop and pooled FX; five-mask health, i-frames, hurt stun and a 100-tick death fade;
+  three data-driven enemies (parishioner, ghoul, fireball-casting adept) with shared FSMs and a
+  validated spawn pipeline; a shared character renderer, wind-up telegraphs, a combat HUD and
+  procedural fallbacks for every enemy/effect. Death rebuilds the room while art and music stay
+  warm. All gates green.
+- Next: M5 — menus and the input binding editor (pause/settings/volume), followed by the bosses.
 
 ## Quick start
 
@@ -54,18 +60,21 @@ First-time E2E setup: `npx playwright install chromium`.
 
 ```
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
-src/config      tunable constants (input bindings, player feel, physics, render, audio; no magic numbers)
-src/data        art keys/rects/clips, room definitions and sound/track catalogs (content, no logic)
+src/config      tunable constants (input, player, combat, enemies, physics, render, audio; no magic numbers)
+src/data        art keys/rects/clips, enemy/effect sheets, room definitions and sound/track catalogs
 src/input       keyboard/gamepad manager and per-tick input snapshots
 src/physics     body model and the tile collision solver
-src/player      player state machine (movement, jump, attack, dash, sound events)
+src/player      player state machine, vitals, i-frames, attack windows and sound events
+src/enemies     shared FSM plus the melee and caster behaviors, and the spawn factory
+src/combat      damage resolver, projectile pool and shared hitbox geometry
+src/ui          combat HUD (health pips, damage flash, death fade)
 src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
-src/world       semantic tile roles, tilemap and room model (collision reads these)
-src/render      art provider, procedural fallbacks, camera, layers, hero view, room scene
+src/world       semantic tile roles, tilemap and room model, including validated enemy spawns
+src/render      art provider, procedural fallbacks, camera, shared character/enemy views, FX, room scene
 src/debug       F1 overlay + debug state contract
-scripts         asset fetcher/validator, screenshot capture
-tests/unit      Vitest (core, world, input, collision, player, camera, animator, audio, manifest)
-tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate)
+scripts         asset fetcher/validator, screenshot capture (--run / --combat / --overlay)
+tests/unit      Vitest (core, world, input, collision, player, camera, animator, combat, enemies, audio, manifest)
+tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate, combat/death)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```
