@@ -39,6 +39,8 @@ export const COMBAT = {
     gravity: 1800,
     maxFall: 620,
     hitstopTicks: 4,
+    /** A guarded hit still freezes briefly, so the clang has weight. */
+    blockedHitstopTicks: 2,
     hitShake: { strength: 2, ticks: 6 },
     /** Knockback applied to an enemy by a player hit. */
     knockback: { x: 120, y: -70 },

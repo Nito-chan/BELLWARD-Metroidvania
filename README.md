@@ -31,7 +31,12 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   deterministic loop: pause, master/music/effects mix with mute, and a keyboard/gamepad binding
   editor with conflict detection, two-step reset and versioned persistence. Opening the menu freezes
   ticks, keeps rendering/music alive and traps focus inside the dialog. All gates green.
-- Next: M6 — the Bellbearer mini-boss and two pattern bosses.
+- **M6 — Bosses of the Drowned Belfry: complete.** The Bellbearer gate fight plus Warden Moss and the
+  Bell Thief: seven phases, fifteen data-driven telegraphed patterns, three arena rooms and a Bell
+  Nave hub, boss health/phase HUD and banners, guard/lane/rain warnings, boss SFX and loops, and
+  first-clear sigils worth one mask. Claimed bosses stay dead for the run; the return door unlocks on
+  victory. All gates green.
+- Next: M7 — save/load, benches and the map.
 
 ## Quick start
 
@@ -69,16 +74,16 @@ src/data        art keys/rects/clips, enemy/effect sheets, room definitions and 
 src/input       keyboard/gamepad manager, per-tick snapshots and the versioned binding document
 src/physics     body model and the tile collision solver
 src/player      player state machine, vitals, i-frames, attack windows and sound events
-src/enemies     shared FSM plus the melee and caster behaviors, and the spawn factory
+src/enemies     shared FSM, melee/caster behaviors, boss phases/patterns and spawn factory
 src/combat      damage resolver, projectile pool and shared hitbox geometry
 src/ui          combat HUD plus the pause/sound/controls DOM menu
 src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
 src/world       semantic tile roles, tilemap and room model, including validated enemy spawns
 src/render      art provider, procedural fallbacks, camera, shared character/enemy views, FX, room scene
 src/debug       F1 overlay + debug state contract
-scripts         asset fetcher/validator, screenshot capture (--run / --combat / --overlay / --menu / --settings / --controls)
-tests/unit      Vitest (core, world, input, bindings, menus, collision, player, camera, animator, combat, enemies, audio, manifest)
-tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate, combat/death, menus)
+scripts         asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls)
+tests/unit      Vitest (core, world, input, bindings, menus, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest)
+tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate, combat/death, menus, bosses)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

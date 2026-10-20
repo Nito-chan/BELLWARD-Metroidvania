@@ -17,6 +17,9 @@
  *      (--settings opens the pause overlay, then the sound screen)
  *      (--small captures any menu screen at the 640x360 E2E viewport)
  *      (--combat walks into the nearest parishioner and shoots on the first impact)
+ *      (--boss loads a boss arena through the debug handle; --boss-room=<id> selects it)
+ *      (--boss-phase captures a phase banner after crossing the threshold; add --boss-room=<id>)
+ *      (boss shots freeze via the pause flow so slow capture cannot lose the tell)
  *
  * Depends on the DEV-only `window.__game` handle, hence the dev server. Uses the same
  * software-WebGL flags and native viewport as the E2E suite so frames match CI captures.
@@ -30,6 +33,14 @@ const args = process.argv.slice(2);
 const runShot = args.includes('--run');
 const overlayShot = args.includes('--overlay');
 const combatShot = args.includes('--combat');
+const bossShot =
+  args.includes('--boss') ||
+  args.includes('--boss-phase') ||
+  args.some((value) => value.startsWith('--boss-room='));
+const bossPhaseShot = args.includes('--boss-phase');
+const bossRoom =
+  args.find((value) => value.startsWith('--boss-room='))?.slice('--boss-room='.length) ??
+  (bossPhaseShot ? 'warden-arena' : 'bellbearer-arena');
 const menuShot =
   args.includes('--menu') || args.includes('--controls') || args.includes('--settings');
 const controlsShot = args.includes('--controls');
@@ -78,6 +89,48 @@ async function main(): Promise<void> {
         await page.keyboard.down('ArrowLeft');
       }
     }
+    if (bossShot) {
+      await page.evaluate((roomId) => window.__game?.debugLoadRoom(roomId), bossRoom);
+      await page.waitForFunction(
+        (roomId) => window.__game?.debugState().scene?.roomId === roomId,
+        bossRoom,
+        { timeout: 15_000 },
+      );
+      await page.waitForFunction(
+        () => {
+          const state = window.__game?.debugState().scene?.boss?.state;
+          return state !== undefined && state !== 'intro';
+        },
+        undefined,
+        { timeout: 10_000 },
+      );
+      if (bossPhaseShot) {
+        await page.waitForFunction(
+          () => window.__game?.debugState().scene?.boss?.state === 'idle',
+          undefined,
+          { timeout: 10_000 },
+        );
+        await page.evaluate(() => {
+          window.__game?.debugDamageBoss(8);
+          window.__game?.debugDamageBoss(7);
+        });
+        await page.waitForFunction(
+          () => window.__game?.debugState().scene?.boss?.phase === 1,
+          undefined,
+          { timeout: 5_000 },
+        );
+      } else {
+        // Capture the first readable wind-up, while the boss is still on its spawn mark.
+        await page.waitForFunction(
+          () => {
+            const boss = window.__game?.debugState().scene?.boss;
+            return boss?.state === 'windup' && boss.telegraph > 0.15 && !boss.hidden;
+          },
+          undefined,
+          { timeout: 10_000 },
+        );
+      }
+    }
     // The combat shot walks into the nearest parishioner and captures the first impact,
     // so the frame shows a live hitbox, a stagger flash and the damage HUD.
     if (combatShot) {
@@ -116,7 +169,28 @@ async function main(): Promise<void> {
         await page.getByRole('dialog', { name: 'Sound' }).waitFor({ timeout: 5_000 });
       }
     }
-    await page.waitForTimeout(menuShot ? 320 : combatShot ? 40 : settleMs);
+    // Screenshot capture is slower than a boss pattern in SwiftShader. Freezing the
+    // simulation through the pause menu (the canvas is captured alone) keeps the chosen
+    // telegraph/phase on screen instead of letting the boss kill the idle player.
+    if (bossShot) {
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+      await page.keyboard.press('Escape');
+      await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 5_000 });
+      // The menu is a DOM sibling of the canvas; hide it after pausing so a canvas
+      // screenshot shows the frozen arena, not the pause overlay on top of it.
+      await page.evaluate(() => {
+        const root = document.querySelector<HTMLElement>('[data-testid="menu-root"]');
+        if (root) root.style.visibility = 'hidden';
+      });
+    }
+    await page.waitForTimeout(
+      menuShot ? 320 : combatShot ? 40 : bossPhaseShot ? 120 : bossShot ? 30 : settleMs,
+    );
     await mkdir(dirname(outputPath), { recursive: true });
     // DOM overlays only appear in a whole-page shot; gameplay uses the canvas alone.
     const target = overlayShot || menuShot ? page : page.locator('canvas');

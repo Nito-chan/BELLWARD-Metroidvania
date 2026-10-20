@@ -1,13 +1,19 @@
 /**
- * Enemy tuning. One entry per enemy kind; the behavior class reads these numbers and
- * never hard-codes a speed, range, damage or duration.
+ * Actor tuning. One entry per enemy or boss kind; behavior classes read these numbers
+ * and never hard-code a speed, range, damage or duration.
  *
- * Three kinds cover three combat verbs:
+ * The three regular enemies cover three combat verbs:
  * - `parishioner` shuffles and claws: the slow, readable introduction;
  * - `ghoul` charges and lunges: punishes standing still;
  * - `adept` holds ground and throws fire: forces the player to close the distance.
+ *
+ * Bosses share the same body/health/physics contract, but their attack vocabulary is
+ * authored in `config/bosses.ts` because a boss is a sequence of telegraphed phases,
+ * not one melee loop.
  */
 export type EnemyKind = 'parishioner' | 'ghoul' | 'adept';
+export type BossKind = 'bellbearer' | 'wardenMoss' | 'bellThief';
+export type ActorKind = EnemyKind | BossKind;
 
 /** A forward hitbox, relative to the owner's feet-center. Mirrors COMBAT.player.attackBox. */
 export type AttackBoxDef = {
@@ -67,7 +73,7 @@ export type EnemyStats = {
   readonly cast?: CastDef;
 };
 
-export const ENEMIES: Readonly<Record<EnemyKind, EnemyStats>> = {
+export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
   parishioner: {
     displayName: 'Drowned Parishioner',
     hp: 3,
@@ -134,6 +140,52 @@ export const ENEMIES: Readonly<Record<EnemyKind, EnemyStats>> = {
       projectile: { speed: 165, damage: 1, lifeTicks: 120 },
     },
   },
+  bellbearer: {
+    displayName: 'The Bellbearer',
+    hp: 16,
+    body: { w: 26, h: 54 },
+    patrolSpeed: 0,
+    chaseSpeed: 0,
+    aggroRange: 0,
+    deaggroRange: 0,
+    verticalRange: 0,
+    staggerTicks: 0,
+    contactDamage: 1,
+  },
+  wardenMoss: {
+    displayName: 'Warden Moss',
+    hp: 26,
+    body: { w: 30, h: 58 },
+    patrolSpeed: 0,
+    chaseSpeed: 0,
+    aggroRange: 0,
+    deaggroRange: 0,
+    verticalRange: 0,
+    staggerTicks: 0,
+    contactDamage: 1,
+  },
+  bellThief: {
+    displayName: 'The Bell Thief',
+    hp: 32,
+    body: { w: 24, h: 58 },
+    patrolSpeed: 0,
+    chaseSpeed: 0,
+    aggroRange: 0,
+    deaggroRange: 0,
+    verticalRange: 0,
+    staggerTicks: 0,
+    contactDamage: 1,
+  },
 };
 
 export const ENEMY_KINDS: readonly EnemyKind[] = ['parishioner', 'ghoul', 'adept'];
+export const BOSS_KINDS: readonly BossKind[] = ['bellbearer', 'wardenMoss', 'bellThief'];
+export const ACTOR_KINDS: readonly ActorKind[] = [...ENEMY_KINDS, ...BOSS_KINDS];
+
+export function isBossKind(kind: ActorKind): kind is BossKind {
+  return (BOSS_KINDS as readonly ActorKind[]).includes(kind);
+}
+
+export function isEnemyKind(kind: ActorKind): kind is EnemyKind {
+  return (ENEMY_KINDS as readonly ActorKind[]).includes(kind);
+}

@@ -32,7 +32,8 @@ function context(
   return {
     tilemap,
     player: { feet: { x: playerX, y: playerY }, dead: false },
-    castProjectile: (...args: number[]) => shots.push(args),
+    castProjectile: (x, y, dirX, dirY, speed, damage, life) =>
+      shots.push([x, y, dirX, dirY, speed, damage, life]),
   };
 }
 

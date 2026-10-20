@@ -1,4 +1,5 @@
 import { COMBAT } from '../config/combat';
+import { BellwardError } from '../core/Errors';
 
 /**
  * The player's survivability: health, invulnerability frames and death. Kept apart from
@@ -6,15 +7,32 @@ import { COMBAT } from '../config/combat';
  * stays focused on movement.
  */
 export class PlayerVitals {
-  private hpValue: number = COMBAT.player.maxHp;
+  private maxHpValue: number;
+  private hpValue: number;
   private invulnerableTicksValue: number = COMBAT.player.spawnInvulnerableTicks;
+
+  constructor(maxHp: number = COMBAT.player.maxHp, hp: number = maxHp) {
+    if (!Number.isInteger(maxHp) || maxHp <= 0) {
+      throw new BellwardError(`player max HP must be a positive integer, got ${maxHp}`);
+    }
+    this.maxHpValue = maxHp;
+    this.hpValue = Math.max(1, Math.min(maxHp, Math.floor(hp)));
+  }
 
   get hp(): number {
     return this.hpValue;
   }
 
   get maxHp(): number {
-    return COMBAT.player.maxHp;
+    return this.maxHpValue;
+  }
+
+  /** Boss sigil reward: raise the ceiling and immediately fill the new mask. */
+  grantMaxHp(amount: number): void {
+    const gain = Math.max(0, Math.floor(amount));
+    if (gain === 0) return;
+    this.maxHpValue += gain;
+    this.hpValue += gain;
   }
 
   /** Remaining invulnerability ticks (0 = hittable). */

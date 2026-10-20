@@ -2,19 +2,23 @@ import { Application, Rectangle } from 'pixi.js';
 import { AudioManager } from '../audio/AudioManager';
 import { HowlerBackend } from '../audio/HowlerBackend';
 import { AUDIO } from '../config/audio';
+import { BOSS_REWARDS } from '../config/bossTypes';
+import { COMBAT } from '../config/combat';
 import { DEBUG } from '../config/debug';
+import type { BossKind } from '../config/enemies';
 import { PALETTE } from '../config/palette';
 import { RENDER } from '../config/render';
 import { SIM, VIEW, WORLD } from '../config/world';
-import { belfryTerrace } from '../data/rooms/belfry-terrace';
+import { DEFAULT_ROOM_ID, getRoom } from '../data/rooms';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
 import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
+import { Announcer } from '../ui/Announcer';
 import { MenuSystem } from '../ui/menu/MenuSystem';
 import { ArtProvider } from '../render/ArtProvider';
 import { RoomScene } from '../render/RoomScene';
-import { createRoom } from '../world/Room';
+import { createRoom, type RoomSpawn } from '../world/Room';
 import { BellwardError, formatError } from './Errors';
 import { EventBus } from './EventBus';
 import { Loop } from './Loop';
@@ -41,6 +45,7 @@ export class Game {
   });
   private readonly rng = new Rng(WORLD.rngSeed);
   private readonly overlay = new DebugOverlay();
+  private readonly announcer = new Announcer();
   private readonly audio = new AudioManager(new HowlerBackend(), { rng: this.rng.fork() });
   private readonly loop = new Loop({
     dt: SIM.dt,
@@ -56,6 +61,9 @@ export class Game {
   private scene: RoomScene | null = null;
   private art: ArtProvider | null = null;
   private ready = false;
+  private roomId = DEFAULT_ROOM_ID;
+  /** Boss sigils claimed this run. M7 persists this set; M6 only carries it in memory. */
+  private readonly sigils = new Set<BossKind>();
   private lastWholeSecond = 0;
   private overlayFrameCounter = 0;
   /** Suppress the pause edge that closes a menu on the first resumed tick. */
@@ -111,8 +119,7 @@ export class Game {
     this.app.canvas.setAttribute('tabindex', '0');
 
     this.art = await ArtProvider.load();
-    this.scene = this.createScene();
-    this.app.stage.addChild(this.scene.view);
+    this.enterRoom(DEFAULT_ROOM_ID);
     window.addEventListener('resize', this.onResize);
     this.onResize();
 
@@ -128,7 +135,6 @@ export class Game {
     // Registering sounds before any gesture lets Howler buffer them while the context
     // is still suspended; nothing is audible until the first gesture unlocks it.
     this.audio.load();
-    this.audio.requestMusic('terrace');
 
     this.ready = true;
     this.loop.start();
@@ -148,6 +154,7 @@ export class Game {
       smoothedFps: this.loop.stats.smoothedFps,
       renderer: this.ready ? this.app.renderer.name : 'none',
       scene: this.scene?.debugState() ?? null,
+      run: { sigils: [...this.sigils], maxHp: this.maxHp() },
       audio: this.audio.debugState(),
       menu: this.menu.debugState(),
       errors: [...this.errors],
@@ -195,9 +202,17 @@ export class Game {
       this.events.emit('secondElapsed', { seconds: wholeSecond });
     }
     if (this.scene) {
-      const events = this.scene.update(this.loop.stats.tickCount, snapshot);
+      const scene = this.scene;
+      const events = scene.update(this.loop.stats.tickCount, snapshot);
       for (const event of events) this.audio.onPlayerEvent(event);
-      if (this.scene.resetRequested) this.resetScene();
+      const defeated = scene.consumeBossDefeat();
+      if (defeated) this.sigils.add(defeated);
+      const exit = scene.exitRequested;
+      if (exit) {
+        this.enterRoom(exit.roomId, exit.spawn, scene.vitals);
+      } else if (scene.resetRequested) {
+        this.resetScene();
+      }
     }
     this.audio.tick(this.loop.stats.tickCount);
   }
@@ -217,23 +232,68 @@ export class Game {
     this.app.canvas.focus();
   }
 
-  /** Builds a fresh room: used at boot and again after the player dies. */
-  private createScene(): RoomScene {
+  /** Builds a room and makes it the active scene, carrying vitals and run progress. */
+  private enterRoom(
+    roomId: string,
+    spawn?: RoomSpawn,
+    carry?: { hp: number; maxHp: number },
+  ): void {
     if (!this.art) {
-      throw new BellwardError('createScene() called before art finished loading');
+      throw new BellwardError('enterRoom() called before art finished loading');
     }
-    return new RoomScene(createRoom(belfryTerrace), this.art, this.rng.fork(), this.audio);
+    const definition = getRoom(roomId);
+    const room = createRoom(definition);
+    const maxHp = carry?.maxHp ?? this.maxHp();
+    const hp = carry?.hp ?? maxHp;
+    const scene = new RoomScene(room, this.art, this.rng.fork(), this.audio, {
+      spawn,
+      hp,
+      maxHp,
+      sigilCount: this.sigils.size,
+      bossRewardClaimed: definition.boss ? this.sigils.has(definition.boss) : false,
+      announce: (text) => this.announcer.say(text),
+    });
+    const previous = this.scene;
+    this.scene = scene;
+    this.roomId = roomId;
+    this.app.stage.addChild(scene.view);
+    if (previous) previous.destroy();
+    this.audio.requestMusic(definition.music ?? 'terrace');
   }
 
-  /**
-   * Replaces the dead room with a clean one. The art provider (and every loaded texture)
-   * is shared, enemies respawn from the room data, and music keeps playing uninterrupted.
-   */
+  /** Current maximum masks: base plus one per claimed sigil. */
+  private maxHp(): number {
+    return COMBAT.player.maxHp + this.sigils.size * BOSS_REWARDS.maxHpPerSigil;
+  }
+
+  /** Replaces the dead room with a clean one at full health, preserving sigils. */
   private resetScene(): void {
-    const previous = this.scene;
-    this.scene = this.createScene();
-    this.app.stage.addChild(this.scene.view);
-    if (previous) previous.destroy();
+    const maxHp = this.maxHp();
+    this.enterRoom(this.roomId, undefined, { hp: maxHp, maxHp });
+  }
+
+  /** DEV-only: jump straight into a room for boss/door E2E coverage. */
+  debugLoadRoom(roomId: string): void {
+    if (!this.ready) throw new BellwardError('debugLoadRoom() called before boot() completed');
+    // A test may jump rooms between a keydown and keyup; never carry a held run key.
+    this.input.reset();
+    const maxHp = this.maxHp();
+    this.enterRoom(roomId, undefined, { hp: maxHp, maxHp });
+  }
+
+  /** DEV-only: route damage through the boss's real phase/gate logic. */
+  debugDamageBoss(amount: number): boolean {
+    return this.scene?.debugDamageBoss(amount) ?? false;
+  }
+
+  /** DEV-only: break the Bellbearer's shield without replaying the wall charge. */
+  debugBreakWard(): boolean {
+    return this.scene?.debugBreakWard() ?? false;
+  }
+
+  /** DEV-only: kill the active boss to exercise rewards, banners and door unlocking. */
+  debugDefeatBoss(): void {
+    this.scene?.debugDefeatBoss();
   }
 
   private onRender(alpha: number): void {

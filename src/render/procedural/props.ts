@@ -7,6 +7,7 @@ export const PROP_SIZES: Record<PropKey, { w: number; h: number }> = {
   balustrade: { w: 128, h: 52 },
   column: { w: 64, h: 140 },
   bell: { w: 64, h: 96 },
+  door: { w: 48, h: 88 },
 };
 
 export const PROP_PAINTERS: Record<PropKey, Painter> = {
@@ -85,5 +86,36 @@ export const PROP_PAINTERS: Record<PropKey, Painter> = {
     ctx.beginPath();
     ctx.arc(32, 83, 4, 0, Math.PI * 2);
     ctx.fill();
+  },
+  door: (ctx) => {
+    // A deep arch cut into the stone, with a brass rim and a small bell keystone.
+    ctx.fillStyle = hex(PALETTE.stone);
+    ctx.beginPath();
+    ctx.moveTo(2, 88);
+    ctx.lineTo(2, 30);
+    ctx.arc(24, 30, 22, Math.PI, 0);
+    ctx.lineTo(46, 88);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = hex(PALETTE.void);
+    ctx.beginPath();
+    ctx.moveTo(8, 88);
+    ctx.lineTo(8, 31);
+    ctx.arc(24, 31, 16, Math.PI, 0);
+    ctx.lineTo(40, 88);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = hex(PALETTE.stoneLit);
+    ctx.fillRect(4, 32, 3, 56);
+    ctx.fillRect(41, 32, 3, 56);
+    ctx.fillStyle = hex(PALETTE.brassDark);
+    ctx.fillRect(7, 52, 34, 3);
+    ctx.fillStyle = hex(PALETTE.brass);
+    ctx.beginPath();
+    ctx.arc(24, 20, 5, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(19, 20, 10, 2);
+    ctx.fillStyle = hex(PALETTE.ember);
+    ctx.fillRect(23, 24, 2, 2);
   },
 };

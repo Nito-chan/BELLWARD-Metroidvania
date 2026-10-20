@@ -55,10 +55,18 @@ export class DebugOverlay {
         `velocity   ${player.vx.toFixed(0)}, ${player.vy.toFixed(0)} facing ${player.facing} ${player.grounded ? 'ground' : 'air'}`,
         `arc        ${player.jumpPeakY !== null ? `apex ${player.jumpPeakY.toFixed(1)}` : player.lastJumpPeakY !== null ? `last ${player.lastJumpPeakY.toFixed(1)}` : '-'}`,
         `foes       ${scene.enemies.length} live · ${scene.projectiles} shots · hitstop ${scene.hitstop}`,
+        `sigils     ${state.run.sigils.length > 0 ? state.run.sigils.join(', ') : '-'} · max hp ${state.run.maxHp}`,
       );
       for (const foe of scene.enemies) {
         lines.push(
           `  ${foe.kind.padEnd(11)} hp ${foe.hp}/${foe.maxHp} ${foe.state}/${foe.animation} @ ${foe.x.toFixed(0)}`,
+        );
+      }
+      if (scene.boss) {
+        const boss = scene.boss;
+        lines.push(
+          `boss       ${boss.name} @ ${boss.x.toFixed(0)},${boss.y.toFixed(0)} hp ${boss.hp}/${boss.maxHp} phase ${boss.phase + 1}/${boss.phaseCount} ${boss.phaseName}${boss.warded ? ' WARDED' : ''}${boss.hidden ? ' HIDDEN' : ''}${scene.exitLocked ? ' EXIT LOCKED' : ''}`,
+          `pattern    ${boss.pattern ?? '-'} ${boss.state} telegraph ${boss.telegraph.toFixed(2)}`,
         );
       }
     }

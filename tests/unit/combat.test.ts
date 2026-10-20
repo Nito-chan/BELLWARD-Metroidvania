@@ -262,7 +262,7 @@ describe('ProjectilePool', () => {
     const pool = new ProjectilePool(2);
     pool.spawn(50, 130, 1, 0, 60, 1, 120);
     const hits = pool.update(GROUND, { x: 0, y: 0, w: 1, h: 1 });
-    expect(hits).toEqual([{ x: 51, y: 130, damage: 1, kind: 'tile' }]);
+    expect(hits).toEqual([{ x: 51, y: 130, damage: 1, kind: 'tile', style: 'fire' }]);
     expect(pool.activeCount).toBe(0);
   });
 

@@ -1,8 +1,9 @@
-import { ENEMIES, type EnemyKind } from '../config/enemies';
+import { ENEMIES, type ActorKind, type BossKind } from '../config/enemies';
 import type { PaletteName } from '../config/palette';
 import { RENDER } from '../config/render';
 import { BellwardError } from '../core/Errors';
 import type { Rect, Vec2 } from '../core/Types';
+import type { MusicKey } from '../data/audio';
 import { Tilemap } from './Tilemap';
 import type { TileRole } from './tiles';
 
@@ -10,7 +11,7 @@ import type { TileRole } from './tiles';
 export type BackgroundKey = 'far' | 'mid' | 'near';
 
 /** Art keys for props. Resolved by the active art provider. */
-export type PropKey = 'balustrade' | 'column' | 'bell';
+export type PropKey = 'balustrade' | 'column' | 'bell' | 'door';
 
 /** Depth band for a prop: behind the hero, or in front of the hero. */
 export type PropLayerName = 'back' | 'front';
@@ -23,6 +24,8 @@ export type RoomProp = {
   y: number;
   /** `back` props sit behind actors; `front` props occlude them. */
   layer: PropLayerName;
+  /** Optional multiplicative tint, used to distinguish otherwise identical doors. */
+  tint?: PaletteName;
 };
 
 export type RoomSpawn = {
@@ -36,12 +39,33 @@ export type RoomSpawn = {
  * hero spawn. `patrol` is an optional horizontal beat, in world pixels.
  */
 export type EnemySpawn = {
-  kind: EnemyKind;
+  kind: ActorKind;
   x: number;
   y: number;
   /** Initial facing; defaults to right. */
   facing?: -1 | 1;
   patrol?: { min: number; max: number };
+};
+
+/** A world-space trigger that walks the player into another room. */
+export type RoomExit = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  targetRoomId: string;
+  /** Feet position in the destination room. */
+  spawn: RoomSpawn;
+};
+
+/** A carved plaque or other short world-space label. */
+export type RoomLabel = {
+  x: number;
+  y: number;
+  text: string;
+  color: PaletteName;
+  alpha?: number;
+  size?: number;
 };
 
 export type RoomDefinition = {
@@ -59,6 +83,14 @@ export type RoomDefinition = {
   spawn: RoomSpawn;
   /** Enemies to spawn when the room is (re)entered. */
   enemies: readonly EnemySpawn[];
+  /** Music loop requested on entry; defaults to the terrace theme. */
+  music?: MusicKey;
+  /** The one boss encounter in this room, if any. */
+  boss?: BossKind;
+  /** Walk-through doorways to other rooms. */
+  exits?: readonly RoomExit[];
+  /** World-space labels (boss door plaques). */
+  labels?: readonly RoomLabel[];
 };
 
 export type Room = {
@@ -88,6 +120,9 @@ export function createRoom(definition: RoomDefinition): Room {
   }
 
   validateEnemies(definition, tilemap);
+  validateBoss(definition);
+  validateExits(definition, tilemap);
+  validateLabels(definition, tilemap);
 
   return {
     definition,
@@ -155,4 +190,68 @@ function validateEnemies(definition: RoomDefinition, tilemap: Tilemap): void {
       }
     }
   });
+}
+
+/** A declared boss must be present exactly once, so the HUD never guesses. */
+function validateBoss(definition: RoomDefinition): void {
+  if (!definition.boss) return;
+  const matches = definition.enemies.filter((enemy) => enemy.kind === definition.boss);
+  if (matches.length !== 1) {
+    throw new BellwardError(
+      `room "${definition.id}" boss "${definition.boss}" must have exactly one spawn, found ${matches.length}`,
+    );
+  }
+  if (definition.enemies.length !== 1) {
+    throw new BellwardError(
+      `room "${definition.id}" is a boss arena and cannot mix regular enemy spawns`,
+    );
+  }
+}
+
+function validateExits(definition: RoomDefinition, tilemap: Tilemap): void {
+  for (const [index, exit] of (definition.exits ?? []).entries()) {
+    const label = `room "${definition.id}" exit ${index}`;
+    if (!Number.isFinite(exit.x) || !Number.isFinite(exit.y)) {
+      throw new BellwardError(`${label}: position must be finite`);
+    }
+    if (!(exit.w > 0 && exit.h > 0)) {
+      throw new BellwardError(`${label}: width and height must be positive`);
+    }
+    if (
+      exit.x < 0 ||
+      exit.y < 0 ||
+      exit.x + exit.w > tilemap.pixelWidth ||
+      exit.y + exit.h > tilemap.pixelHeight
+    ) {
+      throw new BellwardError(`${label}: trigger leaves the room`);
+    }
+    if (!exit.targetRoomId) throw new BellwardError(`${label}: target room is empty`);
+    if (!Number.isFinite(exit.spawn.x) || !Number.isFinite(exit.spawn.y)) {
+      throw new BellwardError(`${label}: destination spawn must be finite`);
+    }
+  }
+}
+
+function validateLabels(definition: RoomDefinition, tilemap: Tilemap): void {
+  for (const [index, label] of (definition.labels ?? []).entries()) {
+    const where = `room "${definition.id}" label ${index}`;
+    if (!label.text.trim()) throw new BellwardError(`${where}: text is empty`);
+    if (!Number.isFinite(label.x) || !Number.isFinite(label.y)) {
+      throw new BellwardError(`${where}: position must be finite`);
+    }
+    if (
+      label.x < 0 ||
+      label.x > tilemap.pixelWidth ||
+      label.y < 0 ||
+      label.y > tilemap.pixelHeight
+    ) {
+      throw new BellwardError(`${where}: label leaves the room`);
+    }
+    if (label.alpha !== undefined && !(label.alpha >= 0 && label.alpha <= 1)) {
+      throw new BellwardError(`${where}: alpha must be within 0..1`);
+    }
+    if (label.size !== undefined && !(label.size > 0)) {
+      throw new BellwardError(`${where}: size must be positive`);
+    }
+  }
 }

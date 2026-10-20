@@ -1,18 +1,28 @@
 import { COMBAT } from '../config/combat';
-import { ENEMIES, type EnemyKind, type EnemyStats } from '../config/enemies';
+import { ENEMIES, type ActorKind, type EnemyStats } from '../config/enemies';
 import { RENDER } from '../config/render';
 import { SIM } from '../config/world';
 import { bodyRect, forwardBox } from '../combat/geometry';
+import type { ProjectileSpawnOptions } from '../combat/ProjectilePool';
 import { approach } from '../core/Math2D';
 import type { Rect, Vec2 } from '../core/Types';
 import { bodyFeet, createBody, type Body } from '../physics/Body';
-import { moveAndCollide } from '../physics/TileCollision';
+import { moveAndCollide, type MoveResult } from '../physics/TileCollision';
 import type { EnemySpawn } from '../world/Room';
 import type { Tilemap } from '../world/Tilemap';
 
 /** Shared FSM states. `active` is the only state with a damaging melee hitbox open. */
 export type EnemyState =
-  'idle' | 'patrol' | 'chase' | 'windup' | 'active' | 'recover' | 'stagger' | 'dead';
+  | 'intro'
+  | 'idle'
+  | 'patrol'
+  | 'chase'
+  | 'windup'
+  | 'active'
+  | 'recover'
+  | 'phase'
+  | 'stagger'
+  | 'dead';
 
 /** What an enemy is allowed to know about the player. Keeps the simulation testable. */
 export type EnemyTarget = {
@@ -24,6 +34,8 @@ export type EnemyTarget = {
 export type EnemyContext = {
   tilemap: Tilemap;
   player: EnemyTarget;
+  /** Room bounds, used by bosses for arena-wide rain patterns. */
+  arena?: Rect;
   castProjectile: (
     x: number,
     y: number,
@@ -32,6 +44,7 @@ export type EnemyContext = {
     speed: number,
     damage: number,
     lifeTicks: number,
+    options?: ProjectileSpawnOptions,
   ) => void;
 };
 
@@ -43,7 +56,7 @@ export type EnemyContext = {
  * once per tick and feed a view.
  */
 export abstract class Enemy {
-  readonly kind: EnemyKind;
+  readonly kind: ActorKind;
   readonly stats: EnemyStats;
   readonly body: Body;
   facing: -1 | 1;
@@ -57,7 +70,7 @@ export abstract class Enemy {
   protected readonly patrolMin: number;
   protected readonly patrolMax: number;
 
-  constructor(kind: EnemyKind, spawn: EnemySpawn) {
+  constructor(kind: ActorKind, spawn: EnemySpawn) {
     this.kind = kind;
     this.stats = ENEMIES[kind];
     this.hp = this.stats.hp;
@@ -96,6 +109,26 @@ export abstract class Enemy {
 
   get grounded(): boolean {
     return this.body.grounded;
+  }
+
+  /** Combat may target this enemy. Bosses hide during teleports and phase transitions. */
+  get targetable(): boolean {
+    return this.alive;
+  }
+
+  /** Body contact can hurt the player. A hidden boss has no body in the room. */
+  get contactHazard(): boolean {
+    return this.alive;
+  }
+
+  /** True when a player swing should clang off instead of applying damage. */
+  get damageBlocked(): boolean {
+    return false;
+  }
+
+  /** Called when a swing hits a blocked target; bosses use it to flash their ward. */
+  onDeflect(_sourceX: number): void {
+    // Regular enemies are never guarded.
   }
 
   /** 0 before a wind-up, rising to 1 on the active frame. Drives the telegraph arc. */
@@ -168,10 +201,16 @@ export abstract class Enemy {
       // Patrols turn around at walls; chasers wait for a player who comes back down.
       if (this.stateValue === 'patrol') this.facing = this.facing === 1 ? -1 : 1;
     }
+    this.onMoveResolved(move, ctx);
   }
 
   /** Subclass decision making. Called once per tick before physics. */
   protected abstract think(ctx: EnemyContext): void;
+
+  /** Called after tile collision. Bosses use it to notice wall impacts. */
+  protected onMoveResolved(_move: MoveResult, _ctx: EnemyContext): void {
+    // Most enemies do not care about the collision result.
+  }
 
   protected beginState(state: EnemyState, ticks: number, clip: string): void {
     this.stateValue = state;

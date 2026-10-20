@@ -16,6 +16,52 @@ export async function debugState(page: Page): Promise<GameDebugState> {
   });
 }
 
+/** Jumps to a room through the DEV handle and waits for the new scene to mount. */
+export async function loadRoom(page: Page, roomId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const game = window.__game;
+    if (!game) throw new Error('window.__game is not available (DEV build required)');
+    game.debugLoadRoom(id);
+  }, roomId);
+  await page.waitForFunction((id) => window.__game?.debugState().scene?.roomId === id, roomId, {
+    timeout: 15_000,
+  });
+}
+
+/**
+ * Holds left until the room changes, then releases in the same frame. Playwright IPC is
+ * too slow here: holding the key across a room transition can walk straight through the
+ * next doorway before the test observes the first change.
+ */
+export async function walkLeftToRoom(page: Page, roomId: string): Promise<string> {
+  return page.evaluate(async (target) => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft', bubbles: true }));
+    const started = performance.now();
+    try {
+      while (performance.now() - started < 12_000) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const current = window.__game?.debugState().scene?.roomId;
+        if (current === target) return current;
+      }
+      return window.__game?.debugState().scene?.roomId ?? 'no-scene';
+    } finally {
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowLeft', bubbles: true }));
+    }
+  }, roomId);
+}
+
+/** Waits until the arena boss has finished its intro and is choosing patterns. */
+export async function waitForBossIdle(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const boss = window.__game?.debugState().scene?.boss;
+      return boss !== null && boss !== undefined && boss.state === 'idle';
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
 export type StrikeResult = 'struck' | 'killed' | 'dead' | 'timeout' | 'no-scene';
 
 export type DeathRun = {

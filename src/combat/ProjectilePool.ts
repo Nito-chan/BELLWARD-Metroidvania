@@ -5,6 +5,16 @@ import type { Rect } from '../core/Types';
 import type { Tilemap } from '../world/Tilemap';
 import { circleOverlapsRect } from './geometry';
 
+/** Projectile visuals. The pool stores this as data; the view maps it to a tint. */
+export type ProjectileStyle = 'fire' | 'spore' | 'wave' | 'coin' | 'bell';
+
+/** Optional data attached when a pattern spawns a shot. */
+export type ProjectileSpawnOptions = {
+  readonly style?: ProjectileStyle;
+  /** Downward acceleration, px/s². Defaults to 0 (straight-line orb). */
+  readonly gravity?: number;
+};
+
 /** One fixed pool slot. Inactive slots keep their last numbers; `active` is the truth. */
 export type Projectile = {
   /** Stable slot index, used by the view to keep a sprite per slot. */
@@ -14,6 +24,8 @@ export type Projectile = {
   y: number;
   vx: number;
   vy: number;
+  gravity: number;
+  style: ProjectileStyle;
   damage: number;
   ticksLeft: number;
 };
@@ -23,6 +35,7 @@ export type ProjectileHit = {
   x: number;
   y: number;
   damage: number;
+  style: ProjectileStyle;
   kind: 'player' | 'tile';
 };
 
@@ -42,6 +55,8 @@ export class ProjectilePool {
       y: 0,
       vx: 0,
       vy: 0,
+      gravity: 0,
+      style: 'fire' as const,
       damage: 0,
       ticksLeft: 0,
     }));
@@ -64,6 +79,7 @@ export class ProjectilePool {
     speed: number,
     damage: number,
     lifeTicks: number,
+    options: ProjectileSpawnOptions = {},
   ): void {
     const length = Math.hypot(dirX, dirY);
     if (length <= 0) return;
@@ -73,6 +89,8 @@ export class ProjectilePool {
     slot.y = y;
     slot.vx = (dirX / length) * speed;
     slot.vy = (dirY / length) * speed;
+    slot.gravity = options.gravity ?? 0;
+    slot.style = options.style ?? 'fire';
     slot.damage = damage;
     slot.ticksLeft = lifeTicks;
   }
@@ -83,12 +101,19 @@ export class ProjectilePool {
     const radius = COMBAT.projectileRadius;
     for (const slot of this.slots) {
       if (!slot.active) continue;
+      slot.vy += slot.gravity * SIM.dt;
       slot.x += slot.vx * SIM.dt;
       slot.y += slot.vy * SIM.dt;
       slot.ticksLeft -= 1;
 
       if (circleOverlapsRect(slot.x, slot.y, radius, target)) {
-        hits.push({ x: slot.x, y: slot.y, damage: slot.damage, kind: 'player' });
+        hits.push({
+          x: slot.x,
+          y: slot.y,
+          damage: slot.damage,
+          style: slot.style,
+          kind: 'player',
+        });
         slot.active = false;
         continue;
       }
@@ -96,7 +121,13 @@ export class ProjectilePool {
       const tx = Math.floor(slot.x / RENDER.tileSize);
       const ty = Math.floor(slot.y / RENDER.tileSize);
       if (tilemap.isSolid(tx, ty)) {
-        hits.push({ x: slot.x, y: slot.y, damage: slot.damage, kind: 'tile' });
+        hits.push({
+          x: slot.x,
+          y: slot.y,
+          damage: slot.damage,
+          style: slot.style,
+          kind: 'tile',
+        });
         slot.active = false;
         continue;
       }

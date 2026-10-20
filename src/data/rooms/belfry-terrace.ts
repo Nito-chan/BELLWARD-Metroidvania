@@ -119,8 +119,10 @@ export const belfryTerrace: RoomDefinition = {
     // The bell's chain runs off the top of the frame: it hangs from the unseen belfry above.
     { art: 'bell', x: 480, y: 120, layer: 'back' },
     { art: 'column', x: 32, y: 320, layer: 'front' },
-    { art: 'column', x: 928, y: 320, layer: 'front' },
+    { art: 'column', x: 896, y: 320, layer: 'front' },
+    { art: 'door', x: 928, y: 320, layer: 'back' },
   ],
+  labels: [{ x: 884, y: 228, text: 'THE BELL NAVE', color: 'echo' }],
   spawn: { x: 420, y: 320 },
   /**
    * Combat is deliberately off the spawn pocket (420..660) so the first frames stay
@@ -132,5 +134,15 @@ export const belfryTerrace: RoomDefinition = {
     { kind: 'parishioner', x: 270, y: 320, facing: 1, patrol: { min: 228, max: 312 } },
     { kind: 'ghoul', x: 380, y: 192, facing: -1, patrol: { min: 328, max: 432 } },
     { kind: 'adept', x: 872, y: 320, facing: -1 },
+  ],
+  exits: [
+    {
+      x: 900,
+      y: 260,
+      w: 56,
+      h: 60,
+      targetRoomId: 'belfry-antechamber',
+      spawn: { x: 80, y: 320 },
+    },
   ],
 };

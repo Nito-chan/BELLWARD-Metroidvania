@@ -1,8 +1,18 @@
 import { Container, Sprite, Texture } from 'pixi.js';
+import { PALETTE } from '../config/palette';
 import { VIEW } from '../config/world';
-import type { ProjectilePool } from '../combat/ProjectilePool';
+import type { ProjectilePool, ProjectileStyle } from '../combat/ProjectilePool';
 import type { ArtProvider } from './ArtProvider';
 import { sliceFrame } from './frames';
+
+/** Pattern tints keep the shared fireball silhouette but give each boss a vocabulary. */
+const STYLE_TINT: Readonly<Record<ProjectileStyle, number>> = {
+  fire: 0xffffff,
+  spore: PALETTE.moss,
+  wave: PALETTE.echo,
+  coin: PALETTE.brass,
+  bell: PALETTE.bone,
+};
 
 /**
  * One sprite per projectile pool slot. The fireball loop is shared by every shot, so a
@@ -44,6 +54,7 @@ export class ProjectileView {
       }
       sprite.visible = true;
       sprite.position.set(slot.x, slot.y);
+      sprite.tint = STYLE_TINT[slot.style];
       if (texture) sprite.texture = texture;
     }
     // Projectiles always draw above actors but below the HUD; the scene owns this layer.

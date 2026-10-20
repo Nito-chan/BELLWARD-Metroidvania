@@ -1,5 +1,5 @@
 import type { Texture } from 'pixi.js';
-import { ENEMY_KINDS, type EnemyKind } from '../config/enemies';
+import { BOSS_KINDS, ENEMY_KINDS, type BossKind, type EnemyKind } from '../config/enemies';
 import { VIEW } from '../config/world';
 import { EFFECT_KEYS, type EffectArt, type EffectKey } from '../data/effects';
 import type { BackgroundKey, PropKey } from '../world/Room';
@@ -7,6 +7,7 @@ import type { TileRole } from '../world/tiles';
 import type { CharacterArt } from './Animation';
 import { paintSky, paintSkyline } from './procedural/backgrounds';
 import { paint, TILE_SIZE } from './procedural/canvas';
+import { buildBossArt } from './procedural/bosses';
 import { buildEffectArt } from './procedural/effects';
 import { buildEnemyArt } from './procedural/enemies';
 import { buildHeroArt } from './procedural/hero';
@@ -26,6 +27,7 @@ export class ProceduralArt {
   private readonly backgrounds = new Map<BackgroundKey, Texture>();
   readonly hero: CharacterArt;
   readonly enemies: Readonly<Record<EnemyKind, CharacterArt>>;
+  readonly bosses: Readonly<Record<BossKind, CharacterArt>>;
   readonly effects: Readonly<Record<EffectKey, EffectArt>>;
 
   constructor() {
@@ -40,6 +42,14 @@ export class ProceduralArt {
       this.textures.set(build.art.textureKey, build.texture);
     }
     this.enemies = enemies;
+
+    const bosses = {} as Record<BossKind, CharacterArt>;
+    for (const kind of BOSS_KINDS) {
+      const build = buildBossArt(kind);
+      bosses[kind] = build.art;
+      this.textures.set(build.art.textureKey, build.texture);
+    }
+    this.bosses = bosses;
 
     const effects = {} as Record<EffectKey, EffectArt>;
     for (const key of EFFECT_KEYS) {

@@ -83,6 +83,7 @@ test.describe('M2 smoke', () => {
   });
 
   test('walks with the keyboard and the camera follows', async ({ page }) => {
+    test.setTimeout(90_000);
     await bootGame(page);
     const before = await debugState(page);
 
@@ -115,10 +116,12 @@ test.describe('M2 smoke', () => {
     // The first key press opened the audio gate; the context itself starts on its own
     // schedule, so wait for it before expecting a sound to be audible.
     expect(running.audio.unlocked).toBe(true);
+    // Trace capture and SwiftShader can delay WebAudio's resume far beyond a desktop
+    // frame; use the same generous window as the dedicated audio tests.
     await page.waitForFunction(
       () => window.__game?.debugState().audio.context === 'running',
       undefined,
-      { timeout: 20_000 },
+      { timeout: 45_000 },
     );
 
     await page.keyboard.up('ArrowRight');

@@ -1,45 +1,48 @@
-import { Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { Container } from 'pixi.js';
+import { BOSS_REWARDS } from '../config/bossTypes';
 import { COMBAT } from '../config/combat';
-import { PALETTE } from '../config/palette';
+import { BOSS_KINDS, isBossKind, type BossKind } from '../config/enemies';
 import { CAMERA } from '../config/render';
-import { VIEW } from '../config/world';
-import { CombatSystem, type CombatEvent } from '../combat/CombatSystem';
-import { ProjectilePool } from '../combat/ProjectilePool';
-import { BellwardError } from '../core/Errors';
+import { CombatSystem } from '../combat/CombatSystem';
+import { ProjectilePool, type ProjectileSpawnOptions } from '../combat/ProjectilePool';
 import type { Rng } from '../core/Rng';
-import type { SfxKey } from '../data/audio';
 import type { SceneDebugState } from '../debug/DebugState';
 import { createEnemy } from '../enemies/createEnemy';
 import type { Enemy, EnemyContext } from '../enemies/Enemy';
 import type { InputSnapshot } from '../input/InputState';
 import { PlayerController, type PlayerEvent } from '../player/PlayerController';
 import { Hud } from '../ui/Hud';
-import type { Room } from '../world/Room';
+import type { Room, RoomSpawn } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
+import type { BossEncounter } from './BossEncounter';
+import { spawnBoss } from './BossSpawn';
 import { Camera } from './Camera';
+import { CombatFeedback, type SceneAudio } from './CombatFeedback';
 import { EffectsLayer } from './EffectsLayer';
 import { EnemyView } from './EnemyView';
+import { ExitGate, type ExitRequest } from './ExitGate';
 import { HeroView } from './HeroView';
-import { ParallaxLayer } from './ParallaxLayer';
+import { LabelLayer } from './LabelLayer';
 import { ProjectileView } from './ProjectileView';
 import { PropLayer } from './PropLayer';
+import { SceneBackdrop } from './SceneBackdrop';
+import { buildSceneDebugState } from './SceneDebug';
 import { TileLayer } from './TileLayer';
-
-type Mote = {
-  readonly view: Sprite;
-  readonly baseX: number;
-  readonly phase: number;
-  readonly speed: number;
-};
 
 type EnemyRecord = { readonly enemy: Enemy; readonly view: EnemyView };
 
-/** The scene only needs one audio call; keeping it narrow makes RoomScene testable. */
-export type SceneAudio = {
-  playSfx(key: SfxKey): void;
+export type RoomSceneOptions = {
+  /** Feet position for the hero; defaults to the room's authored spawn. */
+  spawn?: RoomSpawn;
+  hp?: number;
+  maxHp?: number;
+  /** Sigils already recovered this run, for the HUD row. */
+  sigilCount?: number;
+  /** True when the room's boss was already defeated earlier in the run. */
+  bossRewardClaimed?: boolean;
+  /** Screen-reader announcement hook; the scene never touches the DOM. */
+  announce?: (text: string) => void;
 };
-
-const MOTE_COUNT = 28;
 
 /**
  * Renders one room and drives its simulation: the player and enemies step against the
@@ -52,8 +55,7 @@ export class RoomScene {
   private readonly camera: Camera;
   private readonly heroView: HeroView;
   private readonly player: PlayerController;
-  private readonly backgrounds: ParallaxLayer[] = [];
-  private readonly motes: Mote[] = [];
+  private readonly backdrop: SceneBackdrop;
   private readonly world = new Container();
   private readonly actorLayer = new Container();
   private readonly enemyRecords: EnemyRecord[] = [];
@@ -63,8 +65,12 @@ export class RoomScene {
   private readonly effects: EffectsLayer;
   private readonly hud = new Hud();
   private readonly combat = new CombatSystem();
+  private readonly feedback: CombatFeedback;
+  private readonly exitGate = new ExitGate();
+  private readonly bossEncounter: BossEncounter | null = null;
+  private sigilCount: number;
+  private pendingBossDefeatValue: BossKind | null = null;
   private hitstopTicks = 0;
-  private damageFlashTicks = 0;
   private resetRequestedValue = false;
 
   constructor(
@@ -72,34 +78,29 @@ export class RoomScene {
     private readonly art: ArtProvider,
     rng: Rng,
     private readonly audio: SceneAudio,
+    options: RoomSceneOptions = {},
   ) {
     this.camera = new Camera(room.bounds);
-    this.player = new PlayerController(room.spawn);
-    this.camera.snapTo(room.spawn.x, room.spawn.y + CAMERA.focusOffsetY);
-
-    // A layer only travels (roomWidth - viewWidth) * factor pixels across the whole
-    // room, so each background needs a short strip — not an infinite tiling shader.
-    const panRange = Math.max(0, room.bounds.w - VIEW.width);
-    for (const key of room.definition.backgrounds) {
-      const background = art.background(key);
-      if (!background) {
-        throw new BellwardError(
-          `room "${room.definition.id}" requests unknown background "${key}"`,
-        );
-      }
-      const layer = new ParallaxLayer(background, panRange * background.factor);
-      this.backgrounds.push(layer);
-      this.view.addChild(layer.view);
-    }
+    const spawn = options.spawn ?? room.spawn;
+    const maxHp = options.maxHp ?? COMBAT.player.maxHp;
+    const hp = options.hp ?? maxHp;
+    this.sigilCount = options.sigilCount ?? 0;
+    this.player = new PlayerController(spawn, { maxHp, hp });
+    this.camera.snapTo(spawn.x, spawn.y + CAMERA.focusOffsetY);
+    this.backdrop = new SceneBackdrop(room, art, rng.fork());
+    this.view.addChild(this.backdrop.backgroundView);
 
     this.world.addChild(new TileLayer(room.tilemap, art).view);
     this.world.addChild(new PropLayer(room.definition.props, 'back', art).view);
+    if (room.definition.labels && room.definition.labels.length > 0) {
+      this.world.addChild(new LabelLayer(room.definition.labels).view);
+    }
 
     this.actorLayer.sortableChildren = true;
     this.heroView = new HeroView(art);
     this.heroView.setPose({
-      x: room.spawn.x,
-      y: room.spawn.y,
+      x: spawn.x,
+      y: spawn.y,
       facing: 1,
       animation: 'idle',
       restart: true,
@@ -107,51 +108,76 @@ export class RoomScene {
     });
     this.actorLayer.addChild(this.heroView.view);
 
-    for (const spawn of room.definition.enemies) {
-      const enemy = createEnemy(spawn);
-      const view = new EnemyView(art, spawn.kind);
-      view.sync(enemy);
-      this.enemyRecords.push({ enemy, view });
-      this.actorLayer.addChild(view.view);
-    }
-    this.world.addChild(this.actorLayer);
-
     this.effects = new EffectsLayer(art);
+    this.feedback = new CombatFeedback(audio, this.effects, this.camera);
     this.projectileView = new ProjectileView(art, this.projectiles);
+
+    for (const enemySpawn of room.definition.enemies) {
+      if (!isBossKind(enemySpawn.kind)) {
+        const enemy = createEnemy(enemySpawn, rng.fork());
+        const view = new EnemyView(art, enemySpawn.kind);
+        view.sync(enemy);
+        this.enemyRecords.push({ enemy, view });
+        this.actorLayer.addChild(view.view);
+      }
+    }
+    this.bossEncounter = spawnBoss({
+      room,
+      art,
+      audio,
+      effects: this.effects,
+      camera: this.camera,
+      rng: rng.fork(),
+      claimed: options.bossRewardClaimed ?? false,
+      announce: options.announce,
+      onDefeated: (kind) => this.onBossDefeated(kind),
+    });
+    if (this.bossEncounter) this.actorLayer.addChild(this.bossEncounter.actorView.view);
+
+    this.world.addChild(this.actorLayer);
     this.world.addChild(this.effects.view, this.projectileView.view);
     this.world.addChild(new PropLayer(room.definition.props, 'front', art).view);
     this.view.addChild(this.world);
-
-    const ambient = new Graphics()
-      .rect(0, 0, VIEW.width, VIEW.height)
-      .fill(PALETTE[room.definition.ambient.tint]);
-    ambient.alpha = room.definition.ambient.alpha;
-    this.view.addChild(ambient);
-
-    const moteLayer = new Container();
-    for (let i = 0; i < MOTE_COUNT; i += 1) {
-      // One shared white texture means the motes batch into a single draw call.
-      const mote = new Sprite(Texture.WHITE);
-      mote.anchor.set(0.5);
-      mote.width = 3;
-      mote.height = 3;
-      mote.tint = PALETTE.echo;
-      moteLayer.addChild(mote);
-      this.motes.push({
-        view: mote,
-        baseX: rng.float(0, VIEW.width),
-        phase: rng.float(0, Math.PI * 2),
-        speed: rng.float(0.3, 0.9),
-      });
-    }
-    this.view.addChild(moteLayer);
+    this.view.addChild(this.backdrop.overlayView);
     this.view.addChild(this.hud.view);
+    if (this.bossEncounter) this.view.addChild(this.bossEncounter.overlay);
     this.hud.setHealth(this.player.hp, this.player.maxHp);
+    this.hud.setSigils(this.sigilCount, BOSS_KINDS.length);
   }
 
   /** True once the death sequence finished; the Game rebuilds the room on the next tick. */
   get resetRequested(): boolean {
     return this.resetRequestedValue;
+  }
+
+  /** HP carried into the next room or reset. */
+  get vitals(): { hp: number; maxHp: number } {
+    return { hp: this.player.hp, maxHp: this.player.maxHp };
+  }
+
+  /** A door the player has walked into, or null. Consumed by the Game after update. */
+  get exitRequested(): ExitRequest | null {
+    return this.exitGate.request;
+  }
+
+  /** A first-time boss reward that the Game should record as a run sigil. */
+  consumeBossDefeat(): BossKind | null {
+    const kind = this.pendingBossDefeatValue;
+    this.pendingBossDefeatValue = null;
+    return kind;
+  }
+
+  /** DEV-only E2E hooks. They route through the real damage/ward/defeat paths. */
+  debugDamageBoss(amount: number): boolean {
+    return this.bossEncounter?.debugDamage(amount) ?? false;
+  }
+
+  debugBreakWard(): boolean {
+    return this.bossEncounter?.debugBreakWard() ?? false;
+  }
+
+  debugDefeatBoss(): void {
+    this.bossEncounter?.debugDefeat();
   }
 
   /** Advances the simulation by one fixed tick and returns what that tick produced. */
@@ -167,12 +193,23 @@ export class RoomScene {
     const context: EnemyContext = {
       tilemap: this.room.tilemap,
       player: { feet: this.player.feet, dead: this.player.dead },
-      castProjectile: (x, y, dirX, dirY, speed, damage, lifeTicks) => {
-        this.projectiles.spawn(x, y, dirX, dirY, speed, damage, lifeTicks);
-        this.audio.playSfx('fireball');
+      arena: this.room.bounds,
+      castProjectile: (
+        x: number,
+        y: number,
+        dirX: number,
+        dirY: number,
+        speed: number,
+        damage: number,
+        lifeTicks: number,
+        options?: ProjectileSpawnOptions,
+      ) => {
+        this.projectiles.spawn(x, y, dirX, dirY, speed, damage, lifeTicks, options);
+        if (!options?.style || options.style === 'fire') this.audio.playSfx('fireball');
       },
     };
     for (const record of this.enemyRecords) record.enemy.update(context);
+    this.bossEncounter?.update(context);
 
     const result = this.combat.resolve(
       this.player,
@@ -181,7 +218,8 @@ export class RoomScene {
       this.room.tilemap,
     );
     if (result.hitstop > this.hitstopTicks) this.hitstopTicks = result.hitstop;
-    this.applyCombat(result.events);
+    this.feedback.apply(result.events);
+    this.feedback.update();
 
     this.removeFallenEnemies();
     this.syncViews(tickCount);
@@ -192,11 +230,12 @@ export class RoomScene {
       feet.x + this.player.facing * CAMERA.lookAheadX,
       feet.y + CAMERA.focusOffsetY,
     );
-    this.updateMotes(tickCount);
+    this.backdrop.update(tickCount);
 
     if (this.player.dead && this.player.deathElapsed >= COMBAT.player.deathTicks) {
       this.resetRequestedValue = true;
     }
+    if (!this.player.dead) this.updateExit();
     return this.player.events;
   }
 
@@ -206,7 +245,7 @@ export class RoomScene {
     const x = Math.round(view.x);
     const y = Math.round(view.y);
     this.world.position.set(-x, -y);
-    for (const layer of this.backgrounds) layer.follow({ x, y });
+    this.backdrop.follow({ x, y });
   }
 
   /** Detaches and destroys the whole scene (used when the room resets after a death). */
@@ -216,78 +255,23 @@ export class RoomScene {
   }
 
   debugState(): SceneDebugState {
-    const feet = this.player.feet;
-    return {
-      roomId: this.room.definition.id,
-      roomName: this.room.definition.name,
-      tiles: this.room.tilemap.tileCount,
-      art: {
-        mode: this.art.mode,
-        loaded: this.art.loadedKeys(),
-        failures: [...this.art.failures],
-      },
-      camera: { x: this.camera.x, y: this.camera.y },
-      player: {
-        x: feet.x,
-        y: feet.y,
-        vx: this.player.body.vx,
-        vy: this.player.body.vy,
-        state: this.player.state,
-        animation: this.player.animation,
-        facing: this.player.facing,
-        grounded: this.player.grounded,
-        jumpPeakY: this.player.jumpPeakY,
-        lastJumpPeakY: this.player.lastJumpPeakY,
-        clipTick: this.player.clipTick,
-        hp: this.player.hp,
-        maxHp: this.player.maxHp,
-        invulnerableTicks: this.player.invulnerableTicks,
-        dead: this.player.dead,
-        attackActive: this.player.attackActive,
-      },
-      enemies: this.enemyRecords.map(({ enemy }) => {
-        const position = enemy.feet;
-        return {
-          kind: enemy.kind,
-          name: enemy.stats.displayName,
-          x: position.x,
-          y: position.y,
-          hp: enemy.hp,
-          maxHp: enemy.stats.hp,
-          state: enemy.state,
-          animation: enemy.animation,
-          facing: enemy.facing,
-        };
-      }),
+    return buildSceneDebugState({
+      room: this.room,
+      art: this.art,
+      camera: this.camera,
+      player: this.player,
+      enemies: this.enemyRecords.map((record) => record.enemy),
+      boss: this.bossEncounter,
       projectiles: this.projectiles.activeCount,
       hitstop: this.hitstopTicks,
-    };
+    });
   }
 
   private enemies(): readonly Enemy[] {
     this.enemyBuffer.length = 0;
     for (const record of this.enemyRecords) this.enemyBuffer.push(record.enemy);
+    if (this.bossEncounter) this.enemyBuffer.push(this.bossEncounter.boss);
     return this.enemyBuffer;
-  }
-
-  private applyCombat(events: readonly CombatEvent[]): void {
-    for (const event of events) {
-      if (event.type === 'enemyHit') {
-        this.effects.spark(event.x, event.y, event.facing);
-        this.audio.playSfx(event.killed ? 'enemyDie' : 'enemyHurt');
-        this.camera.shake(COMBAT.enemy.hitShake.strength, COMBAT.enemy.hitShake.ticks);
-        if (event.killed) this.effects.death(event.enemy.feet.x, event.enemy.feet.y);
-        continue;
-      }
-      if (event.type === 'playerHit') {
-        this.damageFlashTicks = COMBAT.player.flashTicks;
-        this.camera.shake(COMBAT.player.hurtShake.strength, COMBAT.player.hurtShake.ticks);
-        continue;
-      }
-      // Projectile impact: a small spark on stone or flesh, plus the sizzle.
-      this.effects.spark(event.x, event.y, 1);
-      this.audio.playSfx('fireballHit');
-    }
   }
 
   private removeFallenEnemies(): void {
@@ -298,6 +282,28 @@ export class RoomScene {
         this.enemyRecords.splice(i, 1);
       }
     }
+  }
+
+  /** First clear of a boss grants one mask and records the sigil for the run. */
+  private onBossDefeated(kind: BossKind): void {
+    this.player.grantMaxHp(BOSS_REWARDS.maxHpPerSigil);
+    this.sigilCount += 1;
+    this.pendingBossDefeatValue = kind;
+    this.hud.setSigils(this.sigilCount, BOSS_KINDS.length);
+    this.hud.setHealth(this.player.hp, this.player.maxHp);
+  }
+
+  /**
+   * Door triggers are armed only after the player leaves every trigger, so a destination
+   * spawn that happens to touch its own doorway does not bounce the player back.
+   * Boss arenas keep their exit locked until the boss is dead.
+   */
+  private updateExit(): void {
+    this.exitGate.update(
+      this.player.body,
+      this.room.definition.exits ?? [],
+      this.bossEncounter?.alive ?? false,
+    );
   }
 
   private syncViews(tickCount: number): void {
@@ -322,22 +328,10 @@ export class RoomScene {
 
   private updateHud(): void {
     this.hud.setHealth(this.player.hp, this.player.maxHp);
-    if (this.damageFlashTicks > 0) this.damageFlashTicks -= 1;
-    this.hud.setDamage(this.damageFlashTicks / COMBAT.player.flashTicks);
+    this.hud.setDamage(this.feedback.damageAlpha);
     const death = this.player.dead
       ? Math.min(1, this.player.deathElapsed / COMBAT.player.deathTicks)
       : 0;
     this.hud.setDeath(death);
-  }
-
-  private updateMotes(tickCount: number): void {
-    const t = tickCount / 60;
-    const span = VIEW.height + 80;
-    for (const mote of this.motes) {
-      const travel = (mote.phase * 101 + t * mote.speed * 22) % span;
-      const x = mote.baseX + Math.sin(t * 0.6 + mote.phase) * 16;
-      mote.view.position.set(x, VIEW.height + 40 - travel);
-      mote.view.alpha = 0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * 1.7 + mote.phase));
-    }
   }
 }

@@ -1,36 +1,21 @@
-import { COMBAT } from '../config/combat';
 import { PLAYER } from '../config/player';
-import { RENDER } from '../config/render';
 import { SIM } from '../config/world';
-import { approach } from '../core/Math2D';
 import type { Rect, Vec2 } from '../core/Types';
-import { isHeld, isPressed, type InputSnapshot } from '../input/InputState';
+import type { InputSnapshot } from '../input/InputState';
 import { createBody, type Body } from '../physics/Body';
 import { moveAndCollide, type MoveResult } from '../physics/TileCollision';
 import type { Tilemap } from '../world/Tilemap';
+import { PlayerCombat, type CombatHost } from './PlayerCombat';
+import { PlayerDash, type DashHost } from './PlayerDash';
+import { PlayerJump, type JumpHost } from './PlayerJump';
+import { applyGravity, stepRun } from './playerMotion';
+import { PlayerPose } from './PlayerPose';
+import { PlayerReaction, type ReactionHost } from './PlayerReaction';
+import { inputDirection } from './playerSensors';
+import type { PlayerEvent, PlayerStateName } from './PlayerTypes';
 import { PlayerVitals } from './PlayerVitals';
 
-export type PlayerStateName =
-  'idle' | 'run' | 'skid' | 'jump' | 'fall' | 'attack' | 'dash' | 'hurt' | 'dead';
-
-/**
- * Momentary things the simulation did, in the tick they happened. Audio and visual
- * effects consume these instead of diffing state, so a footstep cannot double-fire and
- * a landing cannot be missed because the state changed twice in one tick.
- */
-export type PlayerEvent =
-  | 'jump'
-  | 'land'
-  | 'landHeavy'
-  | 'footstep'
-  | 'skid'
-  | 'attack1'
-  | 'attack2'
-  | 'dash'
-  | 'hurt'
-  | 'death';
-
-const EPSILON = 0.001;
+export type { PlayerEvent, PlayerStateName } from './PlayerTypes';
 
 /**
  * The player's locomotion state machine. Pure simulation: no Pixi, no DOM, no wall clock.
@@ -44,34 +29,25 @@ const EPSILON = 0.001;
 export class PlayerController {
   readonly body: Body;
   /** Health, invulnerability and death live in their own small component. */
-  readonly vitals = new PlayerVitals();
+  readonly vitals: PlayerVitals;
+  private readonly pose = new PlayerPose();
+  private readonly combat = new PlayerCombat();
+  private readonly jump = new PlayerJump();
+  private readonly dash = new PlayerDash();
+  private readonly reaction = new PlayerReaction();
   private facingValue: -1 | 1 = 1;
-  private stateValue: PlayerStateName = 'idle';
-  private animationValue = 'idle';
-  private clipTickValue = 0;
-  private restartedValue = true;
-  private attackStage: 1 | 2 = 1;
-  private attackSwingValue = 0;
-  private attackBufferTicks = 0;
-  private jumpBufferTicks = 0;
-  private dashTicksLeft = 0;
-  private dashCooldownTicks = 0;
-  private coyoteTicks = 0;
-  private jumpHeld = false;
-  private hurtTicksValue = 0;
-  private deathElapsedValue = 0;
   private jumpPeakYValue: number | null = null;
   private lastJumpPeakYValue: number | null = null;
-  private readonly eventBuffer: PlayerEvent[] = [];
   private footstepCounter = 0;
 
-  constructor(spawn: Vec2) {
+  constructor(spawn: Vec2, options: { maxHp?: number; hp?: number } = {}) {
     this.body = createBody(
       spawn.x - PLAYER.size.w / 2,
       spawn.y - PLAYER.size.h,
       PLAYER.size.w,
       PLAYER.size.h,
     );
+    this.vitals = new PlayerVitals(options.maxHp, options.hp);
   }
 
   get facing(): -1 | 1 {
@@ -79,22 +55,22 @@ export class PlayerController {
   }
 
   get state(): PlayerStateName {
-    return this.stateValue;
+    return this.pose.state;
   }
 
   /** Active animation clip name (a key in the hero's animation set). */
   get animation(): string {
-    return this.animationValue;
+    return this.pose.animation;
   }
 
   /** Ticks since the current clip started. */
   get clipTick(): number {
-    return this.clipTickValue;
+    return this.pose.clipTick;
   }
 
   /** True on the tick a new clip started, so the view can restart one-shots. */
   get restarted(): boolean {
-    return this.restartedValue;
+    return this.pose.restarted;
   }
 
   /**
@@ -102,7 +78,7 @@ export class PlayerController {
    * at the start of every update() and stays valid until the next one.
    */
   get events(): readonly PlayerEvent[] {
-    return this.eventBuffer;
+    return this.pose.events;
   }
 
   get grounded(): boolean {
@@ -124,7 +100,7 @@ export class PlayerController {
   }
 
   get dashCooldown(): number {
-    return this.dashCooldownTicks;
+    return this.dash.cooldownTicks;
   }
 
   /** Current health (0 when dead). */
@@ -134,6 +110,11 @@ export class PlayerController {
 
   get maxHp(): number {
     return this.vitals.maxHp;
+  }
+
+  /** Boss reward: permanently (for this run) raises the mask ceiling. */
+  grantMaxHp(amount: number): void {
+    this.vitals.grantMaxHp(amount);
   }
 
   /** Remaining invulnerability ticks. */
@@ -147,12 +128,7 @@ export class PlayerController {
 
   /** Ticks since death; the scene fades and resets on this clock. */
   get deathElapsed(): number {
-    return this.deathElapsedValue;
-  }
-
-  /** True while the hurt reaction owns the body. */
-  get hurt(): boolean {
-    return this.hurtTicksValue > 0;
+    return this.reaction.deathElapsed;
   }
 
   /**
@@ -160,7 +136,7 @@ export class PlayerController {
    * once, even while the active window spans several ticks.
    */
   get attackId(): number {
-    return this.attackSwingValue;
+    return this.combat.attackId;
   }
 
   /** Feet-center in world pixels: the view anchor and camera focus. */
@@ -170,25 +146,22 @@ export class PlayerController {
 
   /** True while a swing's damage window is open. */
   get attackActive(): boolean {
-    if (this.stateValue !== 'attack') return false;
-    const window =
-      this.attackStage === 1 ? PLAYER.attack.windows.stage1 : PLAYER.attack.windows.stage2;
-    return this.clipTickValue >= window.start && this.clipTickValue <= window.end;
+    return this.combat.isActive(this.pose.state, this.pose.clipTick);
   }
 
   /** The swing's world-space damage box, or null when the window is closed. */
   attackHitbox(): Rect | null {
-    if (!this.attackActive) return null;
-    const { forward, width, height, top } = COMBAT.player.attackBox;
-    const feet = this.feet;
-    const x = this.facingValue === 1 ? feet.x + forward : feet.x - forward - width;
-    return { x, y: feet.y - top, w: width, h: height };
+    return this.combat.attackHitbox(
+      this.feet,
+      this.facingValue,
+      this.pose.state,
+      this.pose.clipTick,
+    );
   }
 
   /** Damage of the swing currently landing (0 when no window is open). */
   get attackDamage(): number {
-    if (!this.attackActive) return 0;
-    return this.attackStage === 1 ? COMBAT.player.damage.stage1 : COMBAT.player.damage.stage2;
+    return this.combat.attackDamage(this.pose.state, this.pose.clipTick);
   }
 
   /**
@@ -197,63 +170,43 @@ export class PlayerController {
    * from the source, and a face-the-attacker turn so the hit reads.
    */
   takeDamage(amount: number, sourceX: number): boolean {
-    if (!this.vitals.damage(amount)) return false;
-
-    const feet = this.feet;
-    const away = feet.x < sourceX ? -1 : 1;
-    this.facingValue = away === 1 ? -1 : 1;
-    this.body.vx = away * COMBAT.player.knockback.x;
-    this.body.vy = COMBAT.player.knockback.y;
-    this.stateValue = 'hurt';
-    this.hurtTicksValue = COMBAT.player.hurtTicks;
-    this.emit('hurt');
-
-    if (this.vitals.dead) {
-      this.stateValue = 'dead';
-      this.deathElapsedValue = 0;
-      this.emit('death');
-    }
-    return true;
+    return this.reaction.takeDamage(this.reactionHost, amount, sourceX);
   }
 
   /** Advances one fixed tick. */
   update(input: InputSnapshot, tilemap: Tilemap): void {
-    this.restartedValue = false;
-    this.eventBuffer.length = 0;
+    this.pose.beginTick();
     this.vitals.tick();
 
-    if (this.stateValue === 'dead') {
-      this.stepDead(tilemap);
+    if (this.state === 'dead') {
+      this.reaction.stepDead(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
     }
-    if (this.hurtTicksValue > 0) {
-      this.stepHurt(tilemap);
+    if (this.reaction.hurt) {
+      this.reaction.stepHurt(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
     }
 
     this.tickTimers(input);
-    this.updateCoyote();
 
     const wasGrounded = this.body.grounded;
 
-    if (this.tryStartDash(input)) {
+    if (this.dash.tryStart(this.dashHost, input)) {
       // The dash owns the tick.
-    } else if (!this.tryStartAttack()) {
-      this.tryStartJump(input, tilemap);
+    } else if (!this.combat.tryStart(this.combatHost)) {
+      this.jump.tryStart(input, tilemap, this.jumpHost);
     }
 
-    if (this.stateValue === 'dash') {
-      // A dash is a fixed-speed burst with gravity suspended.
-      this.body.vx = this.facingValue * PLAYER.dash.speed;
-      this.body.vy = 0;
-    } else if (this.stateValue === 'attack') {
-      this.stepAttack(input);
-      this.applyGravity();
+    if (this.state === 'dash') {
+      this.dash.hold(this.dashHost);
+    } else if (this.state === 'attack') {
+      this.combat.step(this.combatHost, input);
+      applyGravity(this.body, this.jump.heldButton);
     } else {
       this.stepMove(input);
-      this.applyGravity();
+      applyGravity(this.body, this.jump.heldButton);
     }
 
     // The speed the fall carries into this tick's collision. Sampled before the
@@ -262,6 +215,44 @@ export class PlayerController {
     const move = moveAndCollide(tilemap, this.body, SIM.dt);
     this.finalizeState(input, move, wasGrounded, impactSpeed);
     this.trackJumpPeak();
+  }
+
+  private get combatHost(): CombatHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      facing: this.facingValue,
+      grounded: this.body.grounded,
+      direction: inputDirection,
+    };
+  }
+
+  private get dashHost(): DashHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      facing: this.facingValue,
+      setFacing: (direction) => {
+        this.facingValue = direction;
+      },
+    };
+  }
+
+  private get jumpHost(): JumpHost {
+    return { body: this.body, pose: this.pose };
+  }
+
+  private get reactionHost(): ReactionHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      vitals: this.vitals,
+      feet: this.feet,
+      facing: this.facingValue,
+      setFacing: (direction) => {
+        this.facingValue = direction;
+      },
+    };
   }
 
   /**
@@ -284,180 +275,18 @@ export class PlayerController {
     }
   }
 
-  /** The hurt reaction owns the body: no input, knockback bleeds off, gravity applies. */
-  private stepHurt(tilemap: Tilemap): void {
-    this.hurtTicksValue -= 1;
-    this.clipTickValue += 1;
-    this.body.vx = approach(this.body.vx, 0, COMBAT.player.hurtFriction * SIM.dt);
-    this.applyGravity();
-    moveAndCollide(tilemap, this.body, SIM.dt);
-    if (this.hurtTicksValue <= 0) {
-      this.stateValue = this.body.grounded ? 'idle' : 'fall';
-      this.beginClip(this.body.grounded ? 'idle' : 'fall');
-    }
-  }
-
-  /** Dead: gravity still resolves, the death clock runs, nothing else accepts input. */
-  private stepDead(tilemap: Tilemap): void {
-    this.deathElapsedValue += 1;
-    this.clipTickValue += 1;
-    this.body.vx = approach(this.body.vx, 0, COMBAT.player.hurtFriction * SIM.dt);
-    this.applyGravity();
-    moveAndCollide(tilemap, this.body, SIM.dt);
-  }
-
   /** Ticks down every timer and latches pressed edges into buffers. */
   private tickTimers(input: InputSnapshot): void {
-    if (this.dashCooldownTicks > 0) this.dashCooldownTicks -= 1;
-    if (this.jumpBufferTicks > 0) this.jumpBufferTicks -= 1;
-    if (this.attackBufferTicks > 0) this.attackBufferTicks -= 1;
-    if (isPressed(input, 'jump')) this.jumpBufferTicks = PLAYER.jump.bufferTicks;
-    if (isPressed(input, 'attack')) this.attackBufferTicks = PLAYER.attack.bufferTicks;
-    this.jumpHeld = isHeld(input, 'jump');
-    this.clipTickValue += 1;
-  }
-
-  private updateCoyote(): void {
-    if (this.body.grounded) this.coyoteTicks = PLAYER.jump.coyoteTicks;
-    else if (this.coyoteTicks > 0) this.coyoteTicks -= 1;
-  }
-
-  private tryStartDash(input: InputSnapshot): boolean {
-    if (!isPressed(input, 'dash')) return false;
-    if (this.dashCooldownTicks > 0) return false;
-    if (this.stateValue === 'dash' || this.stateValue === 'attack') return false;
-
-    const dir = this.direction(input);
-    if (dir !== 0) this.facingValue = dir;
-    this.stateValue = 'dash';
-    this.beginClip('dash');
-    this.dashTicksLeft = PLAYER.dash.ticks;
-    this.dashCooldownTicks = PLAYER.dash.cooldownTicks;
-    this.body.vx = this.facingValue * PLAYER.dash.speed;
-    this.body.vy = 0;
-    this.emit('dash');
-    return true;
-  }
-
-  private tryStartAttack(): boolean {
-    if (this.attackBufferTicks <= 0) return false;
-    if (this.stateValue === 'attack' || this.stateValue === 'dash') return false;
-    this.attackBufferTicks = 0;
-    this.startAttack(1);
-    return true;
-  }
-
-  private tryStartJump(input: InputSnapshot, tilemap: Tilemap): boolean {
-    if (this.jumpBufferTicks <= 0) return false;
-
-    // Down + jump on a one-way platform drops through it instead of jumping.
-    if (this.body.grounded && isHeld(input, 'down') && this.standingOnOneWay(tilemap)) {
-      this.body.dropThroughTicks = PLAYER.dropThroughTicks;
-      this.body.vy = PLAYER.dropThroughSpeed;
-      this.jumpBufferTicks = 0;
-      this.stateValue = 'fall';
-      this.beginClip('fall');
-      return true;
-    }
-
-    if (!this.body.grounded && this.coyoteTicks <= 0) return false;
-    this.body.vy = -PLAYER.jump.speed;
-    this.coyoteTicks = 0;
-    this.jumpBufferTicks = 0;
-    this.stateValue = 'jump';
-    this.beginClip('jump');
-    this.emit('jump');
-    return true;
-  }
-
-  private startAttack(stage: 1 | 2): void {
-    this.attackStage = stage;
-    this.attackSwingValue += 1;
-    this.stateValue = 'attack';
-    this.beginClip(stage === 1 ? 'attack1' : 'attack2');
-    // Facing is locked for the swing; the art is directional.
-    this.body.vx *= PLAYER.attack.speedScale;
-    this.emit(stage === 1 ? 'attack1' : 'attack2');
-  }
-
-  private stepAttack(input: InputSnapshot): void {
-    const window =
-      this.attackStage === 1 ? PLAYER.attack.windows.stage1 : PLAYER.attack.windows.stage2;
-    if (
-      this.attackStage === 1 &&
-      this.clipTickValue >= window.start &&
-      this.clipTickValue <= window.end &&
-      isPressed(input, 'attack')
-    ) {
-      this.startAttack(2);
-      return;
-    }
-
-    const total =
-      this.attackStage === 1 ? PLAYER.attack.clipTicks.stage1 : PLAYER.attack.clipTicks.stage2;
-    if (this.clipTickValue >= total) {
-      // The swing has ended; hand control back to locomotion and let the clip select
-      // itself from the current motion.
-      this.stateValue = this.body.grounded ? 'idle' : 'fall';
-      this.beginClip(this.body.grounded ? 'idle' : 'fall');
-      return;
-    }
-
-    // Swings drag: a fraction of ground control remains available.
-    const dir = this.direction(input);
-    const max = PLAYER.ground.maxRun * PLAYER.attack.speedScale;
-    const accel =
-      (this.body.grounded ? PLAYER.ground.accel : PLAYER.air.accel) * PLAYER.attack.speedScale;
-    const decel = this.body.grounded ? PLAYER.ground.friction : PLAYER.air.drag;
-    if (dir !== 0) {
-      this.body.vx = approach(this.body.vx, dir * max, accel * SIM.dt);
-    } else {
-      this.body.vx = approach(this.body.vx, 0, decel * SIM.dt);
-    }
+    this.dash.tick();
+    this.combat.tick(input);
+    this.jump.tick(input, this.body.grounded);
+    this.pose.tickClip();
   }
 
   private stepMove(input: InputSnapshot): void {
-    const dir = this.direction(input);
-    const grounded = this.body.grounded;
-    const max = grounded ? PLAYER.ground.maxRun : PLAYER.air.maxRun;
-
-    if (dir !== 0) {
-      this.facingValue = dir;
-      const opposing = this.body.vx * dir < 0;
-      const rate = grounded
-        ? opposing
-          ? PLAYER.ground.skidDecel
-          : PLAYER.ground.accel
-        : PLAYER.air.accel;
-      this.body.vx = approach(this.body.vx, dir * max, rate * SIM.dt);
-    } else {
-      const rate = grounded ? PLAYER.ground.friction : PLAYER.air.drag;
-      this.body.vx = approach(this.body.vx, 0, rate * SIM.dt);
-    }
-
-    // Dash exits can leave the body above the run cap: bleed the excess off smoothly.
-    if (Math.abs(this.body.vx) > max) {
-      this.body.vx = approach(
-        this.body.vx,
-        Math.sign(this.body.vx) * max,
-        PLAYER.ground.friction * SIM.dt,
-      );
-    }
-  }
-
-  private applyGravity(): void {
-    const jump = PLAYER.jump;
-    const rising = this.body.vy < 0;
-    let gravity = rising ? jump.gravity : jump.fallGravity;
-    if (!this.body.grounded && Math.abs(this.body.vy) < jump.apexSpeed) {
-      gravity *= jump.apexGravityScale;
-    }
-    this.body.vy = Math.min(this.body.vy + gravity * SIM.dt, jump.maxFall);
-
-    // Variable jump height: releasing the button during the rise clips the arc.
-    if (rising && !this.jumpHeld && this.body.vy < -jump.cutSpeed) {
-      this.body.vy = -jump.cutSpeed;
-    }
+    const dir = inputDirection(input);
+    if (dir !== 0) this.facingValue = dir;
+    stepRun(this.body, dir, this.body.grounded);
   }
 
   /**
@@ -474,47 +303,37 @@ export class PlayerController {
     if (!wasGrounded && this.body.grounded) {
       // Touchdown is graded by the speed the fall carried into it: a step off a ledge
       // is silent, a full jump thuds, a long drop lands heavy.
-      if (impactSpeed >= PLAYER.landHeavySoundSpeed) this.emit('landHeavy');
-      else if (impactSpeed >= PLAYER.landSoundSpeed) this.emit('land');
+      if (impactSpeed >= PLAYER.landHeavySoundSpeed) this.pose.emit('landHeavy');
+      else if (impactSpeed >= PLAYER.landSoundSpeed) this.pose.emit('land');
       this.footstepCounter = PLAYER.firstFootstepTicks;
     }
 
-    if (this.stateValue === 'dash') {
-      this.dashTicksLeft -= 1;
-      if (this.dashTicksLeft > 0 && !move.hitX) return;
-      this.body.vx =
-        this.facingValue *
-        Math.min(Math.abs(this.body.vx), PLAYER.ground.maxRun) *
-        PLAYER.dash.exitSpeedScale;
-      this.stateValue = this.body.grounded ? 'idle' : 'fall';
-    }
+    if (this.dash.finalize(this.dashHost, move)) return;
 
-    if (this.stateValue === 'attack') return;
+    if (this.state === 'attack') return;
 
     if (!this.body.grounded) {
-      if (this.body.vy < 0) this.setState('jump', 'jump');
-      else this.setState('fall', 'fall');
+      if (this.body.vy < 0) this.pose.setState('jump', 'jump');
+      else this.pose.setState('fall', 'fall');
       return;
     }
 
-    const dir = this.direction(input);
+    const dir = inputDirection(input);
     const speed = Math.abs(this.body.vx);
     if (dir !== 0 && speed > PLAYER.skidMinSpeed && this.body.vx * dir < 0) {
-      if (this.stateValue !== 'skid') this.emit('skid');
-      this.setState('skid', 'turn');
+      if (this.state !== 'skid') this.pose.emit('skid');
+      this.pose.setState('skid', 'turn');
       return;
     }
-    if (speed > PLAYER.idleSpeed) this.setState('run', 'run');
-    else this.setState('idle', 'idle');
+    if (speed > PLAYER.idleSpeed) this.pose.setState('run', 'run');
+    else this.pose.setState('idle', 'idle');
     this.stepFootsteps();
   }
 
   /** Emits a footfall every PLAYER.footstepTicks while the hero runs on the ground. */
   private stepFootsteps(): void {
     const running =
-      this.body.grounded &&
-      this.stateValue === 'run' &&
-      Math.abs(this.body.vx) > PLAYER.skidMinSpeed;
+      this.body.grounded && this.state === 'run' && Math.abs(this.body.vx) > PLAYER.skidMinSpeed;
     if (!running) {
       this.footstepCounter = PLAYER.firstFootstepTicks;
       return;
@@ -522,42 +341,6 @@ export class PlayerController {
     this.footstepCounter -= 1;
     if (this.footstepCounter > 0) return;
     this.footstepCounter = PLAYER.footstepTicks;
-    this.emit('footstep');
-  }
-
-  private emit(event: PlayerEvent): void {
-    this.eventBuffer.push(event);
-  }
-
-  private setState(state: PlayerStateName, animation: string): void {
-    this.stateValue = state;
-    this.beginClip(animation);
-  }
-
-  private beginClip(name: string): void {
-    if (this.animationValue === name) return;
-    this.animationValue = name;
-    this.clipTickValue = 0;
-    this.restartedValue = true;
-  }
-
-  /** -1, 0 or 1: the horizontal direction the player is asking for. */
-  private direction(input: InputSnapshot): -1 | 0 | 1 {
-    const left = isHeld(input, 'left');
-    const right = isHeld(input, 'right');
-    if (left === right) return 0;
-    return right ? 1 : -1;
-  }
-
-  /** True when a one-way platform sits directly under the body's feet. */
-  private standingOnOneWay(tilemap: Tilemap): boolean {
-    const tile = RENDER.tileSize;
-    const row = Math.floor((this.body.y + this.body.h + 0.5) / tile);
-    const left = Math.floor(this.body.x / tile);
-    const right = Math.floor((this.body.x + this.body.w - EPSILON) / tile);
-    for (let tx = left; tx <= right; tx += 1) {
-      if (tilemap.isOneWay(tx, row)) return true;
-    }
-    return false;
+    this.pose.emit('footstep');
   }
 }

@@ -18,6 +18,14 @@ export type CombatEvent =
       killed: boolean;
     }
   | {
+      type: 'enemyBlocked';
+      enemy: Enemy;
+      /** World position of the clang (the guard's torso). */
+      x: number;
+      y: number;
+      facing: -1 | 1;
+    }
+  | {
       type: 'playerHit';
       x: number;
       y: number;
@@ -59,12 +67,24 @@ export class CombatSystem {
     if (swingBox) {
       const swing = player.attackId;
       for (const enemy of enemies) {
-        if (!enemy.alive || this.lastSwingByEnemy.get(enemy) === swing) continue;
+        if (!enemy.targetable || this.lastSwingByEnemy.get(enemy) === swing) continue;
         if (!overlaps(swingBox, enemy.bounds())) continue;
         this.lastSwingByEnemy.set(enemy, swing);
+        const feet = enemy.feet;
+        if (enemy.damageBlocked) {
+          enemy.onDeflect(player.feet.x);
+          events.push({
+            type: 'enemyBlocked',
+            enemy,
+            x: feet.x,
+            y: feet.y - enemy.stats.body.h * 0.55,
+            facing: player.facing,
+          });
+          hitstop = Math.max(hitstop, COMBAT.enemy.blockedHitstopTicks);
+          continue;
+        }
         const damage = player.attackDamage;
         enemy.takeDamage(damage, player.feet.x);
-        const feet = enemy.feet;
         events.push({
           type: 'enemyHit',
           enemy,
@@ -80,7 +100,7 @@ export class CombatSystem {
 
     if (!player.dead) {
       for (const enemy of enemies) {
-        if (!enemy.alive) continue;
+        if (!enemy.targetable) continue;
         const melee = enemy.attackHitbox();
         const hitPoint = { x: player.feet.x, y: player.feet.y - 20 };
         const meleeDamage = enemy.attackDamage;
@@ -96,7 +116,7 @@ export class CombatSystem {
           }
           continue;
         }
-        if (overlaps(enemy.bounds(), playerBox)) {
+        if (enemy.contactHazard && overlaps(enemy.bounds(), playerBox)) {
           const damage = enemy.stats.contactDamage;
           if (player.takeDamage(damage, enemy.feet.x)) {
             events.push({ type: 'playerHit', ...hitPoint, damage, source: 'contact' });

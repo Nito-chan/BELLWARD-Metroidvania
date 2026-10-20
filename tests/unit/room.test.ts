@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { belfryTerrace } from '../../src/data/rooms/belfry-terrace';
+import { belfryAntechamber } from '../../src/data/rooms/belfry-antechamber';
+import { ALL_ROOMS, ROOMS, getRoom } from '../../src/data/rooms';
 import { BellwardError } from '../../src/core/Errors';
 import { createRoom } from '../../src/world/Room';
 
@@ -139,5 +141,105 @@ describe('createRoom', () => {
         ambient: { tint: 'deepWater', alpha: -0.1 },
       }),
     ).toThrow(BellwardError);
+  });
+});
+
+describe('M6 rooms and the bell nave graph', () => {
+  it('builds every room with unique ids and a solid authored spawn', () => {
+    expect(new Set(ALL_ROOMS.map((room) => room.id)).size).toBe(ALL_ROOMS.length);
+    for (const definition of ALL_ROOMS) {
+      const room = createRoom(definition);
+      expect(room.tilemap.pixelWidth).toBe(960);
+      expect(
+        room.tilemap.isSolid(Math.floor(room.spawn.x / 16), Math.floor(room.spawn.y / 16)),
+      ).toBe(true);
+    }
+    expect(Object.keys(ROOMS).sort()).toEqual(ALL_ROOMS.map((room) => room.id).sort());
+    expect(() => getRoom('missing-room')).toThrow(/unknown room/);
+  });
+
+  it('puts exactly one declared boss in each arena and none in the nave or terrace', () => {
+    for (const definition of ALL_ROOMS) {
+      const bosses = definition.enemies.filter((enemy) => enemy.kind === definition.boss);
+      if (definition.boss) {
+        expect(bosses).toHaveLength(1);
+        expect(definition.enemies).toHaveLength(1);
+        expect(definition.name.length).toBeGreaterThan(0);
+      } else {
+        expect(bosses).toHaveLength(0);
+      }
+    }
+    expect(belfryAntechamber.enemies).toEqual([]);
+    expect(belfryAntechamber.exits?.map((exit) => exit.targetRoomId).sort()).toEqual([
+      'belfry-terrace',
+      'bellbearer-arena',
+      'bellthief-arena',
+      'warden-arena',
+    ]);
+    expect(belfryTerrace.exits?.[0]?.targetRoomId).toBe('belfry-antechamber');
+  });
+
+  it('keeps every exit trigger inside the source and its destination spawn clear', () => {
+    for (const definition of ALL_ROOMS) {
+      const source = createRoom(definition);
+      const sourceSpawnBody = {
+        x: source.spawn.x - 6,
+        y: source.spawn.y - 40,
+        w: 12,
+        h: 40,
+      };
+      for (const sourceExit of source.definition.exits ?? []) {
+        // A spawn inside its own room's door would immediately re-trigger on entry.
+        expect(
+          sourceSpawnBody.x < sourceExit.x + sourceExit.w &&
+            sourceSpawnBody.x + sourceSpawnBody.w > sourceExit.x &&
+            sourceSpawnBody.y < sourceExit.y + sourceExit.h &&
+            sourceSpawnBody.y + sourceSpawnBody.h > sourceExit.y,
+        ).toBe(false);
+      }
+      for (const exit of source.definition.exits ?? []) {
+        expect(exit.x + exit.w).toBeLessThanOrEqual(source.tilemap.pixelWidth);
+        expect(exit.y + exit.h).toBeLessThanOrEqual(source.tilemap.pixelHeight);
+        const target = createRoom(getRoom(exit.targetRoomId));
+        // Destination spawns may overlap a doorway; RoomScene arms exits only after the
+        // player has left every trigger, so a return door does not bounce the player.
+        expect(
+          target.tilemap.isSolid(Math.floor(exit.spawn.x / 16), Math.floor(exit.spawn.y / 16)),
+        ).toBe(true);
+        expect(
+          target.tilemap.isWall(
+            Math.floor((exit.spawn.x - 6) / 16),
+            Math.floor((exit.spawn.y - 40) / 16),
+          ),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('keeps arena ledges off the boss spawn column', () => {
+    for (const id of ['bellbearer-arena', 'warden-arena', 'bellthief-arena']) {
+      const room = createRoom(getRoom(id));
+      // Boss spawns are at x=560 (column 35); both shelves stay clear of that body.
+      expect(room.tilemap.roleAt(11, 17)).toBe('ledge');
+      expect(room.tilemap.roleAt(48, 17)).toBe('ledge');
+      expect(room.tilemap.roleAt(35, 17)).not.toBe('ledge');
+      expect(room.tilemap.roleAt(35, 13)).not.toBe('ledge');
+    }
+  });
+
+  it('rejects a boss declaration without exactly one matching spawn', () => {
+    expect(() =>
+      createRoom({
+        ...belfryAntechamber,
+        boss: 'bellbearer',
+      }),
+    ).toThrow(/exactly one spawn/);
+    expect(() =>
+      createRoom({
+        ...belfryAntechamber,
+        boss: 'bellbearer',
+        enemies: [{ kind: 'bellbearer', x: 760, y: 320 }],
+      }),
+    ).not.toThrow();
   });
 });

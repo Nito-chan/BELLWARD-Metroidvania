@@ -9,6 +9,10 @@ declare global {
     __game?: {
       debugState: () => GameDebugState;
       sampleFrame: () => FrameSample;
+      debugLoadRoom: (roomId: string) => void;
+      debugDamageBoss: (amount: number) => boolean;
+      debugBreakWard: () => boolean;
+      debugDefeatBoss: () => void;
     };
   }
 }

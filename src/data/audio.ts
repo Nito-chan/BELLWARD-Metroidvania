@@ -94,6 +94,19 @@ export const SFX = {
     cooldownTicks: 600,
     rateJitter: 0.01,
   },
+  /** Boss tells and impacts. All reuse CC0 pack files; no new downloads. */
+  bossCharge: { urls: [impact('impactSoft_heavy_000.ogg')], volume: 0.55, cooldownTicks: 12 },
+  bossSlam: { urls: [impact('impactSoft_heavy_003.ogg')], volume: 0.85, cooldownTicks: 10 },
+  bossCast: { urls: [rpg('creak2.ogg')], volume: 0.55, cooldownTicks: 14, rateJitter: 0.02 },
+  bossTeleport: { urls: [rpg('cloth4.ogg')], volume: 0.5, cooldownTicks: 14 },
+  bossBell: { urls: [impact('impactBell_heavy_002.ogg')], volume: 0.55, cooldownTicks: 8 },
+  bossWard: {
+    urls: [impact('impactGlass_light_001.ogg'), impact('impactGlass_light_003.ogg')],
+    volume: 0.65,
+    cooldownTicks: 6,
+  },
+  bossPhase: { urls: [impact('impactBell_heavy_004.ogg')], volume: 0.8, cooldownTicks: 20 },
+  bossDefeat: { urls: [impact('impactSoft_heavy_001.ogg')], volume: 0.9, cooldownTicks: 30 },
 } as const satisfies Record<string, SfxDef>;
 
 export type SfxKey = keyof typeof SFX;

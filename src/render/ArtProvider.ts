@@ -1,5 +1,5 @@
 import { Assets, Rectangle, Texture } from 'pixi.js';
-import { ENEMY_KINDS, type EnemyKind } from '../config/enemies';
+import { ENEMY_KINDS, type BossKind, type EnemyKind } from '../config/enemies';
 import { PALETTE } from '../config/palette';
 import { BellwardError, formatError } from '../core/Errors';
 import {
@@ -45,6 +45,8 @@ export class ArtProvider {
   readonly hero: CharacterArt;
   /** One resolved art set per enemy kind, packed when complete and procedural otherwise. */
   readonly enemies: Readonly<Record<EnemyKind, CharacterArt>>;
+  /** Bosses are always procedural: no packed pack in the project matches their scale. */
+  readonly bosses: Readonly<Record<BossKind, CharacterArt>>;
   /** Resolved effect art (death burst, fireball), independently packed or procedural. */
   readonly effects: Readonly<Record<EffectKey, EffectArt>>;
 
@@ -65,6 +67,7 @@ export class ArtProvider {
       enemies[kind] = ready ? ENEMY_ART[kind] : procedural.enemies[kind];
     }
     this.enemies = enemies;
+    this.bosses = procedural.bosses;
 
     const effects = {} as Record<EffectKey, EffectArt>;
     for (const key of EFFECT_KEYS) {

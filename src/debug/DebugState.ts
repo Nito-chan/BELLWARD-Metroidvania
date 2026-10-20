@@ -14,6 +14,28 @@ export type MenuDebugState = {
   bindings: Bindings;
 };
 
+/** Boss snapshot inside a scene. Present only in arena rooms. */
+export type SceneBossDebugState = {
+  kind: string;
+  name: string;
+  /** Feet-center, in world pixels. */
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  phase: number;
+  phaseCount: number;
+  phaseName: string;
+  warded: boolean;
+  state: string;
+  pattern: string | null;
+  /** 0..1 wind-up warning fill. */
+  telegraph: number;
+  hidden: boolean;
+  alive: boolean;
+  deathElapsed: number;
+};
+
 /** Room/art snapshot for the active scene. */
 export type SceneDebugState = {
   roomId: string;
@@ -73,8 +95,20 @@ export type SceneDebugState = {
   }>;
   /** Number of live projectiles. */
   projectiles: number;
+  /** Active boss snapshot; null outside arenas (and in claimed arenas). */
+  boss: SceneBossDebugState | null;
+  /** True while a living boss keeps the arena's return door locked. */
+  exitLocked: boolean;
   /** Remaining hitstop ticks (the world is frozen while > 0). */
   hitstop: number;
+};
+
+/** Run-level progression kept by the composition root, not the scene. */
+export type RunDebugState = {
+  /** Boss kinds whose sigils were claimed this run. */
+  sigils: string[];
+  /** Base masks plus one per sigil. */
+  maxHp: number;
 };
 
 export type GameDebugState = {
@@ -97,6 +131,8 @@ export type GameDebugState = {
   renderer: string;
   /** Active room snapshot; null until the scene mounts. */
   scene: SceneDebugState | null;
+  /** Run progression (sigils and current mask ceiling). */
+  run: RunDebugState;
   /** Audio director snapshot: mix, unlock gate, current track, load failures. */
   audio: AudioDebugState;
   /** Pause overlay snapshot; bindings are visible even while the menu is closed. */
