@@ -286,6 +286,83 @@ the dash or attack sheet) which would otherwise surface as a runtime throw durin
 **Alternatives:** per-sheet fallback (rejected: half a knight is worse than a procedural one);
 shadow as a separate scene layer (rejected: it is part of the actor's silhouette).
 
+## D026 — 2026-10-20 — Audio architecture: one manager, one backend seam, content in data tables
+
+**Decision:** all audio goes through `AudioManager` (`src/audio/AudioManager.ts`), which talks to an
+`AudioBackend` interface. `HowlerBackend` is the only module in `src/` that imports `howler`.
+Content lives in `src/data/audio.ts` (the `SFX` table with per-key volume, cooldown and rate jitter,
+the `MUSIC` track table, the total `PLAYER_SFX` map) and tuning in `src/config/audio.ts` (bus
+defaults, fade lengths, jitter, bell schedule, storage key, mute key). The mix has three buses —
+`master`, `music`, `sfx` — and the backend applies master once on the context, so a play request is
+scaled by its own bus only. Music fades in over 2.4 s and crossfades in 0.9 s.
+
+**Why:** the simulation must never import a DOM audio library — the unit suite runs in Node, and an
+injected recording backend makes unlock gating, cooldowns, mixing, crossfades and persistence
+testable without a sound device. A total `Record<PlayerEvent, SfxKey>` turns "new simulation event
+without a sound" into a compile error, and data tables keep a retune to one line.
+
+**Alternatives:** controller calling Howler directly (rejected: couples the simulation to the
+browser); a switch statement over string keys (rejected: no exhaustiveness, no data table).
+
+## D027 — 2026-10-20 — The unlock gate is synchronous; music is registered only when requested
+
+**Decision:** a sound plays only when all three hold: a user gesture has arrived (`unlocked`), the
+mix is not muted, and the audio context is live (`contextState() === 'running'`). `unlock()` flips
+`unlocked` **synchronously** on the first gesture and only then awaits `AudioContext.resume()`; the
+requested track starts once the context is running. Music tracks are registered with the backend
+(downloaded and decoded) at the first `requestMusic()` for that key; only SFX are preloaded at boot.
+
+**Why (measured):** the first implementation registered all three tracks at boot, which fetched and
+decoded 12.9 MB of ogg (~150 MB of PCM) and delayed the soundtrack by ~2.4 s while starving
+gameplay-timing E2E tests. Context resume itself measured 0.8–6 s in this headless Windows VM
+(environment-dependent; a real desktop resumes in tens of milliseconds), which is exactly why the
+gate must not wait on it. Gating playback on a running context also prevents a burst: sounds
+scheduled into a suspended clock all release at once when it resumes. Lazy registration means the
+two boss loops (6.6 MB) are never downloaded by a player who never reaches a boss.
+
+**Alternatives:** html5 streaming for music (rejected: Howler loops html5 by re-playing on `ended`,
+leaving an audible gap at every loop point); preloading everything (rejected: measured boot stall
+and wasted bandwidth); deferring the music decode until after resume (rejected for now: Howler
+returns a non-numeric handle when asked to play a sound it has not loaded, so the fade would be
+lost).
+
+## D028 — 2026-10-20 — Simulation events are a per-tick buffer consumed by audio
+
+**Decision:** `PlayerController` collects `PlayerEvent`s in an array cleared at the start of every
+`update()`, and `RoomScene.update()` returns it. The events are `jump`, `land`, `landHeavy`,
+`footstep`, `skid`, `attack1`, `attack2`, `dash`. Landing weight is graded by the fall speed sampled
+_before_ the collision resolves (`PLAYER.landSoundSpeed` 140, `PLAYER.landHeavySoundSpeed` 700 px/s).
+Footsteps fire every 25 ticks while running (the run cycle is 50 ticks with two footfalls), the
+first one 14 ticks into a run; `skid` fires only on the transition into the skid state. `PLAYER_SFX`
+maps each event to a sound key.
+
+**Why:** polling controller state from the audio layer both double-fires (a state that persists for
+many ticks) and misses transients (a state that begins and ends within one tick). A buffer makes the
+order and count of events explicit, keeps the simulation free of RNG (so replays and the
+determinism test are unaffected), and lets unit tests assert exact event sequences without audio.
+
+**Alternatives:** observer callbacks from the controller (rejected: the controller would have to
+know its consumers); deriving sounds from clip-frame events in the art data (deferred: the clip data
+has the hook, but the controller-side event buffer is the authoritative timeline).
+
+## D029 — 2026-10-20 — Persisted mix, utility keys, and a deterministic ambience clock
+
+**Decision:** the mix (three buses plus `muted`) is written to `localStorage['bellward.audio.v1']`
+on every change; reads and writes are wrapped in `try/catch`, a corrupt record falls back to
+defaults, and blocked storage simply disables persistence. `B` toggles master mute and `F1` toggles
+the diagnostics overlay; both are handled in `Game` and never reach `InputManager`, so they are not
+rebindable actions. The distant-bell ambience is scheduled on the simulation clock (first toll after
+1500 ticks, then a 2100–4200 tick gap) from `AudioManager`'s own RNG fork, with a 600-tick cooldown.
+
+**Why:** storage can throw in private mode and must never break boot; players expect their volume
+and mute choice to survive a reload. Muting is a master mute, not a stop — the track keeps its
+place, so unmuting resumes mid-phrase. A separate RNG fork keeps the world's RNG sequence (and thus
+replays and the determinism tests) untouched by ambience timing.
+
+**Alternatives:** keeping settings in memory only (rejected: every reload resets the mix); using the
+scene RNG for bell spacing (rejected: ambience would perturb gameplay randomness); a settings menu
+as the only mute path (deferred to M5; the key is the minimum a player needs today).
+
 ---
 
 (append new entries at the bottom; never edit old ones — correct them with a new entry)

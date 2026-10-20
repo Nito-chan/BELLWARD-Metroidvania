@@ -1,9 +1,9 @@
 # Controls
 
-Status: **implemented (M2)**. These are the live defaults, sourced from `src/config/input.ts` and
-round-tripped by `InputManager.serialize()`; this table is the contract the binding editor (M5+)
-will edit. Keyboard events are matched on `KeyboardEvent.code` (physical key), so layouts like
-AZERTY still use the same physical positions.
+Status: **implemented (M2; utility keys added in M3)**. These are the live defaults, sourced from
+`src/config/input.ts` and round-tripped by `InputManager.serialize()`; this table is the contract
+the binding editor (M5+) will edit. Keyboard events are matched on `KeyboardEvent.code` (physical
+key), so layouts like AZERTY still use the same physical positions.
 
 ## Keyboard (defaults)
 
@@ -25,6 +25,17 @@ AZERTY still use the same physical positions.
 Note: the design doc's original list put heal on A and cast on S, which collide with A/S for
 movement; the collision is resolved here by moving heal to L and cast to I. The key list was
 validated in M2 with no changes; any future change is logged in DECISIONS.md.
+
+## Utility keys (outside the action map)
+
+| Key | Effect                                                   |
+| --- | -------------------------------------------------------- |
+| F1  | Toggle the diagnostics overlay (development builds only) |
+| B   | Mute / unmute all audio (persisted across reloads)       |
+
+These are handled in `Game`, never reach `InputManager`, and therefore cannot be rebound. Audio
+starts on the first key press or pointer press, as browser autoplay policy requires; there is no
+separate click-to-start screen.
 
 ## Gamepad (standard mapping)
 

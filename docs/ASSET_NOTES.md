@@ -86,6 +86,55 @@ Every downloaded pack gets `public/assets/<pack>/LICENSE.txt` containing the ver
 wording + URL + retrieval date, and one MANIFEST.json entry. Validate everything with
 `npm run assets:check` (strict mode is the shipping gate).
 
+## M3 — audio
+
+Four packs, all fetched by `npm run fetch-assets`, each with its verbatim licence archived beside
+the files:
+
+| Pack directory         | Contents                                              | Licence                                             | Source                                               |
+| ---------------------- | ----------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------- |
+| `kenney-rpg-audio`     | 51 clips: cloth/leather moves, knives, doors, creaks  | CC0 1.0 (Kenney, "RPG Audio")                       | `kenney.nl/assets/rpg-audio`                         |
+| `kenney-impact-sounds` | 130 clips: stone footsteps, bells, soft/heavy impacts | CC0 1.0 (Kenney, "Impact Sounds")                   | `kenney.nl/assets/impact-sounds`                     |
+| `music-cathedral`      | "Cathedral in the forest (ambient loop)" (2.9 MB ogg) | CC0 1.0 (congusbongus)                              | `opengameart.org` (`forest_2_0.ogg`)                 |
+| `alkakrab-boss-loops`  | 2 loops of the 6-track dark-fantasy boss pack         | free commercial use, author-confirmed, no AI (D015) | `alkakrab.itch.io/6-dark-fantasy-boss-battle-tracks` |
+
+The boss pack ships six loops plus intro variants; only **"1. Whispers of the Abyss (Loop)"** and
+**"4. Cursed Citadel (After Intro & Loop)"** are kept (6.65 MB). The other four remain in the local
+download cache — to add one, widen the entry's `include` filter in `scripts/lib/asset-packs.ts`,
+delete `public/assets/alkakrab-boss-loops`, and re-run `npm run fetch-assets -- --only=music-boss`
+(the cached zip is reused; nothing is re-downloaded). The itch zip's `Loops ogg/` folder is part of
+the URL because the archive also contains a licence PDF at its root.
+
+### Sound map (`src/data/audio.ts`)
+
+Paths below abbreviate `assets/kenney-rpg-audio/Audio/` as `rpg/` and
+`assets/kenney-impact-sounds/Audio/` as `impact/`.
+
+| Key         | File(s)                                 | Used by                       |
+| ----------- | --------------------------------------- | ----------------------------- |
+| `jump`      | `rpg/clothBelt.ogg`                     | jump event                    |
+| `land`      | `impact/impactSoft_medium_00{0,2}.ogg`  | landing below 700 px/s        |
+| `landHeavy` | `impact/impactSoft_heavy_00{0,2}.ogg`   | landing at 700 px/s or faster |
+| `footstep`  | `impact/footstep_concrete_00{0..4}.ogg` | run cadence, every 25 ticks   |
+| `skid`      | `rpg/cloth4.ogg`                        | transition into a skid        |
+| `attack1`   | `rpg/knifeSlice.ogg`                    | first swing                   |
+| `attack2`   | `rpg/knifeSlice2.ogg`                   | chained heavy swing           |
+| `dash`      | `rpg/cloth2.ogg`                        | dash start                    |
+| `bell`      | `impact/impactBell_heavy_00{0,2,4}.ogg` | distant-bell ambience (D029)  |
+
+| Track         | File                                                                              | Played in                          |
+| ------------- | --------------------------------------------------------------------------------- | ---------------------------------- |
+| `terrace`     | `assets/music-cathedral/cathedral-in-the-forest.ogg`                              | the Belfry Terrace (M3)            |
+| `bossAbyss`   | `assets/alkakrab-boss-loops/Loops ogg/1. Whispers of the Abyss (Loop).ogg`        | reserved for the Bellbearer (M6)   |
+| `bossCitadel` | `assets/alkakrab-boss-loops/Loops ogg/4. Cursed Citadel (After Intro & Loop).ogg` | reserved for the tower warden (M6) |
+
+The individual sound choices were made from the packs' file listings without critical listening
+(D026), so they are the first thing to retune by ear; replacing one is a data-table edit, and the
+unit suite re-checks that every URL exists on disk and is covered by a manifest entry.
+
+Only SFX are preloaded at boot. A music track is registered (downloaded + decoded) the first time a
+room requests it, so players who never reach a boss never download the boss loops (D027).
+
 ## Goals
 
 1. New art = new PNG + data entry. No code edits (D021 covers the typed-TypeScript data form).

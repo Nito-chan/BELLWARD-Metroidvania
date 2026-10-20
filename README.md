@@ -16,7 +16,12 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   a two-stage attack; tile collision with one-way platforms, drop-through and ceiling corner
   correction; keyboard + gamepad bindings (`docs/CONTROLS.md`); camera look-ahead; the terrace now
   has two climbable routes. All gates green.
-- Next: M3 — audio (Howler): music, ambience and the movement SFX set.
+- **M3 — Audio: complete.** A Howler-backed `AudioManager` behind a testable backend seam: three-bus
+  mix (master/music/sfx) persisted across reloads, `B` mute, music that starts only on the first
+  gesture, a deterministic distant-bell ambience, and simulation events (jump, land grades,
+  footsteps, skid, attacks, dash) driving CC0 sound effects. The terrace now has its own track; the
+  boss loops are downloaded only when a boss room asks for them. All gates green.
+- Next: M4 — combat & enemies: hitboxes, health, damage windows and the first enemy types.
 
 ## Quick start
 
@@ -49,17 +54,18 @@ First-time E2E setup: `npx playwright install chromium`.
 
 ```
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
-src/config      tunable constants (input bindings, player feel, physics, render; no magic numbers)
-src/data        art keys/rects/clips and room definitions (content, no logic)
+src/config      tunable constants (input bindings, player feel, physics, render, audio; no magic numbers)
+src/data        art keys/rects/clips, room definitions and sound/track catalogs (content, no logic)
 src/input       keyboard/gamepad manager and per-tick input snapshots
 src/physics     body model and the tile collision solver
-src/player      player state machine (movement, jump, attack, dash)
+src/player      player state machine (movement, jump, attack, dash, sound events)
+src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
 src/world       semantic tile roles, tilemap and room model (collision reads these)
 src/render      art provider, procedural fallbacks, camera, layers, hero view, room scene
 src/debug       F1 overlay + debug state contract
 scripts         asset fetcher/validator, screenshot capture
-tests/unit      Vitest (core, world, input, collision, player, camera, animator, manifest)
-tests/e2e       Playwright smoke (boot + packed art, keyboard movement, jump, collision, fps, overlay)
+tests/unit      Vitest (core, world, input, collision, player, camera, animator, audio, manifest)
+tests/e2e       Playwright smoke (boot, movement, jump, collision, fps, overlay, audio gate)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

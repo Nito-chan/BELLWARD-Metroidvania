@@ -257,3 +257,123 @@ one-way), camera follow polish, and the first traversal gate for the metroidvani
 Audio: a Howler-based sound manager (music/ambience for the terrace, SFX hooks for the movement set
 shipped here), a mix/volume model, and the already-downloaded music assets verified for license
 before use.
+
+---
+
+## M3 — Audio (2026-10-20)
+
+**Commit:** `d89a06b` · **Status:** complete, all gates green.
+
+### Shipped
+
+- **Audio architecture (`src/audio/*`):** `AudioManager` owns the mix, unlock gate, cooldowns, music
+  crossfades, the bell ambience and persistence. It talks to an `AudioBackend` interface;
+  `HowlerBackend` is the only module in `src/` that imports Howler (D026). A recording fake backend
+  drives all 18 audio unit tests without a sound device.
+- **Content & tuning:** `src/config/audio.ts` (bus defaults 0.9/0.65/0.9, fades 2400 ms in / 900 ms
+  out, ±6 % pitch jitter, bell first toll at 1500 ticks then 2100–4200, 600-tick cooldown, storage +
+  mute key) and `src/data/audio.ts` (9 SFX keys with 5 footstep variants, 3 bell variants; 3 music
+  tracks; the total `PLAYER_SFX` map). `bossAbyss` / `bossCitadel` are registered but not yet played.
+- **Mix:** master/music/sfx buses; master is applied once on the context, play requests carry their
+  own bus level. `B` toggles master mute (the track keeps its position); the mix and mute state
+  persist to `localStorage['bellward.audio.v1']` with every access wrapped in `try/catch` (D029).
+- **Autoplay gate (D027):** nothing is scheduled before the first gesture; `unlock()` opens the gate
+  synchronously and only then awaits the context. Playback additionally requires
+  `contextState() === 'running'`, so sounds are never queued into a frozen clock and released in a
+  burst on resume. Music starts with a fade-in; changing rooms crossfades (0.9 s).
+- **Lazy music registration:** only SFX are preloaded at boot. A track is downloaded and decoded the
+  first time a room requests it, so the two boss loops (6.6 MB) never load for a player who stays on
+  the terrace.
+- **Simulation → sound (`PlayerController`, D028):** a per-tick `PlayerEvent` buffer
+  (jump, land, landHeavy, footstep, skid, attack1, attack2, dash) returned by `RoomScene.update()`.
+  Landings are graded by pre-collision fall speed (soft below 700 px/s, heavy at or above); footsteps
+  run every 25 ticks against the 50-tick run cycle, first one 14 ticks in; skid fires only on the
+  transition. `Game` forwards events to the audio manager each tick and calls `audio.tick()` for the
+  bell ambience.
+- **Ambience:** a distant bell tolls on the simulation clock from `AudioManager`'s own RNG fork, so
+  the world's RNG sequence (and replay determinism) is untouched.
+- **Assets (4 packs, 188 files, 11.1 MB):** Kenney RPG Audio and Impact Sounds (both CC0) for
+  cloth/leather/blade/footstep/impact/bell sounds, congusbongus "Cathedral in the forest" (CC0) for
+  the terrace, and two loops from alkakrab's dark-fantasy boss pack (author-confirmed commercial
+  use). Every pack ships its verbatim licence. `assets:check`: 662 files, 0 warnings. Full key → file
+  map in `docs/ASSET_NOTES.md`.
+- **Fetcher:** asset packs gained an `include` regex filter, a single-file download strategy and a
+  cached-download reuse path; the itch flow now selects the right `div.upload` row and handles both
+  "Download Now" and "No thanks" variants. The cached 6-loop boss zip is reusable for widening the
+  selection later.
+- **Debug/E2E/tooling:** the F1 overlay shows `audio` (`context`, unlocked/muted, track +
+  `(playing)`, last SFX and tick), `mix` and `music`; failures are listed. `npm run screenshot`
+  gained `--overlay` (whole-page shot, waits for a live playing path). The smoke suite grew two M3
+  tests: silent-until-gesture → running + `terrace (playing)` with overlay attachment, and
+  mute → reload persistence. The M2 walk test now waits for a live context and proves footsteps
+  arrive as `lastSfx`.
+
+### Gates (all green at commit)
+
+| Gate                   | Result                                                                     |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `npm run typecheck`    | clean                                                                      |
+| `npm run lint`         | clean, zero warnings                                                       |
+| `npm run test`         | 144/144 passed (14 files, ~4.7 s) — up from 126                            |
+| `npm run build`        | ✓ 762 modules, 330.70 kB JS / 96.94 kB gzip (Howler adds ~43 kB)           |
+| `npm run test:e2e`     | 8/8 passed — 70.8 fps avg vs 45 floor, 2.4 min (audio startup dominates)   |
+| `npm run assets:check` | OK, 662 files, 0 warnings                                                  |
+| `npm run format:check` | clean                                                                      |
+| Screenshot             | `docs/screenshots/M3-audio.png` (overlay: context running, `terrace (playing)`, `last-sfx footstep@644`) |
+
+### E2E coverage added
+
+1. boots silent: `unlocked false`, `musicPlaying false`, `failed []`, track requested (`terrace`);
+2. first key press opens the gate; context reaches `running` and the track reports playing; overlay
+   shows `terrace (playing)` and the mix; no page errors;
+3. `B` mutes without stopping the track, the choice survives a reload, and `B` unmutes again.
+
+### Findings & adjustments (recorded in DECISIONS)
+
+- **Preloading every track stalled the soundtrack and the timing tests.** Registering all three
+  loops at boot fetched/decoded 12.9 MB of ogg (~150 MB PCM) and delayed the terrace track by
+  ~2.4 s. Music is now registered on first request (D027); the boss loops cost nothing until a boss
+  room exists.
+- **Context start dominates music latency in this VM.** `AudioContext.resume()` measured 0.8–6 s and
+  the software decode of the terrace track brought the first audible music to ~12 s in a probe
+  (context running at ~3 s). Playback is gated on a `running` context for correctness, so the E2E
+  waits for the real path instead of sleeping; the audio block got a scoped 120 s timeout because
+  the first test legitimately takes ~30 s here. On a desktop this is sub-second.
+- **Howler's html5 loop mode is audibly gapless-noisy:** it re-plays on `ended`. Music therefore uses
+  WebAudio decode, and the boot cost was solved by lazy registration rather than streaming.
+- **`.ogg` files from the itch pack live under `Loops ogg/`** because the archive's licence PDF sits
+  at the root and the unpacker only strips a single top-level directory. The paths are part of the
+  data table; the cached zip makes re-selection instant.
+- **Landing sound needed a sampled pre-collision speed.** Reading `vy` after `moveAndCollide` always
+  reports 0 on the landing tick, which flattened every landing to "soft"; grading now happens before
+  the collision resolves.
+- **The screenshot tool needed a real wait.** A fixed settle produced shots where the context was
+  still starting and the music had not begun. `--overlay` now waits for `running && musicPlaying`,
+  then turns the hero around (he reaches the dais step while audio starts) so the frame shows him
+  mid-stride. This is a diagnostics tool improvement, not a gameplay change.
+- **Footstep cadence is tied to the clip, not the frame rate:** 25 ticks matches two footfalls per
+  50-tick run cycle; `PLAYER.footstepTicks` is the single place to retune it.
+
+### Explicitly deferred / stubs
+
+- **No volume UI.** The mix model and persistence exist and are unit-tested, but the only player
+  control is `B` mute; the settings screen arrives with the menus milestone (M5).
+- **The two boss tracks are reserved, not played** — boss rooms do not exist until M6. They are
+  registered lazily, so nothing downloads them today.
+- **No positional/stereo audio and no ducking** (e.g. music under a boss roar); all sounds are 2D
+  and centred. Deliberate for the vertical slice.
+- **Sound choices were made from file listings, not by ear** (no speakers on this machine); they are
+  one-line data swaps, and the unit suite re-checks every URL exists and is manifested.
+- **Bells are ambience only** — the broken bell prop has no interaction sound yet; that arrives with
+  the bell-interaction mechanic.
+- **Gamepad audio parity is untested on hardware** (keyboard and pointer gestures are covered).
+- **No sound for heal/cast/interact/map/pause** because no system consumes those actions yet; the
+  event map is total over `PlayerEvent`, so adding one is a compile-checked change.
+- **Music does not resume from a save** — there is no save system yet (M7).
+
+### Next milestone preview (M4)
+
+Combat and the first enemies: hitboxes and damage windows on the existing two-stage attack, health
+and i-frames for the player, three data-driven enemy types with FSMs and pooled projectiles, and the
+combat sounds already wired through the event buffer.
+
