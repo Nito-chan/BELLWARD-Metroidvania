@@ -51,6 +51,7 @@ export class Game {
   });
 
   private scene: RoomScene | null = null;
+  private art: ArtProvider | null = null;
   private ready = false;
   private lastWholeSecond = 0;
   private overlayFrameCounter = 0;
@@ -86,13 +87,9 @@ export class Game {
     mount.appendChild(this.app.canvas);
     this.app.canvas.setAttribute('tabindex', '0');
 
-    this.scene = new RoomScene(
-      createRoom(belfryTerrace),
-      await ArtProvider.load(),
-      this.rng.fork(),
-    );
+    this.art = await ArtProvider.load();
+    this.scene = this.createScene();
     this.app.stage.addChild(this.scene.view);
-
     window.addEventListener('resize', this.onResize);
     this.onResize();
 
@@ -163,8 +160,28 @@ export class Game {
     if (this.scene) {
       const events = this.scene.update(this.loop.stats.tickCount, this.input.snapshot());
       for (const event of events) this.audio.onPlayerEvent(event);
+      if (this.scene.resetRequested) this.resetScene();
     }
     this.audio.tick(this.loop.stats.tickCount);
+  }
+
+  /** Builds a fresh room: used at boot and again after the player dies. */
+  private createScene(): RoomScene {
+    if (!this.art) {
+      throw new BellwardError('createScene() called before art finished loading');
+    }
+    return new RoomScene(createRoom(belfryTerrace), this.art, this.rng.fork(), this.audio);
+  }
+
+  /**
+   * Replaces the dead room with a clean one. The art provider (and every loaded texture)
+   * is shared, enemies respawn from the room data, and music keeps playing uninterrupted.
+   */
+  private resetScene(): void {
+    const previous = this.scene;
+    this.scene = this.createScene();
+    this.app.stage.addChild(this.scene.view);
+    if (previous) previous.destroy();
   }
 
   private onRender(alpha: number): void {

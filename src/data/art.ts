@@ -33,6 +33,13 @@ export const ART_URLS = {
   'hero.attack1': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Attack.png',
   'hero.attack2': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Attack2.png',
   'hero.dash': 'assets/aamatniekss-knight/Colour1/NoOutline/120x80_PNGSheets/_Dash.png',
+  'enemy.parishioner.idle': 'assets/ansimuz-town/PNG/spritesheets/bearded-idle.png',
+  'enemy.parishioner.walk': 'assets/ansimuz-town/PNG/spritesheets/bearded-walk.png',
+  'enemy.ghoul': 'assets/ansimuz-church/SPRITES/burning-ghoul/spritesheet/v2/burning-ghoul.png',
+  'enemy.adept': 'assets/ansimuz-church/SPRITES/wizard/spritesheet/wizard.png',
+  'fx.enemyDeath':
+    'assets/ansimuz-church/SPRITES/fx/enemy-death/enemy-death-spritesheet/enemy-death.png',
+  'fx.fireball': 'assets/ansimuz-church/SPRITES/fx/fireball/fireball-spritesheet/fireball.png',
 } as const;
 
 export type ArtKey = keyof typeof ART_URLS;

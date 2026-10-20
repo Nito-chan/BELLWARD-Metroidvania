@@ -23,15 +23,45 @@ export type SceneDebugState = {
     /** Velocity in pixels per second. */
     vx: number;
     vy: number;
-    /** Controller state (idle/run/skid/jump/fall/attack/dash). */
+    /** Controller state (idle/run/skid/jump/fall/attack/dash/hurt/dead). */
     state: string;
     /** Active animation clip. */
     animation: string;
     facing: -1 | 1;
     grounded: boolean;
+    /** Feet Y at the apex of the jump in progress, or null while grounded. */
+    jumpPeakY: number | null;
+    /** Feet Y at the apex of the last completed jump, or null before the first one. */
+    lastJumpPeakY: number | null;
     /** Ticks since the current clip started. */
     clipTick: number;
+    /** Current and maximum health. */
+    hp: number;
+    maxHp: number;
+    /** Remaining invulnerability ticks (0 = hittable). */
+    invulnerableTicks: number;
+    /** True while the death sequence is playing. */
+    dead: boolean;
+    /** True while a swing's damage window is open. */
+    attackActive: boolean;
   };
+  /** Live enemies, in spawn order. Dead enemies are removed before this snapshot. */
+  enemies: Array<{
+    kind: string;
+    name: string;
+    /** Feet-center, in world pixels. */
+    x: number;
+    y: number;
+    hp: number;
+    maxHp: number;
+    state: string;
+    animation: string;
+    facing: -1 | 1;
+  }>;
+  /** Number of live projectiles. */
+  projectiles: number;
+  /** Remaining hitstop ticks (the world is frozen while > 0). */
+  hitstop: number;
 };
 
 export type GameDebugState = {

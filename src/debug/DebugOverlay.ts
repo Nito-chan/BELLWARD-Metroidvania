@@ -51,8 +51,16 @@ export class DebugOverlay {
         `art        ${scene.art.mode} (${scene.art.loaded.length} packed, ${scene.art.failures.length} fallback)`,
         `camera     ${scene.camera.x.toFixed(1)}, ${scene.camera.y.toFixed(1)}`,
         `player     ${player.state}/${player.animation} @ ${player.x.toFixed(1)},${player.y.toFixed(1)}`,
+        `vitals     hp ${player.hp}/${player.maxHp} iframes ${player.invulnerableTicks}${player.dead ? ' DEAD' : ''}${player.attackActive ? ' swing-open' : ''}`,
         `velocity   ${player.vx.toFixed(0)}, ${player.vy.toFixed(0)} facing ${player.facing} ${player.grounded ? 'ground' : 'air'}`,
+        `arc        ${player.jumpPeakY !== null ? `apex ${player.jumpPeakY.toFixed(1)}` : player.lastJumpPeakY !== null ? `last ${player.lastJumpPeakY.toFixed(1)}` : '-'}`,
+        `foes       ${scene.enemies.length} live · ${scene.projectiles} shots · hitstop ${scene.hitstop}`,
       );
+      for (const foe of scene.enemies) {
+        lines.push(
+          `  ${foe.kind.padEnd(11)} hp ${foe.hp}/${foe.maxHp} ${foe.state}/${foe.animation} @ ${foe.x.toFixed(0)}`,
+        );
+      }
     }
     const { audio } = state;
     lines.push(

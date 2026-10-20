@@ -61,6 +61,71 @@ describe('createRoom', () => {
     );
   });
 
+  it('places the four story enemies on solid ground within their beats', () => {
+    const room = createRoom(belfryTerrace);
+    expect(belfryTerrace.enemies.map((enemy) => enemy.kind)).toEqual([
+      'parishioner',
+      'parishioner',
+      'ghoul',
+      'adept',
+    ]);
+    for (const enemy of belfryTerrace.enemies) {
+      expect(room.tilemap.isSolid(Math.floor(enemy.x / 16), Math.floor(enemy.y / 16))).toBe(true);
+      if (enemy.patrol) {
+        expect(enemy.x).toBeGreaterThanOrEqual(enemy.patrol.min);
+        expect(enemy.x).toBeLessThanOrEqual(enemy.patrol.max);
+      }
+    }
+  });
+
+  it('rejects enemy spawns with no ground under their feet', () => {
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        enemies: [{ kind: 'parishioner', x: 500, y: 200 }],
+      }),
+    ).toThrow(/not on solid ground/);
+  });
+
+  it('rejects an unknown enemy kind from bad data', () => {
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        enemies: [{ kind: 'revenant' as never, x: 150, y: 320 }],
+      }),
+    ).toThrow(/unknown enemy kind/);
+  });
+
+  it('rejects enemy bodies that overlap a wall', () => {
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        enemies: [{ kind: 'parishioner', x: 20, y: 320 }],
+      }),
+    ).toThrow(/body overlaps wall/);
+  });
+
+  it('rejects patrol beats that are inverted, outside the room, or miss the spawn', () => {
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        enemies: [{ kind: 'parishioner', x: 150, y: 320, patrol: { min: 200, max: 150 } }],
+      }),
+    ).toThrow(/patrol min .* must be less than max/);
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        enemies: [{ kind: 'parishioner', x: 150, y: 320, patrol: { min: -10, max: 150 } }],
+      }),
+    ).toThrow(/leaves the room/);
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        enemies: [{ kind: 'parishioner', x: 150, y: 320, patrol: { min: 200, max: 300 } }],
+      }),
+    ).toThrow(/outside patrol/);
+  });
+
   it('rejects invalid ambient alpha', () => {
     expect(() =>
       createRoom({

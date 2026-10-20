@@ -84,6 +84,28 @@ describe('Camera', () => {
     expect(camera.y).toBe(1000 - VIEW.height);
   });
 
+  it('applies a decaying shake without permanently moving the camera', () => {
+    const camera = new Camera(BIG_ROOM);
+    const base = camera.view(1);
+    camera.shake(4, 8);
+    expect(camera.shakeActive).toBe(true);
+    expect(camera.view(1)).not.toEqual(base);
+
+    for (let i = 0; i < 8; i += 1) camera.update(1000, 500);
+    expect(camera.shakeActive).toBe(false);
+    expect(camera.view(1)).toEqual({ x: camera.x, y: camera.y });
+  });
+
+  it('ignores non-positive shake requests', () => {
+    const camera = new Camera(BIG_ROOM);
+    const base = camera.view(0);
+    camera.shake(0, 10);
+    camera.shake(3, 0);
+    camera.shake(-2, 5);
+    expect(camera.shakeActive).toBe(false);
+    expect(camera.view(0)).toEqual(base);
+  });
+
   it('is deterministic for identical input sequences', () => {
     const a = new Camera(BIG_ROOM);
     const b = new Camera(BIG_ROOM);

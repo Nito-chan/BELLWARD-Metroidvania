@@ -150,6 +150,16 @@ describe('PlayerController jump arc', () => {
     expect(controller.grounded).toBe(true);
     expect(controller.feet.y).toBeCloseTo(128, 1);
     expect(controller.state).toBe('idle');
+    expect(controller.jumpPeakY).toBeNull();
+    expect(controller.lastJumpPeakY).not.toBeNull();
+    expect(controller.lastJumpPeakY).toBeCloseTo(minFeet, 5);
+  });
+
+  it('ignores the initial floor settle when recording jump apexes', () => {
+    const controller = new PlayerController({ x: 80, y: 128 });
+    for (let i = 0; i < 10; i += 1) controller.update(input(), GROUND);
+    expect(controller.lastJumpPeakY).toBeNull();
+    expect(controller.jumpPeakY).toBeNull();
   });
 
   it('clips the arc when the jump button is released early', () => {
@@ -157,15 +167,13 @@ describe('PlayerController jump arc', () => {
     controller.update(input(['jump'], ['jump']), GROUND);
     controller.update(input(['jump']), GROUND);
 
-    let minFeet = controller.feet.y;
     for (let i = 0; i < 60; i += 1) {
       controller.update(input(), GROUND);
-      minFeet = Math.min(minFeet, controller.feet.y);
     }
 
-    const apex = 128 - minFeet;
-    expect(apex).toBeGreaterThan(10);
-    expect(apex).toBeLessThan(45);
+    const recordedApex = 128 - (controller.lastJumpPeakY ?? 128);
+    expect(recordedApex).toBeGreaterThan(10);
+    expect(recordedApex).toBeLessThan(45);
   });
 });
 

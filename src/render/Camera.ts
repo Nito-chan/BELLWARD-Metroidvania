@@ -15,6 +15,10 @@ export class Camera {
   private currentX = 0;
   private currentY = 0;
   private bounds: Rect;
+  private shakeStrength = 0;
+  private shakeTicks = 0;
+  private shakeDuration = 0;
+  private shakePhase = 0;
 
   constructor(bounds: Rect) {
     validateBounds(bounds);
@@ -73,13 +77,48 @@ export class Camera {
       this.bounds.h,
       VIEW.height,
     );
+
+    if (this.shakeTicks > 0) {
+      this.shakeTicks -= 1;
+      this.shakePhase += 1;
+    }
+  }
+
+  /**
+   * Requests a camera kick. A stronger request overrides the current one; a weaker one is
+   * ignored while the current shake is still running, so overlapping hits never jitter.
+   */
+  shake(strength: number, ticks: number): void {
+    if (ticks <= 0 || strength <= 0) return;
+    if (this.shakeTicks > 0 && strength < this.shakeStrength) return;
+    this.shakeStrength = strength;
+    this.shakeTicks = ticks;
+    this.shakeDuration = ticks;
+    this.shakePhase = 0;
+  }
+
+  /** True while a shake is being applied (exposed for tests and debug). */
+  get shakeActive(): boolean {
+    return this.shakeTicks > 0;
   }
 
   /** Top-left of the visible world rect, interpolated between the last two ticks. */
   view(alpha: number): Vec2 {
+    const shake = this.shakeOffset();
     return {
-      x: lerp(this.prevX, this.currentX, alpha),
-      y: lerp(this.prevY, this.currentY, alpha),
+      x: lerp(this.prevX, this.currentX, alpha) + shake.x,
+      y: lerp(this.prevY, this.currentY, alpha) + shake.y,
+    };
+  }
+
+  /** Deterministic decaying oscillation: no RNG, so replays shake identically. */
+  private shakeOffset(): Vec2 {
+    if (this.shakeTicks <= 0) return { x: 0, y: 0 };
+    const falloff = this.shakeTicks / Math.max(1, this.shakeDuration);
+    const amplitude = this.shakeStrength * falloff;
+    return {
+      x: Math.sin(this.shakePhase * 1.7) * amplitude,
+      y: Math.cos(this.shakePhase * 2.3) * amplitude * 0.6,
     };
   }
 }

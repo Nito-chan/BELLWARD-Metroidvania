@@ -1,14 +1,17 @@
+import { COMBAT } from '../config/combat';
 import { PLAYER } from '../config/player';
 import { RENDER } from '../config/render';
 import { SIM } from '../config/world';
 import { approach } from '../core/Math2D';
-import type { Vec2 } from '../core/Types';
+import type { Rect, Vec2 } from '../core/Types';
 import { isHeld, isPressed, type InputSnapshot } from '../input/InputState';
 import { createBody, type Body } from '../physics/Body';
 import { moveAndCollide, type MoveResult } from '../physics/TileCollision';
 import type { Tilemap } from '../world/Tilemap';
+import { PlayerVitals } from './PlayerVitals';
 
-export type PlayerStateName = 'idle' | 'run' | 'skid' | 'jump' | 'fall' | 'attack' | 'dash';
+export type PlayerStateName =
+  'idle' | 'run' | 'skid' | 'jump' | 'fall' | 'attack' | 'dash' | 'hurt' | 'dead';
 
 /**
  * Momentary things the simulation did, in the tick they happened. Audio and visual
@@ -16,7 +19,16 @@ export type PlayerStateName = 'idle' | 'run' | 'skid' | 'jump' | 'fall' | 'attac
  * a landing cannot be missed because the state changed twice in one tick.
  */
 export type PlayerEvent =
-  'jump' | 'land' | 'landHeavy' | 'footstep' | 'skid' | 'attack1' | 'attack2' | 'dash';
+  | 'jump'
+  | 'land'
+  | 'landHeavy'
+  | 'footstep'
+  | 'skid'
+  | 'attack1'
+  | 'attack2'
+  | 'dash'
+  | 'hurt'
+  | 'death';
 
 const EPSILON = 0.001;
 
@@ -31,18 +43,25 @@ const EPSILON = 0.001;
  */
 export class PlayerController {
   readonly body: Body;
+  /** Health, invulnerability and death live in their own small component. */
+  readonly vitals = new PlayerVitals();
   private facingValue: -1 | 1 = 1;
   private stateValue: PlayerStateName = 'idle';
   private animationValue = 'idle';
   private clipTickValue = 0;
   private restartedValue = true;
   private attackStage: 1 | 2 = 1;
+  private attackSwingValue = 0;
   private attackBufferTicks = 0;
   private jumpBufferTicks = 0;
   private dashTicksLeft = 0;
   private dashCooldownTicks = 0;
   private coyoteTicks = 0;
   private jumpHeld = false;
+  private hurtTicksValue = 0;
+  private deathElapsedValue = 0;
+  private jumpPeakYValue: number | null = null;
+  private lastJumpPeakYValue: number | null = null;
   private readonly eventBuffer: PlayerEvent[] = [];
   private footstepCounter = 0;
 
@@ -90,8 +109,58 @@ export class PlayerController {
     return this.body.grounded;
   }
 
+  /**
+   * Feet Y at the highest point of the airtime in progress, or null while grounded.
+   * A trace only starts on upward motion, so settling into the floor at spawn is not
+   * mistaken for a jump.
+   */
+  get jumpPeakY(): number | null {
+    return this.jumpPeakYValue;
+  }
+
+  /** Feet Y at the apex of the last completed jump; null until the first one lands. */
+  get lastJumpPeakY(): number | null {
+    return this.lastJumpPeakYValue;
+  }
+
   get dashCooldown(): number {
     return this.dashCooldownTicks;
+  }
+
+  /** Current health (0 when dead). */
+  get hp(): number {
+    return this.vitals.hp;
+  }
+
+  get maxHp(): number {
+    return this.vitals.maxHp;
+  }
+
+  /** Remaining invulnerability ticks. */
+  get invulnerableTicks(): number {
+    return this.vitals.invulnerableTicks;
+  }
+
+  get dead(): boolean {
+    return this.vitals.dead;
+  }
+
+  /** Ticks since death; the scene fades and resets on this clock. */
+  get deathElapsed(): number {
+    return this.deathElapsedValue;
+  }
+
+  /** True while the hurt reaction owns the body. */
+  get hurt(): boolean {
+    return this.hurtTicksValue > 0;
+  }
+
+  /**
+   * Identifies the current swing. Combat uses it so one swing can damage an enemy only
+   * once, even while the active window spans several ticks.
+   */
+  get attackId(): number {
+    return this.attackSwingValue;
   }
 
   /** Feet-center in world pixels: the view anchor and camera focus. */
@@ -99,7 +168,7 @@ export class PlayerController {
     return { x: this.body.x + this.body.w / 2, y: this.body.y + this.body.h };
   }
 
-  /** True while a swing's damage window is open (combat lands in a later milestone). */
+  /** True while a swing's damage window is open. */
   get attackActive(): boolean {
     if (this.stateValue !== 'attack') return false;
     const window =
@@ -107,10 +176,63 @@ export class PlayerController {
     return this.clipTickValue >= window.start && this.clipTickValue <= window.end;
   }
 
+  /** The swing's world-space damage box, or null when the window is closed. */
+  attackHitbox(): Rect | null {
+    if (!this.attackActive) return null;
+    const { forward, width, height, top } = COMBAT.player.attackBox;
+    const feet = this.feet;
+    const x = this.facingValue === 1 ? feet.x + forward : feet.x - forward - width;
+    return { x, y: feet.y - top, w: width, h: height };
+  }
+
+  /** Damage of the swing currently landing (0 when no window is open). */
+  get attackDamage(): number {
+    if (!this.attackActive) return 0;
+    return this.attackStage === 1 ? COMBAT.player.damage.stage1 : COMBAT.player.damage.stage2;
+  }
+
+  /**
+   * Applies a hit from the world. Returns false when it was ignored (dead or in
+   * invulnerability frames). The reaction is a short loss of control, knockback away
+   * from the source, and a face-the-attacker turn so the hit reads.
+   */
+  takeDamage(amount: number, sourceX: number): boolean {
+    if (!this.vitals.damage(amount)) return false;
+
+    const feet = this.feet;
+    const away = feet.x < sourceX ? -1 : 1;
+    this.facingValue = away === 1 ? -1 : 1;
+    this.body.vx = away * COMBAT.player.knockback.x;
+    this.body.vy = COMBAT.player.knockback.y;
+    this.stateValue = 'hurt';
+    this.hurtTicksValue = COMBAT.player.hurtTicks;
+    this.emit('hurt');
+
+    if (this.vitals.dead) {
+      this.stateValue = 'dead';
+      this.deathElapsedValue = 0;
+      this.emit('death');
+    }
+    return true;
+  }
+
   /** Advances one fixed tick. */
   update(input: InputSnapshot, tilemap: Tilemap): void {
     this.restartedValue = false;
     this.eventBuffer.length = 0;
+    this.vitals.tick();
+
+    if (this.stateValue === 'dead') {
+      this.stepDead(tilemap);
+      this.trackJumpPeak();
+      return;
+    }
+    if (this.hurtTicksValue > 0) {
+      this.stepHurt(tilemap);
+      this.trackJumpPeak();
+      return;
+    }
+
     this.tickTimers(input);
     this.updateCoyote();
 
@@ -139,6 +261,49 @@ export class PlayerController {
     const impactSpeed = this.body.vy;
     const move = moveAndCollide(tilemap, this.body, SIM.dt);
     this.finalizeState(input, move, wasGrounded, impactSpeed);
+    this.trackJumpPeak();
+  }
+
+  /**
+   * Records the apex of the current jump for the debug snapshot. This runs after
+   * collision so it uses the resolved position, and is simulation-driven: a render
+   * stall can skip frames, but it can never skip a tick of the arc.
+   */
+  private trackJumpPeak(): void {
+    if (!this.body.grounded) {
+      if (this.body.vy < 0) {
+        const feetY = this.feet.y;
+        this.jumpPeakYValue =
+          this.jumpPeakYValue === null ? feetY : Math.min(this.jumpPeakYValue, feetY);
+      }
+      return;
+    }
+    if (this.jumpPeakYValue !== null) {
+      this.lastJumpPeakYValue = this.jumpPeakYValue;
+      this.jumpPeakYValue = null;
+    }
+  }
+
+  /** The hurt reaction owns the body: no input, knockback bleeds off, gravity applies. */
+  private stepHurt(tilemap: Tilemap): void {
+    this.hurtTicksValue -= 1;
+    this.clipTickValue += 1;
+    this.body.vx = approach(this.body.vx, 0, COMBAT.player.hurtFriction * SIM.dt);
+    this.applyGravity();
+    moveAndCollide(tilemap, this.body, SIM.dt);
+    if (this.hurtTicksValue <= 0) {
+      this.stateValue = this.body.grounded ? 'idle' : 'fall';
+      this.beginClip(this.body.grounded ? 'idle' : 'fall');
+    }
+  }
+
+  /** Dead: gravity still resolves, the death clock runs, nothing else accepts input. */
+  private stepDead(tilemap: Tilemap): void {
+    this.deathElapsedValue += 1;
+    this.clipTickValue += 1;
+    this.body.vx = approach(this.body.vx, 0, COMBAT.player.hurtFriction * SIM.dt);
+    this.applyGravity();
+    moveAndCollide(tilemap, this.body, SIM.dt);
   }
 
   /** Ticks down every timer and latches pressed edges into buffers. */
@@ -207,6 +372,7 @@ export class PlayerController {
 
   private startAttack(stage: 1 | 2): void {
     this.attackStage = stage;
+    this.attackSwingValue += 1;
     this.stateValue = 'attack';
     this.beginClip(stage === 1 ? 'attack1' : 'attack2');
     // Facing is locked for the swing; the art is directional.

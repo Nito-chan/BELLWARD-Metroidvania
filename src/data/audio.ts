@@ -56,6 +56,30 @@ export const SFX = {
   attack1: { urls: [rpg('knifeSlice.ogg')], volume: 0.6, cooldownTicks: 8 },
   attack2: { urls: [rpg('knifeSlice2.ogg')], volume: 0.7, cooldownTicks: 8 },
   dash: { urls: [rpg('cloth2.ogg')], volume: 0.5, cooldownTicks: 10 },
+  /** Blade meeting a body: the enemy hit feedback. */
+  enemyHurt: {
+    urls: [impact('impactSoft_medium_001.ogg'), impact('impactSoft_medium_004.ogg')],
+    volume: 0.55,
+    cooldownTicks: 4,
+  },
+  /** The body gives way; heavier and longer than a hit. */
+  enemyDie: {
+    urls: [impact('impactSoft_heavy_001.ogg'), impact('impactSoft_heavy_003.ogg')],
+    volume: 0.7,
+    cooldownTicks: 6,
+  },
+  /** The player is hit: a blunt, close, unpleasant thud. */
+  playerHurt: { urls: [impact('impactPunch_heavy_000.ogg')], volume: 0.7, cooldownTicks: 10 },
+  /** The adept's wind-up: a dry, resonant creak that reads as "something is coming". */
+  cast: { urls: [rpg('creak2.ogg')], volume: 0.5, cooldownTicks: 10, rateJitter: 0.02 },
+  /** Fire leaving the adept's hands. */
+  fireball: { urls: [rpg('cloth3.ogg')], volume: 0.45, cooldownTicks: 8 },
+  /** Fireball meeting stone (or a player). */
+  fireballHit: {
+    urls: [impact('impactGlass_light_001.ogg'), impact('impactGlass_light_003.ogg')],
+    volume: 0.55,
+    cooldownTicks: 4,
+  },
   /**
    * The region's signature: a distant bell. Played by the ambience scheduler in
    * AudioManager; the rate jitter is pinned low so the toll keeps a stable pitch.
@@ -112,6 +136,9 @@ export const PLAYER_SFX: Record<PlayerEvent, SfxKey> = {
   attack1: 'attack1',
   attack2: 'attack2',
   dash: 'dash',
+  hurt: 'playerHurt',
+  // The region answers a death with its signature sound: the distant bell.
+  death: 'bell',
 };
 
 /** The rate the manager wants for a key: the table's jitter, or the global default. */

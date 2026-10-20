@@ -67,7 +67,7 @@ export const PLAYER = {
      * clips in `src/data/art.ts` so the windows below can never drift from the art.
      */
     clipTicks: { stage1: 16, stage2: 20 },
-    /** Active damage windows, in ticks since the swing started (combat lands in M4). */
+    /** Active damage windows, in ticks since the swing started. */
     windows: {
       stage1: { start: 4, end: 11 },
       stage2: { start: 5, end: 15 },

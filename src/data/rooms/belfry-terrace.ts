@@ -122,4 +122,15 @@ export const belfryTerrace: RoomDefinition = {
     { art: 'column', x: 928, y: 320, layer: 'front' },
   ],
   spawn: { x: 420, y: 320 },
+  /**
+   * Combat is deliberately off the spawn pocket (420..660) so the first frames stay
+   * readable: two parishioners haunt the left walkway, the ghoul guards the beam bridge
+   * above, and the adept waits beyond the dais in the far-right pocket.
+   */
+  enemies: [
+    { kind: 'parishioner', x: 150, y: 320, facing: -1, patrol: { min: 104, max: 200 } },
+    { kind: 'parishioner', x: 270, y: 320, facing: 1, patrol: { min: 228, max: 312 } },
+    { kind: 'ghoul', x: 380, y: 192, facing: -1, patrol: { min: 328, max: 432 } },
+    { kind: 'adept', x: 872, y: 320, facing: -1 },
+  ],
 };

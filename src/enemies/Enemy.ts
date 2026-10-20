@@ -1,0 +1,235 @@
+import { COMBAT } from '../config/combat';
+import { ENEMIES, type EnemyKind, type EnemyStats } from '../config/enemies';
+import { RENDER } from '../config/render';
+import { SIM } from '../config/world';
+import { bodyRect, forwardBox } from '../combat/geometry';
+import { approach } from '../core/Math2D';
+import type { Rect, Vec2 } from '../core/Types';
+import { bodyFeet, createBody, type Body } from '../physics/Body';
+import { moveAndCollide } from '../physics/TileCollision';
+import type { EnemySpawn } from '../world/Room';
+import type { Tilemap } from '../world/Tilemap';
+
+/** Shared FSM states. `active` is the only state with a damaging melee hitbox open. */
+export type EnemyState =
+  'idle' | 'patrol' | 'chase' | 'windup' | 'active' | 'recover' | 'stagger' | 'dead';
+
+/** What an enemy is allowed to know about the player. Keeps the simulation testable. */
+export type EnemyTarget = {
+  feet: Vec2;
+  dead: boolean;
+};
+
+/** Everything an enemy needs from the scene. Passed per tick, never stored. */
+export type EnemyContext = {
+  tilemap: Tilemap;
+  player: EnemyTarget;
+  castProjectile: (
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    speed: number,
+    damage: number,
+    lifeTicks: number,
+  ) => void;
+};
+
+/**
+ * Base for every enemy: tile physics, health, hit reaction, the animation contract and
+ * small steering helpers. Subclasses own only their decision making (`think`).
+ *
+ * The base deliberately has no Pixi or DOM dependency; scenes read the public getters
+ * once per tick and feed a view.
+ */
+export abstract class Enemy {
+  readonly kind: EnemyKind;
+  readonly stats: EnemyStats;
+  readonly body: Body;
+  facing: -1 | 1;
+  hp: number;
+  protected stateValue: EnemyState = 'idle';
+  protected stateTicks = 0;
+  protected cooldownTicks = 0;
+  protected flashTicks = 0;
+  protected animationValue = 'idle';
+  protected restartedValue = true;
+  protected readonly patrolMin: number;
+  protected readonly patrolMax: number;
+
+  constructor(kind: EnemyKind, spawn: EnemySpawn) {
+    this.kind = kind;
+    this.stats = ENEMIES[kind];
+    this.hp = this.stats.hp;
+    this.facing = spawn.facing ?? 1;
+    const { w, h } = this.stats.body;
+    this.body = createBody(spawn.x - w / 2, spawn.y - h, w, h);
+    this.patrolMin = spawn.patrol?.min ?? spawn.x;
+    this.patrolMax = spawn.patrol?.max ?? spawn.x;
+  }
+
+  /** Feet-center in world pixels. */
+  get feet(): Vec2 {
+    return bodyFeet(this.body);
+  }
+
+  get state(): EnemyState {
+    return this.stateValue;
+  }
+
+  get alive(): boolean {
+    return this.stateValue !== 'dead';
+  }
+
+  get animation(): string {
+    return this.animationValue;
+  }
+
+  /** True for exactly one tick after a clip change, so looping clips do not freeze. */
+  get restarted(): boolean {
+    return this.restartedValue;
+  }
+
+  get flash(): boolean {
+    return this.flashTicks > 0;
+  }
+
+  get grounded(): boolean {
+    return this.body.grounded;
+  }
+
+  /** 0 before a wind-up, rising to 1 on the active frame. Drives the telegraph arc. */
+  get telegraph(): number {
+    if (this.stateValue !== 'windup' || !this.stats.melee) return 0;
+    return 1 - this.stateTicks / this.stats.melee.windupTicks;
+  }
+
+  /** The damaging melee box while the active window is open. */
+  attackHitbox(): Rect | null {
+    if (this.stateValue !== 'active' || !this.stats.melee) return null;
+    const feet = this.feet;
+    return forwardBox(feet.x, feet.y, this.facing, this.stats.melee.box);
+  }
+
+  /** Damage of the active melee window (0 when closed). */
+  get attackDamage(): number {
+    if (this.stateValue !== 'active' || !this.stats.melee) return 0;
+    return this.stats.melee.damage;
+  }
+
+  /** The body box used for contact damage (not the sprite's visual bounds). */
+  bounds(): Rect {
+    return bodyRect(this.body);
+  }
+
+  /**
+   * Applies a player hit. Returns false when the enemy is already dead, true otherwise.
+   * A surviving enemy is interrupted into a stagger; its current wind-up or cast is lost.
+   */
+  takeDamage(amount: number, sourceX: number): boolean {
+    if (!this.alive) return false;
+    const applied = Math.max(0, Math.floor(amount));
+    if (applied === 0) return false;
+
+    this.hp = Math.max(0, this.hp - applied);
+    this.flashTicks = 4;
+    if (this.hp <= 0) {
+      this.stateValue = 'dead';
+      this.stateTicks = 0;
+      this.body.vx = 0;
+      this.body.vy = 0;
+      return true;
+    }
+
+    const away = this.feet.x < sourceX ? -1 : 1;
+    this.facing = away === 1 ? -1 : 1;
+    this.body.vx = away * COMBAT.enemy.knockback.x;
+    this.body.vy = COMBAT.enemy.knockback.y;
+    this.stateValue = 'stagger';
+    this.stateTicks = this.stats.staggerTicks;
+    this.restartClip('hurt');
+    return true;
+  }
+
+  /** Advances one fixed tick. Dead enemies are removed by the scene and never update. */
+  update(ctx: EnemyContext): void {
+    if (!this.alive) return;
+    this.restartedValue = false;
+    if (this.cooldownTicks > 0) this.cooldownTicks -= 1;
+    if (this.flashTicks > 0) this.flashTicks -= 1;
+    if (this.stateTicks > 0) this.stateTicks -= 1;
+
+    this.think(ctx);
+
+    this.body.vy = Math.min(COMBAT.enemy.maxFall, this.body.vy + COMBAT.enemy.gravity * SIM.dt);
+    const move = moveAndCollide(ctx.tilemap, this.body, SIM.dt);
+    if (move.hitX) {
+      this.body.vx = 0;
+      // Patrols turn around at walls; chasers wait for a player who comes back down.
+      if (this.stateValue === 'patrol') this.facing = this.facing === 1 ? -1 : 1;
+    }
+  }
+
+  /** Subclass decision making. Called once per tick before physics. */
+  protected abstract think(ctx: EnemyContext): void;
+
+  protected beginState(state: EnemyState, ticks: number, clip: string): void {
+    this.stateValue = state;
+    this.stateTicks = ticks;
+    this.beginClip(clip);
+  }
+
+  protected beginClip(name: string): void {
+    if (this.animationValue === name) return;
+    this.animationValue = name;
+    this.restartedValue = true;
+  }
+
+  /** Forces the clip to restart even when it is already active (a second hit). */
+  protected restartClip(name: string): void {
+    this.animationValue = name;
+    this.restartedValue = true;
+  }
+
+  /** True when the player is inside the range box and alive. */
+  protected canSee(ctx: EnemyContext, range: number, vertical: number): boolean {
+    if (ctx.player.dead) return false;
+    const dx = Math.abs(ctx.player.feet.x - this.feet.x);
+    const dy = Math.abs(ctx.player.feet.y - this.feet.y);
+    return dx <= range && dy <= vertical;
+  }
+
+  protected horizontalDelta(ctx: EnemyContext): number {
+    return ctx.player.feet.x - this.feet.x;
+  }
+
+  /** Turns to face the player without moving. */
+  protected facePlayer(ctx: EnemyContext): void {
+    const dx = this.horizontalDelta(ctx);
+    if (dx !== 0) this.facing = dx > 0 ? 1 : -1;
+  }
+
+  /** Walks in `dir`, refusing to step off a ledge. */
+  protected walk(dir: -1 | 1, speed: number, tilemap: Tilemap): void {
+    this.facing = dir;
+    if (!this.hasGroundAhead(dir, tilemap)) {
+      this.body.vx = 0;
+      return;
+    }
+    this.body.vx = dir * speed;
+  }
+
+  protected brake(rate: number): void {
+    this.body.vx = approach(this.body.vx, 0, rate * SIM.dt);
+  }
+
+  /**
+   * Ground probe one pixel past the leading foot. Uses solid tiles (one-way platforms
+   * count), so a patrolling enemy walks the beam bridge but never off its edge.
+   */
+  protected hasGroundAhead(dir: -1 | 1, tilemap: Tilemap): boolean {
+    const probeX = dir === 1 ? this.body.x + this.body.w + 2 : this.body.x - 2;
+    const row = Math.floor((this.body.y + this.body.h + 2) / RENDER.tileSize);
+    return tilemap.isSolid(Math.floor(probeX / RENDER.tileSize), row);
+  }
+}

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { COMBAT } from '../../src/config/combat';
 import type { GameDebugState } from '../../src/debug/DebugState';
 
 async function bootGame(page: Page): Promise<void> {
@@ -62,10 +63,22 @@ test.describe('M2 smoke', () => {
     expect(scene?.tiles).toBe(449);
     expect(scene?.art.mode).toBe('packed');
     expect(scene?.art.failures).toEqual([]);
-    expect(scene?.art.loaded).toHaveLength(12);
+    // 12 scene/hero textures plus the parishioner (2), ghoul, adept, death burst and fireball.
+    expect(scene?.art.loaded).toHaveLength(18);
     expect(scene?.player.animation).toMatch(/idle|run/);
     expect(scene?.player.grounded).toBe(true);
     expect(scene?.player.y).toBeCloseTo(320, 0);
+    expect(scene?.player.hp).toBe(5);
+    expect(scene?.player.maxHp).toBe(5);
+    expect(scene?.player.dead).toBe(false);
+    expect(scene?.enemies.map((enemy) => enemy.kind)).toEqual([
+      'parishioner',
+      'parishioner',
+      'ghoul',
+      'adept',
+    ]);
+    expect(scene?.enemies.every((enemy) => enemy.hp === enemy.maxHp)).toBe(true);
+    expect(scene?.projectiles).toBe(0);
 
     const sample = await page.evaluate(() => {
       const game = window.__game;
@@ -136,49 +149,34 @@ test.describe('M2 smoke', () => {
     const ground = await debugState(page);
     const groundY = ground.scene?.player.y ?? 0;
     expect(ground.scene?.player.grounded).toBe(true);
+    expect(ground.scene?.player.lastJumpPeakY).toBeNull();
 
-    // Hold the button for the whole arc; the sampler runs inside the page so it sees
-    // every frame (polling from the test process is too slow to catch a 0.5 s jump).
+    // The apex is recorded by the simulation itself, once per tick. A frame sampler
+    // flakes when the first-gesture audio decode stalls the main thread and several
+    // ticks are caught up in one frame; the tick record cannot skip the arc.
     await page.keyboard.down('Space');
-    const arc = await page.evaluate(
-      () =>
-        new Promise<{ minY: number; airborne: number; endY: number; grounded: boolean }>(
-          (resolve) => {
-            const game = window.__game;
-            if (!game) throw new Error('window.__game is not available (DEV build required)');
-            const start = game.debugState().scene?.player.y ?? 0;
-            let minY = start;
-            let airborne = 0;
-            const deadline = performance.now() + 900;
-            const tick = (): void => {
-              const player = game.debugState().scene?.player;
-              if (player) {
-                minY = Math.min(minY, player.y);
-                if (!player.grounded) airborne += 1;
-              }
-              if (performance.now() >= deadline) {
-                resolve({
-                  minY,
-                  airborne,
-                  endY: player?.y ?? start,
-                  grounded: player?.grounded ?? false,
-                });
-                return;
-              }
-              requestAnimationFrame(tick);
-            };
-            requestAnimationFrame(tick);
-          },
-        ),
+    await page.waitForFunction(
+      (previousPeak) => {
+        const player = window.__game?.debugState().scene?.player;
+        return (
+          player !== undefined &&
+          player.grounded &&
+          player.lastJumpPeakY !== null &&
+          player.lastJumpPeakY !== previousPeak
+        );
+      },
+      ground.scene?.player.lastJumpPeakY ?? null,
+      { timeout: 5_000 },
     );
     await page.keyboard.up('Space');
 
-    expect(arc.airborne).toBeGreaterThan(10);
-    expect(groundY - arc.minY).toBeGreaterThan(40);
-    expect(groundY - arc.minY).toBeLessThan(95);
-    expect(arc.grounded).toBe(true);
-    expect(Math.abs(arc.endY - groundY)).toBeLessThan(1);
-    expect((await debugState(page)).errors).toEqual([]);
+    const landed = await debugState(page);
+    const peak = landed.scene?.player.lastJumpPeakY ?? groundY;
+    expect(groundY - peak).toBeGreaterThan(40);
+    expect(groundY - peak).toBeLessThan(95);
+    expect(landed.scene?.player.grounded).toBe(true);
+    expect(Math.abs((landed.scene?.player.y ?? 0) - groundY)).toBeLessThan(1);
+    expect(landed.errors).toEqual([]);
   });
 
   test('the dais step blocks the hero until he jumps it', async ({ page }) => {
@@ -266,9 +264,129 @@ test.describe('M2 smoke', () => {
     await expect(overlay).toContainText('camera');
     await expect(overlay).toContainText('player');
     await expect(overlay).toContainText('ground');
+    await expect(overlay).toContainText('vitals');
+    await expect(overlay).toContainText('hp 5/5');
+    await expect(overlay).toContainText('foes');
+    await expect(overlay).toContainText('4 live');
 
     await page.keyboard.press('F1');
     await expect(overlay).toBeHidden();
+  });
+});
+
+test.describe('M4 combat', () => {
+  test('a chained melee swing kills a parishioner', async ({ page }, testInfo) => {
+    await bootGame(page);
+
+    // March left until the nearest parishioner is inside the hero's reach.
+    await page.keyboard.down('ArrowLeft');
+    await page.waitForFunction(
+      () => {
+        const scene = window.__game?.debugState().scene;
+        if (!scene) return false;
+        return scene.enemies.some(
+          (enemy) =>
+            enemy.kind === 'parishioner' &&
+            enemy.x < scene.player.x &&
+            scene.player.x - enemy.x <= 34,
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+    await page.keyboard.up('ArrowLeft');
+
+    // Press on the swing cadence: a press inside the stage-one window chains the heavy
+    // stage two (1 + 2 damage), which is exactly a parishioner's 3 HP.
+    let killed = false;
+    for (let press = 0; press < 24 && !killed; press += 1) {
+      await page.keyboard.press('KeyX');
+      await page.waitForTimeout(110);
+      const scene = (await debugState(page)).scene;
+      killed = (scene?.enemies.length ?? 4) < 4;
+    }
+
+    const after = await debugState(page);
+    expect(killed).toBe(true);
+    expect(after.scene?.enemies).toHaveLength(3);
+    expect(after.scene?.player.dead).toBe(false);
+    expect(after.errors).toEqual([]);
+
+    await testInfo.attach('m4-combat.png', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  });
+
+  test('taking a hit grants i-frames, and death rebuilds the room', async ({ page }) => {
+    test.setTimeout(90_000);
+    await bootGame(page);
+
+    await page.keyboard.down('ArrowLeft');
+    await page.waitForFunction(
+      () => {
+        const scene = window.__game?.debugState().scene;
+        if (!scene) return false;
+        return scene.enemies.some(
+          (enemy) =>
+            enemy.kind === 'parishioner' &&
+            enemy.x < scene.player.x &&
+            scene.player.x - enemy.x <= 24,
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+    await page.keyboard.up('ArrowLeft');
+
+    await page.waitForFunction(
+      () => (window.__game?.debugState().scene?.player.hp ?? 5) < 5,
+      undefined,
+      { timeout: 20_000 },
+    );
+    const hurt = await debugState(page);
+    // A single hit takes one of five masks and opens the invulnerability window. The
+    // exact HP is read a moment after the hit, so assert the range rather than racing a
+    // second (guarded) hit if the audio decode stalls the main thread.
+    expect(hurt.scene?.player.hp).toBeLessThan(5);
+    expect(hurt.scene?.player.hp).toBeGreaterThan(0);
+    expect(hurt.scene?.player.invulnerableTicks).toBeGreaterThan(0);
+    expect(hurt.scene?.player.dead).toBe(false);
+    const firstHitTick = hurt.tickCount;
+
+    // Stand still and let the parishioner finish the job: one hit per invulnerability
+    // window, knockback included, until the fifth mask breaks.
+    await page.waitForFunction(
+      () => window.__game?.debugState().scene?.player.dead === true,
+      undefined,
+      { timeout: 45_000 },
+    );
+    const dead = await debugState(page);
+    expect(dead.scene?.player.hp).toBe(0);
+    expect(dead.scene?.player.dead).toBe(true);
+    // Four more hits at one mask each can only land after four full i-frame windows.
+    // Measured on the simulation clock, so a slow or stalled main thread cannot shrink it.
+    expect(dead.tickCount - firstHitTick).toBeGreaterThanOrEqual(
+      hurt.scene!.player.hp * COMBAT.player.invulnerableTicks,
+    );
+
+    // The 100-tick death fade ends in a fresh room: full health, four enemies, spawn point.
+    await page.waitForFunction(
+      () => {
+        const scene = window.__game?.debugState().scene;
+        if (!scene) return false;
+        return !scene.player.dead && scene.player.hp === 5 && scene.enemies.length === 4;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+    const respawned = await debugState(page);
+    expect(respawned.scene?.player.hp).toBe(5);
+    expect(respawned.scene?.player.x).toBeCloseTo(420, 0);
+    expect(respawned.scene?.player.invulnerableTicks).toBeGreaterThan(0);
+    expect(respawned.scene?.enemies.every((enemy) => enemy.hp === enemy.maxHp)).toBe(true);
+    expect(respawned.scene?.projectiles).toBe(0);
+    expect(respawned.errors).toEqual([]);
   });
 });
 

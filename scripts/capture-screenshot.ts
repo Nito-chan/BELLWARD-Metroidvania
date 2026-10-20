@@ -7,7 +7,9 @@
  *      npm run screenshot -- docs/screenshots/M0-boot.png
  *      npm run screenshot -- docs/screenshots/M2-terrace.png --run   (hero running right)
  *      npm run screenshot -- docs/screenshots/M3-audio.png --run --overlay
+ *      npm run screenshot -- docs/screenshots/M4-combat.png --combat  (mid-fight frame)
  *      (--overlay presses F1 and captures the whole page, so the DOM debug panel shows)
+ *      (--combat walks into the nearest parishioner and shoots on the first impact)
  *
  * Depends on the DEV-only `window.__game` handle, hence the dev server. Uses the same
  * software-WebGL flags and native viewport as the E2E suite so frames match CI captures.
@@ -20,6 +22,7 @@ const url = process.env.GAME_URL ?? 'http://localhost:5173';
 const args = process.argv.slice(2);
 const runShot = args.includes('--run');
 const overlayShot = args.includes('--overlay');
+const combatShot = args.includes('--combat');
 const outputPath = resolve(
   args.find((value) => !value.startsWith('--')) ?? 'docs/screenshots/current.png',
 );
@@ -60,7 +63,33 @@ async function main(): Promise<void> {
         await page.keyboard.down('ArrowLeft');
       }
     }
-    await page.waitForTimeout(settleMs); // let the scene animate to a representative frame
+    // The combat shot walks into the nearest parishioner and captures the first impact,
+    // so the frame shows a live hitbox, a stagger flash and the damage HUD.
+    if (combatShot) {
+      await page.keyboard.down('ArrowLeft');
+      await page.waitForFunction(
+        () => {
+          const scene = window.__game?.debugState().scene;
+          if (!scene) return false;
+          return scene.enemies.some(
+            (enemy) =>
+              enemy.kind === 'parishioner' &&
+              enemy.x < scene.player.x &&
+              scene.player.x - enemy.x <= 34,
+          );
+        },
+        undefined,
+        { timeout: 15_000 },
+      );
+      await page.keyboard.up('ArrowLeft');
+      await page.keyboard.press('KeyX');
+      await page
+        .waitForFunction(() => (window.__game?.debugState().scene?.hitstop ?? 0) > 0, undefined, {
+          timeout: 5_000,
+        })
+        .catch(() => console.warn('screenshot: no impact frame observed; capturing anyway'));
+    }
+    await page.waitForTimeout(combatShot ? 40 : settleMs); // hold the impact if we caught it
     await mkdir(dirname(outputPath), { recursive: true });
     // The overlay is DOM, so it only appears in a whole-page shot.
     const target = overlayShot ? page : page.locator('canvas');

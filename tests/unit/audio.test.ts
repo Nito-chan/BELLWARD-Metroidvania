@@ -165,6 +165,8 @@ describe('audio data tables', () => {
       'attack1',
       'attack2',
       'dash',
+      'hurt',
+      'death',
     ];
     expect(Object.keys(PLAYER_SFX).sort()).toEqual([...events].sort());
     for (const event of events) {

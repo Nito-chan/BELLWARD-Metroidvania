@@ -1,4 +1,5 @@
 import { Assets, Rectangle, Texture } from 'pixi.js';
+import { ENEMY_KINDS, type EnemyKind } from '../config/enemies';
 import { PALETTE } from '../config/palette';
 import { BellwardError, formatError } from '../core/Errors';
 import {
@@ -11,6 +12,8 @@ import {
   type ArtKey,
   type SourceRect,
 } from '../data/art';
+import { ENEMY_ART, ENEMY_REQUIRED } from '../data/enemies';
+import { EFFECT_ART, EFFECT_KEYS, type EffectArt, type EffectKey } from '../data/effects';
 import type { BackgroundKey, PropKey } from '../world/Room';
 import type { TileRole } from '../world/tiles';
 import type { CharacterArt } from './Animation';
@@ -40,6 +43,10 @@ export class ArtProvider {
   readonly failures: readonly string[];
   readonly mode: ArtMode;
   readonly hero: CharacterArt;
+  /** One resolved art set per enemy kind, packed when complete and procedural otherwise. */
+  readonly enemies: Readonly<Record<EnemyKind, CharacterArt>>;
+  /** Resolved effect art (death burst, fireball), independently packed or procedural. */
+  readonly effects: Readonly<Record<EffectKey, EffectArt>>;
 
   private constructor(
     private readonly procedural: ProceduralArt,
@@ -51,6 +58,20 @@ export class ArtProvider {
     // The hero falls back as a whole: a knight missing clips would break at runtime.
     const knightReady = KNIGHT_REQUIRED.every((key) => packed.has(key));
     this.hero = knightReady ? HERO_ART : procedural.hero;
+
+    const enemies = {} as Record<EnemyKind, CharacterArt>;
+    for (const kind of ENEMY_KINDS) {
+      const ready = ENEMY_REQUIRED[kind].every((key) => packed.has(key));
+      enemies[kind] = ready ? ENEMY_ART[kind] : procedural.enemies[kind];
+    }
+    this.enemies = enemies;
+
+    const effects = {} as Record<EffectKey, EffectArt>;
+    for (const key of EFFECT_KEYS) {
+      const packedKey = EFFECT_ART[key].textureKey as ArtKey;
+      effects[key] = packed.has(packedKey) ? EFFECT_ART[key] : procedural.effects[key];
+    }
+    this.effects = effects;
   }
 
   static async load(): Promise<ArtProvider> {
