@@ -54,6 +54,15 @@ describe('MenuModel screens', () => {
     expect(model.screen).toBeNull();
   });
 
+  it('opens directly on the map and closes it with Back/Escape', () => {
+    const { model } = makeModel();
+    model.open('map');
+    expect(model.screen).toBe('map');
+    expect(model.capture).toBeNull();
+    expect(model.back()).toBe('closed');
+    expect(model.screen).toBeNull();
+  });
+
   it('cancels an active capture instead of leaving the screen', () => {
     const { model } = makeModel();
     model.open();

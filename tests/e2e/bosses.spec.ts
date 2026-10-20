@@ -66,6 +66,7 @@ test.describe('M6 bell bosses', () => {
   }, testInfo) => {
     await bootGame(page);
     await loadRoom(page, 'bellbearer-arena');
+    expect(await page.evaluate(() => window.__game?.debugProtectPlayer())).toBe(true);
     await waitForBossIdle(page);
 
     const gate = await page.evaluate(() => ({
@@ -147,6 +148,7 @@ test.describe('M6 bell bosses', () => {
   }, testInfo) => {
     await bootGame(page);
     await loadRoom(page, 'warden-arena');
+    expect(await page.evaluate(() => window.__game?.debugProtectPlayer())).toBe(true);
     await waitForBossIdle(page);
 
     const hits = await page.evaluate(() => [
@@ -191,6 +193,7 @@ test.describe('M6 bell bosses', () => {
   test('the Bell Thief reaches its final phase', async ({ page }) => {
     await bootGame(page);
     await loadRoom(page, 'bellthief-arena');
+    expect(await page.evaluate(() => window.__game?.debugProtectPlayer())).toBe(true);
     await waitForBossIdle(page);
 
     expect(await page.evaluate(() => window.__game?.debugDamageBoss(14))).toBe(true);

@@ -54,6 +54,14 @@ export class PlayerVitals {
     if (this.invulnerableTicksValue > 0) this.invulnerableTicksValue -= 1;
   }
 
+  /** DEV-only: extend i-frames for deterministic state-machine probes. */
+  debugProtect(ticks: number): void {
+    this.invulnerableTicksValue = Math.max(
+      this.invulnerableTicksValue,
+      Math.max(0, Math.floor(ticks)),
+    );
+  }
+
   /**
    * Applies damage. Returns false when the hit was ignored (dead or invulnerable), so
    * the caller never plays a hit reaction for a hit that did not happen.

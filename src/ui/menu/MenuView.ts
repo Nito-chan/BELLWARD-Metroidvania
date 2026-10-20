@@ -1,5 +1,8 @@
 /** The DOM shell and screen renderers for the pause flow. All text is set via textContent. */
 import type { AudioBus } from '../../audio/AudioManager';
+import { formatKeyCode } from '../../input/bindingLabels';
+import { buildMapScreen } from '../map/mapScreen';
+import type { MapSnapshot } from '../map/mapTypes';
 import type { MenuModel } from './MenuModel';
 import { SCREEN_COPY, defaultFocusId } from './menuContent';
 import { el, makeBellMark, makeHint } from './menuDom';
@@ -8,6 +11,8 @@ import { buildControlsScreen, buildPauseScreen, buildSettingsScreen } from './sc
 export type MenuViewHandlers = {
   onCommand(command: string): void;
   onVolume(bus: AudioBus, value: number): void;
+  /** Built on demand: the chart must reflect the current run, not the menu's open time. */
+  getMap(): MapSnapshot;
 };
 
 export class MenuView {
@@ -83,8 +88,23 @@ export class MenuView {
     if (screen === 'pause') this.body.append(buildPauseScreen());
     if (screen === 'settings') this.body.append(buildSettingsScreen(model));
     if (screen === 'controls') this.body.append(buildControlsScreen(model));
+    if (screen === 'map') this.body.append(buildMapScreen(this.handlers.getMap()));
 
-    this.footer.replaceChildren(...copy.hints.map((hint) => makeHint(hint.keys, hint.label)));
+    const hints =
+      screen === 'map'
+        ? [
+            { keys: 'Esc', label: 'Close' },
+            {
+              keys: model.bindings.keyboard.map.map((code) => formatKeyCode(code)).join(' / '),
+              label: 'Close',
+            },
+          ]
+        : copy.hints;
+    this.footer.replaceChildren(
+      ...hints
+        .filter((hint) => hint.keys.length > 0)
+        .map((hint) => makeHint(hint.keys, hint.label)),
+    );
     this.focus(focusId ?? defaultFocusId(screen));
   }
 

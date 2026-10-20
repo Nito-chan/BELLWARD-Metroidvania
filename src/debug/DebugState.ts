@@ -1,6 +1,7 @@
 /** The read-only debug snapshot. This is the contract E2E tests and the F1 overlay use. */
 import type { AudioDebugState } from '../audio/AudioManager';
 import type { Bindings } from '../input/bindings';
+import type { SaveReason } from '../save/runSave';
 import type { CaptureTarget, MenuScreen } from '../ui/menu/menuTypes';
 
 /** Pause overlay snapshot: screen, capture target, focus and the live binding document. */
@@ -97,6 +98,12 @@ export type SceneDebugState = {
   projectiles: number;
   /** Active boss snapshot; null outside arenas (and in claimed arenas). */
   boss: SceneBossDebugState | null;
+  /** Nearest bench while it is in interaction range; null otherwise. */
+  bench: {
+    id: string;
+    name: string;
+    inRange: boolean;
+  } | null;
   /** True while a living boss keeps the arena's return door locked. */
   exitLocked: boolean;
   /** Remaining hitstop ticks (the world is frozen while > 0). */
@@ -105,10 +112,32 @@ export type SceneDebugState = {
 
 /** Run-level progression kept by the composition root, not the scene. */
 export type RunDebugState = {
+  /** Current room id; changes on every transition. */
+  roomId: string;
   /** Boss kinds whose sigils were claimed this run. */
   sigils: string[];
   /** Base masks plus one per sigil. */
   maxHp: number;
+  /** Rooms charted on the map, in region order. */
+  visitedRooms: string[];
+  /** Last bench rest, or null before the first rest. */
+  checkpoint: {
+    roomId: string;
+    benchId: string;
+    name: string;
+  } | null;
+};
+
+/** Persistence status: useful for E2E proof that a rest actually reached storage. */
+export type SaveDebugState = {
+  key: string;
+  version: number;
+  /** True when a valid document was loaded or a write has succeeded. */
+  present: boolean;
+  /** True when boot restored a document (rather than starting fresh). */
+  loaded: boolean;
+  /** Why the most recent successful write happened, or null when none has succeeded. */
+  lastWrite: SaveReason | null;
 };
 
 export type GameDebugState = {
@@ -131,8 +160,10 @@ export type GameDebugState = {
   renderer: string;
   /** Active room snapshot; null until the scene mounts. */
   scene: SceneDebugState | null;
-  /** Run progression (sigils and current mask ceiling). */
+  /** Run progression (sigils, masks, charted rooms and checkpoint). */
   run: RunDebugState;
+  /** Save-document status for diagnostics and E2E. */
+  save: SaveDebugState;
   /** Audio director snapshot: mix, unlock gate, current track, load failures. */
   audio: AudioDebugState;
   /** Pause overlay snapshot; bindings are visible even while the menu is closed. */

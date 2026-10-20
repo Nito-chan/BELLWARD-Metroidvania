@@ -173,6 +173,11 @@ export class PlayerController {
     return this.reaction.takeDamage(this.reactionHost, amount, sourceX);
   }
 
+  /** DEV-only: extend i-frames for deterministic state-machine probes. */
+  debugProtect(ticks: number): void {
+    this.vitals.debugProtect(ticks);
+  }
+
   /** Advances one fixed tick. */
   update(input: InputSnapshot, tilemap: Tilemap): void {
     this.pose.beginTick();

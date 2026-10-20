@@ -56,6 +56,9 @@ export class DebugOverlay {
         `arc        ${player.jumpPeakY !== null ? `apex ${player.jumpPeakY.toFixed(1)}` : player.lastJumpPeakY !== null ? `last ${player.lastJumpPeakY.toFixed(1)}` : '-'}`,
         `foes       ${scene.enemies.length} live · ${scene.projectiles} shots · hitstop ${scene.hitstop}`,
         `sigils     ${state.run.sigils.length > 0 ? state.run.sigils.join(', ') : '-'} · max hp ${state.run.maxHp}`,
+        `charted    ${state.run.visitedRooms.length} rooms · rest ${state.run.checkpoint?.name ?? '-'}`,
+        `bench      ${scene.bench ? `${scene.bench.name}${scene.bench.inRange ? ' IN RANGE' : ''}` : '-'}`,
+        `save       ${state.save.present ? 'present' : 'none'} · ${state.save.loaded ? 'loaded' : 'fresh'} · last ${state.save.lastWrite ?? '-'}`,
       );
       for (const foe of scene.enemies) {
         lines.push(

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { PLAYER } from '../../src/config/player';
+import { BENCHES } from '../../src/data/benches';
 import { belfryTerrace } from '../../src/data/rooms/belfry-terrace';
 import { belfryAntechamber } from '../../src/data/rooms/belfry-antechamber';
 import { ALL_ROOMS, ROOMS, getRoom } from '../../src/data/rooms';
 import { BellwardError } from '../../src/core/Errors';
-import { createRoom } from '../../src/world/Room';
+import { createRoom, isStandingPoint } from '../../src/world/Room';
 
 describe('createRoom', () => {
   it('builds the belfry terrace with the expected dimensions', () => {
@@ -241,5 +243,48 @@ describe('M6 rooms and the bell nave graph', () => {
         enemies: [{ kind: 'bellbearer', x: 760, y: 320 }],
       }),
     ).not.toThrow();
+  });
+
+  it('indexes every bench and gives it solid ground and a clear respawn', () => {
+    expect([...BENCHES.keys()]).toEqual(['terrace-weeping-stone', 'nave-bell-keepers-rest']);
+    for (const bench of BENCHES.values()) {
+      const room = createRoom(getRoom(bench.roomId));
+      expect(room.tilemap.isSolid(Math.floor(bench.x / 16), Math.floor(bench.y / 16))).toBe(true);
+      expect(isStandingPoint(room.tilemap, bench.spawn, PLAYER.size)).toBe(true);
+    }
+  });
+
+  it('rejects duplicate bench ids and blocked bench spawns', () => {
+    const [bench] = belfryTerrace.benches ?? [];
+    expect(bench).toBeDefined();
+    if (!bench) return;
+
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        benches: [bench, { ...bench, name: 'Echo of the Stone' }],
+      }),
+    ).toThrow(/duplicate bench id/);
+
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        benches: [{ ...bench, spawn: { x: 10, y: 300 } }],
+      }),
+    ).toThrow(/clear standing point/);
+
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        benches: [{ ...bench, y: 300 }],
+      }),
+    ).toThrow(/not on solid ground/);
+
+    expect(() =>
+      createRoom({
+        ...belfryTerrace,
+        benches: [{ ...bench, spawn: { x: bench.x + 47, y: bench.y } }],
+      }),
+    ).toThrow(/outside its interaction range/);
   });
 });

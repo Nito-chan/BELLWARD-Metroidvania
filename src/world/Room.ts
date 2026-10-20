@@ -1,5 +1,7 @@
+import { BENCH } from '../config/bench';
 import { ENEMIES, type ActorKind, type BossKind } from '../config/enemies';
 import type { PaletteName } from '../config/palette';
+import { PLAYER } from '../config/player';
 import { RENDER } from '../config/render';
 import { BellwardError } from '../core/Errors';
 import type { Rect, Vec2 } from '../core/Types';
@@ -11,7 +13,7 @@ import type { TileRole } from './tiles';
 export type BackgroundKey = 'far' | 'mid' | 'near';
 
 /** Art keys for props. Resolved by the active art provider. */
-export type PropKey = 'balustrade' | 'column' | 'bell' | 'door';
+export type PropKey = 'balustrade' | 'column' | 'bell' | 'door' | 'bench';
 
 /** Depth band for a prop: behind the hero, or in front of the hero. */
 export type PropLayerName = 'back' | 'front';
@@ -32,6 +34,19 @@ export type RoomSpawn = {
   /** Feet position (bottom-center of the hero), in world pixels. */
   x: number;
   y: number;
+};
+
+/**
+ * A rest point. `id` is the stable save id, while `x`/`y` place the stone bench in the
+ * world and `spawn` is where the hero stands when the room is rebuilt after resting or a
+ * death. The bench art is procedural and anchored at its bottom-center like every prop.
+ */
+export type RoomBench = {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  spawn: RoomSpawn;
 };
 
 /**
@@ -91,6 +106,8 @@ export type RoomDefinition = {
   exits?: readonly RoomExit[];
   /** World-space labels (boss door plaques). */
   labels?: readonly RoomLabel[];
+  /** Rest points. Each bench saves its spawn as the run's respawn checkpoint. */
+  benches?: readonly RoomBench[];
 };
 
 export type Room = {
@@ -123,6 +140,7 @@ export function createRoom(definition: RoomDefinition): Room {
   validateBoss(definition);
   validateExits(definition, tilemap);
   validateLabels(definition, tilemap);
+  validateBenches(definition, tilemap);
 
   return {
     definition,
@@ -130,6 +148,36 @@ export function createRoom(definition: RoomDefinition): Room {
     bounds: { x: 0, y: 0, w: tilemap.pixelWidth, h: tilemap.pixelHeight },
     spawn: { x, y },
   };
+}
+
+/**
+ * True when a feet-center position has solid ground under it and no wall cells in the
+ * body volume. Used by bench validation and by the save loader, so a hand-edited save can
+ * never put the hero inside masonry.
+ */
+export function isStandingPoint(
+  tilemap: Tilemap,
+  point: RoomSpawn,
+  body: { readonly w: number; readonly h: number },
+): boolean {
+  const tile = RENDER.tileSize;
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+  if (point.x < 0 || point.x >= tilemap.pixelWidth) return false;
+  if (point.y <= 0 || point.y > tilemap.pixelHeight) return false;
+
+  const footTx = Math.floor(point.x / tile);
+  const groundTy = Math.floor(point.y / tile);
+  if (!tilemap.isSolid(footTx, groundTy)) return false;
+
+  const leftTx = Math.floor((point.x - body.w / 2) / tile);
+  const rightTx = Math.floor((point.x + body.w / 2 - 0.001) / tile);
+  const topTy = Math.floor((point.y - body.h + 0.001) / tile);
+  for (let ty = topTy; ty < groundTy; ty += 1) {
+    for (let tx = leftTx; tx <= rightTx; tx += 1) {
+      if (tilemap.isWall(tx, ty)) return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -252,6 +300,46 @@ function validateLabels(definition: RoomDefinition, tilemap: Tilemap): void {
     }
     if (label.size !== undefined && !(label.size > 0)) {
       throw new BellwardError(`${where}: size must be positive`);
+    }
+  }
+}
+
+/** Benches must stand on the floor and their respawn point must fit the hero body. */
+function validateBenches(definition: RoomDefinition, tilemap: Tilemap): void {
+  const ids = new Set<string>();
+  const tile = RENDER.tileSize;
+  for (const [index, bench] of (definition.benches ?? []).entries()) {
+    const where = `room "${definition.id}" bench ${index}`;
+    if (!bench.id.trim()) throw new BellwardError(`${where}: id is empty`);
+    if (ids.has(bench.id)) throw new BellwardError(`${where}: duplicate bench id "${bench.id}"`);
+    ids.add(bench.id);
+    if (!bench.name.trim()) throw new BellwardError(`${where}: name is empty`);
+    if (!Number.isFinite(bench.x) || !Number.isFinite(bench.y)) {
+      throw new BellwardError(`${where}: position must be finite`);
+    }
+    if (
+      bench.x < 0 ||
+      bench.x >= tilemap.pixelWidth ||
+      bench.y <= 0 ||
+      bench.y > tilemap.pixelHeight
+    ) {
+      throw new BellwardError(`${where}: marker (${bench.x},${bench.y}) leaves the room`);
+    }
+    if (!tilemap.isSolid(Math.floor(bench.x / tile), Math.floor(bench.y / tile))) {
+      throw new BellwardError(`${where}: marker (${bench.x},${bench.y}) is not on solid ground`);
+    }
+    if (!isStandingPoint(tilemap, bench.spawn, PLAYER.size)) {
+      throw new BellwardError(
+        `${where}: spawn (${bench.spawn.x},${bench.spawn.y}) is not a clear standing point`,
+      );
+    }
+    if (
+      Math.abs(bench.spawn.x - bench.x) > BENCH.interactRadiusX ||
+      Math.abs(bench.spawn.y - bench.y) > BENCH.interactRadiusY
+    ) {
+      throw new BellwardError(
+        `${where}: spawn (${bench.spawn.x},${bench.spawn.y}) is outside its interaction range`,
+      );
     }
   }
 }

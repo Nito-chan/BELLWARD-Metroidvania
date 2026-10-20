@@ -9,11 +9,12 @@ import './menu.css';
 import type { MenuDebugState } from '../../debug/DebugState';
 import type { ActionName } from '../../config/input';
 import type { Bindings } from '../../input/bindings';
+import type { MapSnapshot } from '../map/mapTypes';
 import { MenuModel } from './MenuModel';
 import { MenuPad, type MenuDirection } from './MenuPad';
 import { MenuView } from './MenuView';
 import { ACTION_ORDER, bindingFocusId } from './menuContent';
-import type { MenuAudio } from './menuTypes';
+import type { MenuAudio, MenuScreen } from './menuTypes';
 
 export type MenuSystemOptions = {
   bindings: Bindings;
@@ -21,6 +22,10 @@ export type MenuSystemOptions = {
   applyBindings: (next: Bindings) => void;
   /** Called after the menu hides itself; Game resumes the loop here. */
   onClose: () => void;
+  /** Current chart data, built when the map screen renders. */
+  getMap: () => MapSnapshot;
+  /** Live keyboard codes for the map action, so M toggles the map closed too. */
+  mapKeyCodes: () => readonly string[];
 };
 
 const NATIVE_RANGE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
@@ -40,6 +45,7 @@ export class MenuSystem {
     this.view = new MenuView({
       onCommand: (command) => this.onCommand(command),
       onVolume: (bus, value) => this.model.setVolume(bus, value),
+      getMap: () => this.options.getMap(),
     });
     this.pad = new MenuPad({
       captureKind: () => this.model.capture?.kind ?? null,
@@ -73,10 +79,10 @@ export class MenuSystem {
     document.addEventListener('keydown', this.onKeyDown, { capture: true });
   }
 
-  open(): void {
+  open(screen: MenuScreen = 'pause'): void {
     if (this.openValue) return;
     this.openValue = true;
-    this.model.open();
+    this.model.open(screen);
     this.view.show();
     this.setGameInert(true);
     this.view.render(this.model, null, true);
@@ -115,7 +121,7 @@ export class MenuSystem {
       this.requestClose();
       return;
     }
-    if (command === 'settings' || command === 'controls') {
+    if (command === 'settings' || command === 'controls' || command === 'map') {
       this.model.navigate(command);
       this.view.render(this.model, null, true);
       return;
@@ -206,6 +212,15 @@ export class MenuSystem {
       target.type === 'range' &&
       NATIVE_RANGE_KEYS.has(code)
     ) {
+      return;
+    }
+
+    // The map's own action closes it, matching the shortcut that opened it. Rebinding
+    // the action updates the code list live, so this is never a hard-coded M.
+    if (this.model.screen === 'map' && this.options.mapKeyCodes().includes(code)) {
+      this.handleBack();
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
 

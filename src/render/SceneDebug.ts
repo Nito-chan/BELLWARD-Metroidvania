@@ -13,6 +13,7 @@ export type SceneDebugInput = {
   player: PlayerController;
   enemies: readonly Enemy[];
   boss: BossEncounter | null;
+  bench: { readonly id: string; readonly name: string } | null;
   projectiles: number;
   hitstop: number;
 };
@@ -64,6 +65,7 @@ export function buildSceneDebugState(input: SceneDebugInput): SceneDebugState {
       };
     }),
     boss: input.boss?.debugState() ?? null,
+    bench: input.bench ? { ...input.bench, inRange: true } : null,
     exitLocked: input.boss?.alive ?? false,
     projectiles: input.projectiles,
     hitstop: input.hitstop,

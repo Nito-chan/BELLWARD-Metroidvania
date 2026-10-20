@@ -125,6 +125,19 @@ export const belfryTerrace: RoomDefinition = {
   labels: [{ x: 884, y: 228, text: 'THE BELL NAVE', color: 'echo' }],
   spawn: { x: 420, y: 320 },
   /**
+   * The first rest point stands just left of the broken bell. Its respawn point is
+   * deliberately offset from the seat so the hero never wakes inside the stone.
+   */
+  benches: [
+    {
+      id: 'terrace-weeping-stone',
+      name: 'The Weeping Stone',
+      x: 608,
+      y: 320,
+      spawn: { x: 566, y: 320 },
+    },
+  ],
+  /**
    * Combat is deliberately off the spawn pocket (420..660) so the first frames stay
    * readable: two parishioners haunt the left walkway, the ghoul guards the beam bridge
    * above, and the adept waits beyond the dais in the far-right pocket.

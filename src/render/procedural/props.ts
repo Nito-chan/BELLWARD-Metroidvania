@@ -8,6 +8,7 @@ export const PROP_SIZES: Record<PropKey, { w: number; h: number }> = {
   column: { w: 64, h: 140 },
   bell: { w: 64, h: 96 },
   door: { w: 48, h: 88 },
+  bench: { w: 64, h: 38 },
 };
 
 export const PROP_PAINTERS: Record<PropKey, Painter> = {
@@ -117,5 +118,35 @@ export const PROP_PAINTERS: Record<PropKey, Painter> = {
     ctx.fillRect(19, 20, 10, 2);
     ctx.fillStyle = hex(PALETTE.ember);
     ctx.fillRect(23, 24, 2, 2);
+  },
+  bench: (ctx) => {
+    // Low stone seat with a brass bell inlay: readable at 640x360 without reading as a door.
+    ctx.fillStyle = hex(PALETTE.stone);
+    ctx.fillRect(4, 21, 56, 7);
+    ctx.fillRect(9, 28, 7, 10);
+    ctx.fillRect(48, 28, 7, 10);
+    ctx.fillStyle = hex(PALETTE.stoneLit);
+    ctx.fillRect(4, 21, 56, 2);
+    ctx.fillRect(9, 28, 7, 2);
+    ctx.fillRect(48, 28, 7, 2);
+    ctx.fillStyle = hex(PALETTE.cavern);
+    ctx.fillRect(12, 28, 40, 2);
+    ctx.fillStyle = hex(PALETTE.void);
+    ctx.fillRect(4, 36, 56, 2);
+    // The seat's back rail, then the bell mark that tells a rest point from scenery.
+    ctx.fillStyle = hex(PALETTE.brassDark);
+    ctx.fillRect(10, 13, 44, 3);
+    ctx.fillRect(10, 16, 3, 6);
+    ctx.fillRect(51, 16, 3, 6);
+    ctx.fillStyle = hex(PALETTE.brass);
+    ctx.beginPath();
+    ctx.moveTo(28, 16);
+    ctx.lineTo(36, 16);
+    ctx.lineTo(39, 19);
+    ctx.lineTo(25, 19);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = hex(PALETTE.ember);
+    ctx.fillRect(31, 18, 2, 2);
   },
 };

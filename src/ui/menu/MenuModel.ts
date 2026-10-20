@@ -64,8 +64,8 @@ export class MenuModel {
     return this.bindingsValue;
   }
 
-  open(): void {
-    this.screenValue = 'pause';
+  open(screen: MenuScreen = 'pause'): void {
+    this.screenValue = screen;
     this.captureValue = null;
     this.statusValue = '';
     this.toneValue = 'info';
@@ -88,13 +88,13 @@ export class MenuModel {
     this.resetArmedValue = false;
   }
 
-  /** Escape / Back: cancels capture, backs one screen, or closes from pause. */
+  /** Escape / Back: cancels capture, backs one screen, or closes from pause/map. */
   back(): BackResult {
     if (this.captureValue) {
       this.cancelCapture();
       return 'cancelled';
     }
-    if (this.screenValue === null || this.screenValue === 'pause') {
+    if (this.screenValue === null || this.screenValue === 'pause' || this.screenValue === 'map') {
       this.close();
       return 'closed';
     }

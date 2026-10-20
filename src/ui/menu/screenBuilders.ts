@@ -15,6 +15,7 @@ export function buildPauseScreen(): HTMLElement {
     { label: 'Resume', command: 'resume', focusId: 'pause:resume' },
     { label: 'Settings', command: 'settings', focusId: 'pause:settings' },
     { label: 'Controls', command: 'controls', focusId: 'pause:controls' },
+    { label: 'Map', command: 'map', focusId: 'pause:map' },
   ];
   items.forEach((item, index) => {
     const button = makeButton('', item.command, 'menu-option');
@@ -90,7 +91,7 @@ export function buildControlsScreen(model: MenuModel): HTMLElement {
   return wrap;
 }
 
-function buildBackRow(row: number): HTMLElement {
+export function buildBackRow(row: number): HTMLElement {
   const wrap = el('div', 'screen-back-row');
   const back = makeButton('Back', 'back', 'menu-back-button');
   markNav(back, BACK_FOCUS_ID, row, 0);

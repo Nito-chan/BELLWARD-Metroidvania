@@ -2,7 +2,7 @@
 import type { AudioBus, AudioMix } from '../../audio/AudioManager';
 import type { ActionName } from '../../config/input';
 
-export type MenuScreen = 'pause' | 'settings' | 'controls';
+export type MenuScreen = 'pause' | 'settings' | 'controls' | 'map';
 export type BindingKind = 'key' | 'pad';
 
 export type CaptureTarget = {

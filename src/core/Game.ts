@@ -2,27 +2,24 @@ import { Application, Rectangle } from 'pixi.js';
 import { AudioManager } from '../audio/AudioManager';
 import { HowlerBackend } from '../audio/HowlerBackend';
 import { AUDIO } from '../config/audio';
-import { BOSS_REWARDS } from '../config/bossTypes';
-import { COMBAT } from '../config/combat';
 import { DEBUG } from '../config/debug';
-import type { BossKind } from '../config/enemies';
 import { PALETTE } from '../config/palette';
 import { RENDER } from '../config/render';
 import { SIM, VIEW, WORLD } from '../config/world';
-import { DEFAULT_ROOM_ID, getRoom } from '../data/rooms';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
 import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
 import { Announcer } from '../ui/Announcer';
 import { MenuSystem } from '../ui/menu/MenuSystem';
+import type { MenuScreen } from '../ui/menu/menuTypes';
 import { ArtProvider } from '../render/ArtProvider';
-import { RoomScene } from '../render/RoomScene';
-import { createRoom, type RoomSpawn } from '../world/Room';
+import type { RoomSpawn } from '../world/Room';
 import { BellwardError, formatError } from './Errors';
 import { EventBus } from './EventBus';
 import { Loop } from './Loop';
 import { Rng } from './Rng';
+import { RunSession } from './RunSession';
 import type { GameEvents } from './Types';
 
 /** Result of Game.sampleFrame(): a cheap framebuffer read-back probe for smoke tests. */
@@ -47,6 +44,7 @@ export class Game {
   private readonly overlay = new DebugOverlay();
   private readonly announcer = new Announcer();
   private readonly audio = new AudioManager(new HowlerBackend(), { rng: this.rng.fork() });
+  private readonly run = new RunSession();
   private readonly loop = new Loop({
     dt: SIM.dt,
     maxFrameTime: SIM.maxFrameTime,
@@ -58,18 +56,13 @@ export class Game {
   private readonly input: InputManager;
   private readonly menu: MenuSystem;
 
-  private scene: RoomScene | null = null;
-  private art: ArtProvider | null = null;
   private ready = false;
-  private roomId = DEFAULT_ROOM_ID;
-  /** Boss sigils claimed this run. M7 persists this set; M6 only carries it in memory. */
-  private readonly sigils = new Set<BossKind>();
   private lastWholeSecond = 0;
   private overlayFrameCounter = 0;
-  /** Suppress the pause edge that closes a menu on the first resumed tick. */
-  private pauseLatch = false;
-  /** Physical pause keys currently down; survives an InputManager reset. */
-  private readonly pauseKeysDown = new Set<string>();
+  /** Suppress the menu key edges that closed an overlay on the first resumed tick. */
+  private menuLatch = false;
+  /** Physical menu keys currently down; survives an InputManager reset. */
+  private readonly menuKeysDown = new Set<string>();
 
   constructor() {
     this.bindings = loadBindings();
@@ -79,11 +72,13 @@ export class Game {
       audio: this.audio,
       applyBindings: (next) => {
         this.bindings = next;
-        this.pauseKeysDown.clear();
+        this.menuKeysDown.clear();
         this.input.setBindings(next);
         saveBindings(next);
       },
       onClose: () => this.resumeFromMenu(),
+      getMap: () => this.run.mapSnapshot(),
+      mapKeyCodes: () => this.bindings.keyboard.map,
     });
   }
 
@@ -118,15 +113,21 @@ export class Game {
     mount.appendChild(this.app.canvas);
     this.app.canvas.setAttribute('tabindex', '0');
 
-    this.art = await ArtProvider.load();
-    this.enterRoom(DEFAULT_ROOM_ID);
+    const art = await ArtProvider.load();
+    this.run.begin({
+      art,
+      audio: this.audio,
+      rng: this.rng,
+      stage: this.app.stage,
+      announce: (text) => this.announcer.say(text),
+    });
     window.addEventListener('resize', this.onResize);
     this.onResize();
 
     this.overlay.mount();
     this.menu.mount();
-    window.addEventListener('keydown', this.onPauseKeyDown, true);
-    window.addEventListener('keyup', this.onPauseKeyUp, true);
+    window.addEventListener('keydown', this.onMenuKeyDown, true);
+    window.addEventListener('keyup', this.onMenuKeyUp, true);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
@@ -153,8 +154,9 @@ export class Game {
       simTime: this.loop.stats.simTime,
       smoothedFps: this.loop.stats.smoothedFps,
       renderer: this.ready ? this.app.renderer.name : 'none',
-      scene: this.scene?.debugState() ?? null,
-      run: { sigils: [...this.sigils], maxHp: this.maxHp() },
+      scene: this.run.scene?.debugState() ?? null,
+      run: this.run.progress.debugRun(this.run.roomId),
+      save: this.run.progress.debugSave(),
       audio: this.audio.debugState(),
       menu: this.menu.debugState(),
       errors: [...this.errors],
@@ -189,10 +191,19 @@ export class Game {
     if (this.menu.isOpen) return;
     const snapshot = this.input.snapshot();
 
-    if (this.pauseLatch) {
-      if (this.pauseKeysDown.size === 0 && !snapshot.held.has('pause')) this.pauseLatch = false;
+    if (this.menuLatch) {
+      if (
+        this.menuKeysDown.size === 0 &&
+        !snapshot.held.has('pause') &&
+        !snapshot.held.has('map')
+      ) {
+        this.menuLatch = false;
+      }
     } else if (snapshot.pressed.has('pause')) {
-      this.openMenu();
+      this.openMenu('pause');
+      return;
+    } else if (snapshot.pressed.has('map')) {
+      this.openMenu('map');
       return;
     }
 
@@ -201,105 +212,64 @@ export class Game {
       this.lastWholeSecond = wholeSecond;
       this.events.emit('secondElapsed', { seconds: wholeSecond });
     }
-    if (this.scene) {
-      const scene = this.scene;
-      const events = scene.update(this.loop.stats.tickCount, snapshot);
+    if (this.run.scene) {
+      const events = this.run.tick(this.loop.stats.tickCount, snapshot);
       for (const event of events) this.audio.onPlayerEvent(event);
-      const defeated = scene.consumeBossDefeat();
-      if (defeated) this.sigils.add(defeated);
-      const exit = scene.exitRequested;
-      if (exit) {
-        this.enterRoom(exit.roomId, exit.spawn, scene.vitals);
-      } else if (scene.resetRequested) {
-        this.resetScene();
-      }
     }
     this.audio.tick(this.loop.stats.tickCount);
   }
 
   /** Freezes the simulation but keeps rendering the scene behind the overlay. */
-  private openMenu(): void {
+  private openMenu(screen: MenuScreen): void {
     this.input.reset();
     this.loop.pause();
-    this.menu.open();
+    this.menu.open(screen);
   }
 
-  /** Resumes from the pause overlay without letting a held pause input re-open it. */
+  /** Resumes from the overlay without letting a held pause/map input re-open it. */
   private resumeFromMenu(): void {
-    this.pauseLatch = true;
+    this.menuLatch = true;
     this.input.reset();
     this.loop.resume();
     this.app.canvas.focus();
   }
 
-  /** Builds a room and makes it the active scene, carrying vitals and run progress. */
-  private enterRoom(
-    roomId: string,
-    spawn?: RoomSpawn,
-    carry?: { hp: number; maxHp: number },
-  ): void {
-    if (!this.art) {
-      throw new BellwardError('enterRoom() called before art finished loading');
-    }
-    const definition = getRoom(roomId);
-    const room = createRoom(definition);
-    const maxHp = carry?.maxHp ?? this.maxHp();
-    const hp = carry?.hp ?? maxHp;
-    const scene = new RoomScene(room, this.art, this.rng.fork(), this.audio, {
-      spawn,
-      hp,
-      maxHp,
-      sigilCount: this.sigils.size,
-      bossRewardClaimed: definition.boss ? this.sigils.has(definition.boss) : false,
-      announce: (text) => this.announcer.say(text),
-    });
-    const previous = this.scene;
-    this.scene = scene;
-    this.roomId = roomId;
-    this.app.stage.addChild(scene.view);
-    if (previous) previous.destroy();
-    this.audio.requestMusic(definition.music ?? 'terrace');
-  }
-
-  /** Current maximum masks: base plus one per claimed sigil. */
-  private maxHp(): number {
-    return COMBAT.player.maxHp + this.sigils.size * BOSS_REWARDS.maxHpPerSigil;
-  }
-
-  /** Replaces the dead room with a clean one at full health, preserving sigils. */
-  private resetScene(): void {
-    const maxHp = this.maxHp();
-    this.enterRoom(this.roomId, undefined, { hp: maxHp, maxHp });
-  }
-
-  /** DEV-only: jump straight into a room for boss/door E2E coverage. */
-  debugLoadRoom(roomId: string): void {
+  /** DEV-only: jump straight into a room (optionally at a validated spawn) for E2E. */
+  debugLoadRoom(roomId: string, spawn?: RoomSpawn): void {
     if (!this.ready) throw new BellwardError('debugLoadRoom() called before boot() completed');
     // A test may jump rooms between a keydown and keyup; never carry a held run key.
     this.input.reset();
-    const maxHp = this.maxHp();
-    this.enterRoom(roomId, undefined, { hp: maxHp, maxHp });
+    this.run.debugLoadRoom(roomId, spawn);
+  }
+
+  /** DEV-only: kill the hero through the real damage path for respawn coverage. */
+  debugKillPlayer(): boolean {
+    return this.run.scene?.debugKillPlayer() ?? false;
+  }
+
+  /** DEV-only: hold i-frames open while a probe inspects boss phases. */
+  debugProtectPlayer(): boolean {
+    return this.run.scene?.debugProtectPlayer(DEBUG.protectTicks) ?? false;
   }
 
   /** DEV-only: route damage through the boss's real phase/gate logic. */
   debugDamageBoss(amount: number): boolean {
-    return this.scene?.debugDamageBoss(amount) ?? false;
+    return this.run.scene?.debugDamageBoss(amount) ?? false;
   }
 
   /** DEV-only: break the Bellbearer's shield without replaying the wall charge. */
   debugBreakWard(): boolean {
-    return this.scene?.debugBreakWard() ?? false;
+    return this.run.scene?.debugBreakWard() ?? false;
   }
 
   /** DEV-only: kill the active boss to exercise rewards, banners and door unlocking. */
   debugDefeatBoss(): void {
-    this.scene?.debugDefeatBoss();
+    this.run.scene?.debugDefeatBoss();
   }
 
   private onRender(alpha: number): void {
-    if (this.scene) {
-      this.scene.render(alpha);
-    }
+    const scene = this.run.scene;
+    if (scene) scene.render(alpha);
     this.app.render();
     this.overlayFrameCounter += 1;
     if (this.overlay.visible && this.overlayFrameCounter >= DEBUG.overlayUpdateEveryFrames) {
@@ -316,12 +286,15 @@ export class Game {
     this.app.canvas.style.height = `${VIEW.height * scale}px`;
   };
 
-  private readonly onPauseKeyDown = (event: KeyboardEvent): void => {
-    if (this.bindings.keyboard.pause.includes(event.code)) this.pauseKeysDown.add(event.code);
+  private readonly onMenuKeyDown = (event: KeyboardEvent): void => {
+    const keyboard = this.bindings.keyboard;
+    if (keyboard.pause.includes(event.code) || keyboard.map.includes(event.code)) {
+      this.menuKeysDown.add(event.code);
+    }
   };
 
-  private readonly onPauseKeyUp = (event: KeyboardEvent): void => {
-    this.pauseKeysDown.delete(event.code);
+  private readonly onMenuKeyUp = (event: KeyboardEvent): void => {
+    this.menuKeysDown.delete(event.code);
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -350,7 +323,7 @@ export class Game {
   /** Losing focus mid-keypress must not leave the hero running forever. */
   private readonly onBlur = (): void => {
     this.input.blur();
-    this.pauseKeysDown.clear();
+    this.menuKeysDown.clear();
   };
 
   /**

@@ -33,6 +33,17 @@ export const belfryAntechamber: RoomDefinition = {
     { x: 800, y: 228, text: 'III · THE BELL THIEF', color: 'brass' },
   ],
   spawn: { x: 80, y: 320 },
+  benches: [
+    {
+      // West of the Bellbearer door: reachable from the terrace spawn and from every
+      // arena return without forcing the player through a boss doorway to rest.
+      id: 'nave-bell-keepers-rest',
+      name: "The Bell-Keeper's Rest",
+      x: 104,
+      y: 320,
+      spawn: { x: 64, y: 320 },
+    },
+  ],
   exits: [
     { x: 8, y: 260, w: 48, h: 60, targetRoomId: 'belfry-terrace', spawn: { x: 860, y: 320 } },
     {

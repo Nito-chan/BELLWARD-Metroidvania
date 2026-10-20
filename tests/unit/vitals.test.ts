@@ -41,4 +41,14 @@ describe('PlayerVitals', () => {
     expect(player.maxHp).toBe(6);
     expect(player.hp).toBe(3);
   });
+
+  it('holds debug i-frames open for a deterministic state probe', () => {
+    const vitals = new PlayerVitals(5, 5);
+    while (vitals.invulnerableTicks > 0) vitals.tick();
+    vitals.debugProtect(2);
+    expect(vitals.damage(1)).toBe(false);
+    vitals.tick();
+    vitals.tick();
+    expect(vitals.damage(1)).toBe(true);
+  });
 });

@@ -33,7 +33,10 @@ async function main(): Promise<void> {
       value: Object.freeze({
         debugState: () => game.debugState(),
         sampleFrame: () => game.sampleFrame(),
-        debugLoadRoom: (roomId: string) => game.debugLoadRoom(roomId),
+        debugLoadRoom: (roomId: string, spawn?: { x: number; y: number }) =>
+          game.debugLoadRoom(roomId, spawn),
+        debugKillPlayer: () => game.debugKillPlayer(),
+        debugProtectPlayer: () => game.debugProtectPlayer(),
         debugDamageBoss: (amount: number) => game.debugDamageBoss(amount),
         debugBreakWard: () => game.debugBreakWard(),
         debugDefeatBoss: () => game.debugDefeatBoss(),

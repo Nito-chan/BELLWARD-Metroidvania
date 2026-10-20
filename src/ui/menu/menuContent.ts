@@ -46,6 +46,15 @@ export const SCREEN_COPY: Readonly<
       { keys: 'Esc', label: 'Back' },
     ],
   },
+  map: {
+    eyebrow: 'The Drowned Belfry',
+    title: 'Region Map',
+    subtitle: 'Every bell has a room; every room remembers.',
+    hints: [
+      { keys: 'Esc', label: 'Close' },
+      { keys: 'M', label: 'Close' },
+    ],
+  },
 };
 
 export const ACTION_ORDER: readonly ActionName[] = [
@@ -93,6 +102,7 @@ export function bindingFocusId(action: ActionName, kind: BindingKind, slot: numb
 export function defaultFocusId(screen: MenuScreen): string {
   if (screen === 'pause') return 'pause:resume';
   if (screen === 'settings') return 'settings:master';
+  if (screen === 'map') return BACK_FOCUS_ID;
   return bindingFocusId('jump', 'key', 0);
 }
 

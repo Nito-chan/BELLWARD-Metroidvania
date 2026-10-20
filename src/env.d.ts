@@ -9,7 +9,9 @@ declare global {
     __game?: {
       debugState: () => GameDebugState;
       sampleFrame: () => FrameSample;
-      debugLoadRoom: (roomId: string) => void;
+      debugLoadRoom: (roomId: string, spawn?: { x: number; y: number }) => void;
+      debugKillPlayer: () => boolean;
+      debugProtectPlayer: () => boolean;
       debugDamageBoss: (amount: number) => boolean;
       debugBreakWard: () => boolean;
       debugDefeatBoss: () => void;

@@ -16,6 +16,8 @@
  *      (--controls opens the pause overlay, then the bindings screen)
  *      (--settings opens the pause overlay, then the sound screen)
  *      (--small captures any menu screen at the 640x360 E2E viewport)
+ *      (--bench loads the terrace beside the bench and captures the rest prompt)
+ *      (--map charts every room, rests at the nave, claims one sigil, then captures the map)
  *      (--combat walks into the nearest parishioner and shoots on the first impact)
  *      (--boss loads a boss arena through the debug handle; --boss-room=<id> selects it)
  *      (--boss-phase captures a phase banner after crossing the threshold; add --boss-room=<id>)
@@ -45,8 +47,11 @@ const menuShot =
   args.includes('--menu') || args.includes('--controls') || args.includes('--settings');
 const controlsShot = args.includes('--controls');
 const settingsShot = args.includes('--settings');
-/** Menus are normally captured at 1280x720; --small checks the 640x360 E2E viewport. */
+const benchShot = args.includes('--bench');
+const mapShot = args.includes('--map');
+/** Menus and the chart are normally captured at 1280x720; --small checks the 640x360 view. */
 const smallShot = args.includes('--small');
+const pageShot = overlayShot || menuShot || mapShot;
 const outputPath = resolve(
   args.find((value) => !value.startsWith('--')) ?? 'docs/screenshots/current.png',
 );
@@ -56,7 +61,7 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
   try {
     const page = await browser.newPage({
-      viewport: menuShot && !smallShot ? { width: 1280, height: 720 } : { width: 640, height: 360 },
+      viewport: pageShot && !smallShot ? { width: 1280, height: 720 } : { width: 640, height: 360 },
     });
     const response = await page.goto(url).catch(() => null);
     if (!response || !response.ok()) {
@@ -157,6 +162,53 @@ async function main(): Promise<void> {
         })
         .catch(() => console.warn('screenshot: no impact frame observed; capturing anyway'));
     }
+    if (benchShot) {
+      await page.evaluate(() => window.__game?.debugLoadRoom('belfry-terrace', { x: 590, y: 320 }));
+      await page.waitForFunction(
+        () => window.__game?.debugState().scene?.bench?.inRange === true,
+        undefined,
+        { timeout: 10_000 },
+      );
+    }
+    if (mapShot) {
+      const visitRoom = async (roomId: string): Promise<void> => {
+        await page.evaluate((id) => window.__game?.debugLoadRoom(id), roomId);
+        await page.waitForFunction(
+          (id) => window.__game?.debugState().scene?.roomId === id,
+          roomId,
+          { timeout: 10_000 },
+        );
+      };
+
+      await page.evaluate(() =>
+        window.__game?.debugLoadRoom('belfry-antechamber', { x: 90, y: 320 }),
+      );
+      await page.waitForFunction(
+        () => window.__game?.debugState().scene?.bench?.inRange === true,
+        undefined,
+        { timeout: 10_000 },
+      );
+      await page.keyboard.press('KeyE');
+      await page.waitForFunction(
+        () => window.__game?.debugState().run.checkpoint?.benchId === 'nave-bell-keepers-rest',
+        undefined,
+        { timeout: 10_000 },
+      );
+      await visitRoom('bellbearer-arena');
+      await page.evaluate(() => window.__game?.debugDefeatBoss());
+      await page.waitForFunction(
+        () => window.__game?.debugState().run.sigils.includes('bellbearer'),
+        undefined,
+        { timeout: 10_000 },
+      );
+      await visitRoom('warden-arena');
+      await visitRoom('bellthief-arena');
+      await visitRoom('belfry-antechamber');
+      await page.keyboard.press('KeyM');
+      await page
+        .getByRole('dialog', { name: 'Region Map' })
+        .waitFor({ state: 'visible', timeout: 5_000 });
+    }
     if (menuShot) {
       await page.keyboard.press('Escape');
       await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 5_000 });
@@ -189,11 +241,21 @@ async function main(): Promise<void> {
       });
     }
     await page.waitForTimeout(
-      menuShot ? 320 : combatShot ? 40 : bossPhaseShot ? 120 : bossShot ? 30 : settleMs,
+      menuShot || mapShot
+        ? 320
+        : benchShot
+          ? 120
+          : combatShot
+            ? 40
+            : bossPhaseShot
+              ? 120
+              : bossShot
+                ? 30
+                : settleMs,
     );
     await mkdir(dirname(outputPath), { recursive: true });
     // DOM overlays only appear in a whole-page shot; gameplay uses the canvas alone.
-    const target = overlayShot || menuShot ? page : page.locator('canvas');
+    const target = pageShot ? page : page.locator('canvas');
     await target.screenshot({ path: outputPath });
     if (runShot) await page.keyboard.up('ArrowLeft');
     console.log(`screenshot: saved ${outputPath}`);

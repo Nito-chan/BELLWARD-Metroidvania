@@ -8,6 +8,16 @@ export async function bootGame(page: Page): Promise<void> {
   });
 }
 
+/** Reloads the page and waits for the autosaved run to boot. */
+export async function reloadGame(page: Page): Promise<void> {
+  await page.reload();
+  await page.waitForFunction(
+    () => window.__game?.debugState().ready === true && window.__game?.debugState().scene !== null,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
 export async function debugState(page: Page): Promise<GameDebugState> {
   return page.evaluate(() => {
     const game = window.__game;
@@ -17,12 +27,19 @@ export async function debugState(page: Page): Promise<GameDebugState> {
 }
 
 /** Jumps to a room through the DEV handle and waits for the new scene to mount. */
-export async function loadRoom(page: Page, roomId: string): Promise<void> {
-  await page.evaluate((id) => {
-    const game = window.__game;
-    if (!game) throw new Error('window.__game is not available (DEV build required)');
-    game.debugLoadRoom(id);
-  }, roomId);
+export async function loadRoom(
+  page: Page,
+  roomId: string,
+  spawn?: { readonly x: number; readonly y: number },
+): Promise<void> {
+  await page.evaluate(
+    ({ id, at }) => {
+      const game = window.__game;
+      if (!game) throw new Error('window.__game is not available (DEV build required)');
+      game.debugLoadRoom(id, at);
+    },
+    { id: roomId, at: spawn },
+  );
   await page.waitForFunction((id) => window.__game?.debugState().scene?.roomId === id, roomId, {
     timeout: 15_000,
   });

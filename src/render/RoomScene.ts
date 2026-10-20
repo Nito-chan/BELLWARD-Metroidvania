@@ -11,9 +11,11 @@ import { createEnemy } from '../enemies/createEnemy';
 import type { Enemy, EnemyContext } from '../enemies/Enemy';
 import type { InputSnapshot } from '../input/InputState';
 import { PlayerController, type PlayerEvent } from '../player/PlayerController';
+import { Banner } from '../ui/Banner';
 import { Hud } from '../ui/Hud';
-import type { Room, RoomSpawn } from '../world/Room';
+import type { Room, RoomBench, RoomSpawn } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
+import { BenchInteraction } from './BenchInteraction';
 import type { BossEncounter } from './BossEncounter';
 import { spawnBoss } from './BossSpawn';
 import { Camera } from './Camera';
@@ -42,6 +44,13 @@ export type RoomSceneOptions = {
   bossRewardClaimed?: boolean;
   /** Screen-reader announcement hook; the scene never touches the DOM. */
   announce?: (text: string) => void;
+  /** Optional arrival banner shown above the HUD for a rest or respawn. */
+  arrival?: RoomArrival;
+};
+
+export type RoomArrival = {
+  readonly title: string;
+  readonly subtitle: string;
 };
 
 /**
@@ -68,6 +77,10 @@ export class RoomScene {
   private readonly feedback: CombatFeedback;
   private readonly exitGate = new ExitGate();
   private readonly bossEncounter: BossEncounter | null = null;
+  private readonly bench: BenchInteraction;
+  private readonly banner = new Banner();
+  private readonly announce: (text: string) => void;
+  private readonly arrival: RoomArrival | null;
   private sigilCount: number;
   private pendingBossDefeatValue: BossKind | null = null;
   private hitstopTicks = 0;
@@ -85,6 +98,8 @@ export class RoomScene {
     const maxHp = options.maxHp ?? COMBAT.player.maxHp;
     const hp = options.hp ?? maxHp;
     this.sigilCount = options.sigilCount ?? 0;
+    this.announce = options.announce ?? (() => undefined);
+    this.arrival = options.arrival ?? null;
     this.player = new PlayerController(spawn, { maxHp, hp });
     this.camera.snapTo(spawn.x, spawn.y + CAMERA.focusOffsetY);
     this.backdrop = new SceneBackdrop(room, art, rng.fork());
@@ -95,6 +110,8 @@ export class RoomScene {
     if (room.definition.labels && room.definition.labels.length > 0) {
       this.world.addChild(new LabelLayer(room.definition.labels).view);
     }
+    this.bench = new BenchInteraction(room.definition.benches ?? [], art, this.announce);
+    this.world.addChild(this.bench.worldView);
 
     this.actorLayer.sortableChildren = true;
     this.heroView = new HeroView(art);
@@ -139,13 +156,19 @@ export class RoomScene {
     this.world.addChild(new PropLayer(room.definition.props, 'front', art).view);
     this.view.addChild(this.world);
     this.view.addChild(this.backdrop.overlayView);
+    this.view.addChild(this.bench.screenView);
     this.view.addChild(this.hud.view);
+    this.view.addChild(this.banner.view);
     if (this.bossEncounter) this.view.addChild(this.bossEncounter.overlay);
     this.hud.setHealth(this.player.hp, this.player.maxHp);
     this.hud.setSigils(this.sigilCount, BOSS_KINDS.length);
+    if (this.arrival) {
+      this.banner.show(this.arrival.title, this.arrival.subtitle);
+      this.announce(`${this.arrival.title}. ${this.arrival.subtitle}.`);
+    }
   }
 
-  /** True once the death sequence finished; the Game rebuilds the room on the next tick. */
+  /** True once the death sequence finished; RunSession rebuilds the room on the next tick. */
   get resetRequested(): boolean {
     return this.resetRequestedValue;
   }
@@ -155,16 +178,34 @@ export class RoomScene {
     return { hp: this.player.hp, maxHp: this.player.maxHp };
   }
 
-  /** A door the player has walked into, or null. Consumed by the Game after update. */
+  /** A door the player walked into, or null. Consumed by RunSession after update. */
   get exitRequested(): ExitRequest | null {
     return this.exitGate.request;
   }
 
-  /** A first-time boss reward that the Game should record as a run sigil. */
+  /** A first-time boss reward that RunSession should record as a run sigil. */
   consumeBossDefeat(): BossKind | null {
     const kind = this.pendingBossDefeatValue;
     this.pendingBossDefeatValue = null;
     return kind;
+  }
+
+  /** A bench the player invoked this tick; RunSession saves and rebuilds the room. */
+  consumeBenchRest(): RoomBench | null {
+    return this.bench.consumeRest();
+  }
+
+  /** DEV-only: kill the hero through the real damage path for respawn coverage. */
+  debugKillPlayer(): boolean {
+    if (!this.player.dead) this.player.takeDamage(999, this.player.feet.x + 1);
+    return this.player.dead;
+  }
+
+  /** DEV-only: hold i-frames open while a probe inspects boss phases. */
+  debugProtectPlayer(ticks: number): boolean {
+    if (this.player.dead) return false;
+    this.player.debugProtect(ticks);
+    return true;
   }
 
   /** DEV-only E2E hooks. They route through the real damage/ward/defeat paths. */
@@ -224,6 +265,8 @@ export class RoomScene {
     this.removeFallenEnemies();
     this.syncViews(tickCount);
     this.updateHud();
+    this.bench.update(this.player.feet, this.player.dead, input.pressed.has('interact'), tickCount);
+    this.banner.tick();
 
     const feet = this.player.feet;
     this.camera.update(
@@ -262,6 +305,7 @@ export class RoomScene {
       player: this.player,
       enemies: this.enemyRecords.map((record) => record.enemy),
       boss: this.bossEncounter,
+      bench: this.bench.focused,
       projectiles: this.projectiles.activeCount,
       hitstop: this.hitstopTicks,
     });
