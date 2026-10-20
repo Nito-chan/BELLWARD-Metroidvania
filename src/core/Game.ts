@@ -1,4 +1,7 @@
 import { Application, Rectangle } from 'pixi.js';
+import { AudioManager } from '../audio/AudioManager';
+import { HowlerBackend } from '../audio/HowlerBackend';
+import { AUDIO } from '../config/audio';
 import { DEBUG } from '../config/debug';
 import { PALETTE } from '../config/palette';
 import { RENDER } from '../config/render';
@@ -37,6 +40,8 @@ export class Game {
   private readonly rng = new Rng(WORLD.rngSeed);
   private readonly overlay = new DebugOverlay();
   private readonly input = new InputManager();
+  /** Audio stays silent until the first user gesture; everything is queued before that. */
+  private readonly audio = new AudioManager(new HowlerBackend(), { rng: this.rng.fork() });
   private readonly loop = new Loop({
     dt: SIM.dt,
     maxFrameTime: SIM.maxFrameTime,
@@ -95,6 +100,12 @@ export class Game {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    window.addEventListener('pointerdown', this.onGesture);
+
+    // Registering sounds before any gesture lets Howler buffer them while the context
+    // is still suspended; nothing is audible until the first gesture unlocks it.
+    this.audio.load();
+    this.audio.requestMusic('terrace');
 
     this.ready = true;
     this.loop.start();
@@ -114,6 +125,7 @@ export class Game {
       smoothedFps: this.loop.stats.smoothedFps,
       renderer: this.ready ? this.app.renderer.name : 'none',
       scene: this.scene?.debugState() ?? null,
+      audio: this.audio.debugState(),
       errors: [...this.errors],
     };
   }
@@ -149,8 +161,10 @@ export class Game {
       this.events.emit('secondElapsed', { seconds: wholeSecond });
     }
     if (this.scene) {
-      this.scene.update(this.loop.stats.tickCount, this.input.snapshot());
+      const events = this.scene.update(this.loop.stats.tickCount, this.input.snapshot());
+      for (const event of events) this.audio.onPlayerEvent(event);
     }
+    this.audio.tick(this.loop.stats.tickCount);
   }
 
   private onRender(alpha: number): void {
@@ -179,6 +193,13 @@ export class Game {
       this.overlay.toggle();
       return;
     }
+    if (event.code === AUDIO.muteKey) {
+      // A utility binding, not a gameplay action: it never reaches the InputManager.
+      event.preventDefault();
+      if (!event.repeat) this.audio.toggleMute();
+      return;
+    }
+    this.onGesture();
     // Bound gameplay keys consume their default (arrows scroll, space scrolls, etc.).
     if (this.input.handleKey(event.code, true)) event.preventDefault();
   };
@@ -190,6 +211,16 @@ export class Game {
   /** Losing focus mid-keypress must not leave the hero running forever. */
   private readonly onBlur = (): void => {
     this.input.blur();
+  };
+
+  /**
+   * The browser only starts audio inside a user gesture: the first key press or tap is
+   * that gesture. Repeat calls are idempotent and cheap.
+   */
+  private readonly onGesture = (): void => {
+    this.audio.unlock().catch((error: unknown) => {
+      this.recordError('audio unlock failed', error);
+    });
   };
 
   private recordError(message: string, cause?: unknown): void {

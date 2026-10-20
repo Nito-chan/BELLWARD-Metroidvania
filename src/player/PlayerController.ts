@@ -10,6 +10,14 @@ import type { Tilemap } from '../world/Tilemap';
 
 export type PlayerStateName = 'idle' | 'run' | 'skid' | 'jump' | 'fall' | 'attack' | 'dash';
 
+/**
+ * Momentary things the simulation did, in the tick they happened. Audio and visual
+ * effects consume these instead of diffing state, so a footstep cannot double-fire and
+ * a landing cannot be missed because the state changed twice in one tick.
+ */
+export type PlayerEvent =
+  'jump' | 'land' | 'landHeavy' | 'footstep' | 'skid' | 'attack1' | 'attack2' | 'dash';
+
 const EPSILON = 0.001;
 
 /**
@@ -35,6 +43,8 @@ export class PlayerController {
   private dashCooldownTicks = 0;
   private coyoteTicks = 0;
   private jumpHeld = false;
+  private readonly eventBuffer: PlayerEvent[] = [];
+  private footstepCounter = 0;
 
   constructor(spawn: Vec2) {
     this.body = createBody(
@@ -68,6 +78,14 @@ export class PlayerController {
     return this.restartedValue;
   }
 
+  /**
+   * What the simulation did on the most recent tick, in order. The buffer is cleared
+   * at the start of every update() and stays valid until the next one.
+   */
+  get events(): readonly PlayerEvent[] {
+    return this.eventBuffer;
+  }
+
   get grounded(): boolean {
     return this.body.grounded;
   }
@@ -92,8 +110,11 @@ export class PlayerController {
   /** Advances one fixed tick. */
   update(input: InputSnapshot, tilemap: Tilemap): void {
     this.restartedValue = false;
+    this.eventBuffer.length = 0;
     this.tickTimers(input);
     this.updateCoyote();
+
+    const wasGrounded = this.body.grounded;
 
     if (this.tryStartDash(input)) {
       // The dash owns the tick.
@@ -113,8 +134,11 @@ export class PlayerController {
       this.applyGravity();
     }
 
+    // The speed the fall carries into this tick's collision. Sampled before the
+    // collision resolves, because that is where a landing's weight is decided.
+    const impactSpeed = this.body.vy;
     const move = moveAndCollide(tilemap, this.body, SIM.dt);
-    this.finalizeState(input, move);
+    this.finalizeState(input, move, wasGrounded, impactSpeed);
   }
 
   /** Ticks down every timer and latches pressed edges into buffers. */
@@ -146,6 +170,7 @@ export class PlayerController {
     this.dashCooldownTicks = PLAYER.dash.cooldownTicks;
     this.body.vx = this.facingValue * PLAYER.dash.speed;
     this.body.vy = 0;
+    this.emit('dash');
     return true;
   }
 
@@ -176,6 +201,7 @@ export class PlayerController {
     this.jumpBufferTicks = 0;
     this.stateValue = 'jump';
     this.beginClip('jump');
+    this.emit('jump');
     return true;
   }
 
@@ -185,6 +211,7 @@ export class PlayerController {
     this.beginClip(stage === 1 ? 'attack1' : 'attack2');
     // Facing is locked for the swing; the art is directional.
     this.body.vx *= PLAYER.attack.speedScale;
+    this.emit(stage === 1 ? 'attack1' : 'attack2');
   }
 
   private stepAttack(input: InputSnapshot): void {
@@ -267,8 +294,25 @@ export class PlayerController {
     }
   }
 
-  /** Resolves state and clip after the physics step, from the ground truth of collision. */
-  private finalizeState(input: InputSnapshot, move: MoveResult): void {
+  /**
+   * Resolves state and clip after the physics step, from the ground truth of collision.
+   * This is also the one place momentary events are emitted, so their order (landing
+   * first, then a skid, then footfalls) is fixed and testable.
+   */
+  private finalizeState(
+    input: InputSnapshot,
+    move: MoveResult,
+    wasGrounded: boolean,
+    impactSpeed: number,
+  ): void {
+    if (!wasGrounded && this.body.grounded) {
+      // Touchdown is graded by the speed the fall carried into it: a step off a ledge
+      // is silent, a full jump thuds, a long drop lands heavy.
+      if (impactSpeed >= PLAYER.landHeavySoundSpeed) this.emit('landHeavy');
+      else if (impactSpeed >= PLAYER.landSoundSpeed) this.emit('land');
+      this.footstepCounter = PLAYER.firstFootstepTicks;
+    }
+
     if (this.stateValue === 'dash') {
       this.dashTicksLeft -= 1;
       if (this.dashTicksLeft > 0 && !move.hitX) return;
@@ -290,11 +334,33 @@ export class PlayerController {
     const dir = this.direction(input);
     const speed = Math.abs(this.body.vx);
     if (dir !== 0 && speed > PLAYER.skidMinSpeed && this.body.vx * dir < 0) {
+      if (this.stateValue !== 'skid') this.emit('skid');
       this.setState('skid', 'turn');
       return;
     }
     if (speed > PLAYER.idleSpeed) this.setState('run', 'run');
     else this.setState('idle', 'idle');
+    this.stepFootsteps();
+  }
+
+  /** Emits a footfall every PLAYER.footstepTicks while the hero runs on the ground. */
+  private stepFootsteps(): void {
+    const running =
+      this.body.grounded &&
+      this.stateValue === 'run' &&
+      Math.abs(this.body.vx) > PLAYER.skidMinSpeed;
+    if (!running) {
+      this.footstepCounter = PLAYER.firstFootstepTicks;
+      return;
+    }
+    this.footstepCounter -= 1;
+    if (this.footstepCounter > 0) return;
+    this.footstepCounter = PLAYER.footstepTicks;
+    this.emit('footstep');
+  }
+
+  private emit(event: PlayerEvent): void {
+    this.eventBuffer.push(event);
   }
 
   private setState(state: PlayerStateName, animation: string): void {

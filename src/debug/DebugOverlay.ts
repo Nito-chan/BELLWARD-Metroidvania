@@ -54,6 +54,15 @@ export class DebugOverlay {
         `velocity   ${player.vx.toFixed(0)}, ${player.vy.toFixed(0)} facing ${player.facing} ${player.grounded ? 'ground' : 'air'}`,
       );
     }
+    const { audio } = state;
+    lines.push(
+      `audio      ${audio.context} ${audio.unlocked ? 'unlocked' : 'locked'} ${audio.muted ? 'muted' : 'on'}`,
+      `mix        master ${audio.volumes.master.toFixed(2)} music ${audio.volumes.music.toFixed(2)} sfx ${audio.volumes.sfx.toFixed(2)}`,
+      `music      ${audio.music ?? '-'}${audio.musicPlaying ? ' (playing)' : ''}  last-sfx ${audio.lastSfx ? `${audio.lastSfx.key}@${audio.lastSfx.tick}` : '-'}`,
+    );
+    if (audio.failed.length > 0) {
+      lines.push(`audio-load ${audio.failed.join(', ')}`);
+    }
     lines.push(`errors     ${state.errors.length}`);
     if (state.errors.length > 0) {
       lines.push('', state.errors[0] ?? '');

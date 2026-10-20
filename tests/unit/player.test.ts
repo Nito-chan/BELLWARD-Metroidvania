@@ -326,3 +326,90 @@ describe('PlayerController in the belfry terrace', () => {
     expect(controller.grounded).toBe(true);
   });
 });
+
+/** Tall shaft: 16 rows of air above the same floor, so a fall can reach terminal speed. */
+const SHAFT = Tilemap.fromRows(
+  [...Array.from({ length: 16 }, () => ' '.repeat(20)), 'F'.repeat(20), 'f'.repeat(20)],
+  LEGEND,
+);
+
+describe('PlayerController events', () => {
+  /** Steps until a landing event fires; returns which grade of landing it was. */
+  function drop(controller: PlayerController, map: Tilemap, ticks = 200): string | null {
+    for (let i = 0; i < ticks; i += 1) {
+      controller.update(input(), map);
+      const landing = controller.events.find((event) => event === 'land' || event === 'landHeavy');
+      if (landing) return landing;
+    }
+    return null;
+  }
+
+  it('emits jump on the launch tick and grades a normal landing as soft', () => {
+    const controller = new PlayerController({ x: 80, y: 128 });
+    controller.update(input(), GROUND); // settle on the floor
+    expect(controller.events).toEqual([]);
+
+    controller.update(input(['jump'], ['jump']), GROUND);
+    expect(controller.events).toEqual(['jump']);
+
+    // A full jump lands near 610 px/s: a thud, below the heavy threshold (700).
+    expect(drop(controller, GROUND)).toBe('land');
+  });
+
+  it('grades a long drop as a heavy landing', () => {
+    const controller = new PlayerController({ x: 80, y: 40 });
+    expect(drop(controller, SHAFT)).toBe('landHeavy');
+  });
+
+  it('keeps a steady footstep cadence while running', () => {
+    const controller = new PlayerController({ x: 40, y: 128 });
+    controller.update(input(), GROUND);
+
+    const footsteps: number[] = [];
+    for (let i = 0; i < 110; i += 1) {
+      controller.update(input(['right']), GROUND);
+      if (controller.events.includes('footstep')) footsteps.push(i);
+    }
+
+    expect(footsteps.length).toBeGreaterThanOrEqual(4);
+    for (let i = 1; i < footsteps.length; i += 1) {
+      expect(footsteps[i]! - footsteps[i - 1]!).toBe(PLAYER.footstepTicks);
+    }
+  });
+
+  it('emits skid when a fast reversal begins, and only once', () => {
+    const controller = new PlayerController({ x: 80, y: 128 });
+    tick(controller, GROUND, 20, ['right']);
+    expect(controller.body.vx).toBeCloseTo(PLAYER.ground.maxRun, 5);
+
+    controller.update(input(['left'], ['left']), GROUND);
+    expect(controller.events).toContain('skid');
+
+    let repeats = 0;
+    for (let i = 0; i < 4; i += 1) {
+      controller.update(input(['left']), GROUND);
+      repeats += controller.events.filter((event) => event === 'skid').length;
+    }
+    expect(repeats).toBe(0);
+  });
+
+  it('emits attack and dash starts, including the chained second swing', () => {
+    const controller = new PlayerController({ x: 80, y: 128 });
+    controller.update(input(), GROUND);
+
+    controller.update(input([], ['attack']), GROUND);
+    expect(controller.events).toEqual(['attack1']);
+
+    let chained = false;
+    for (let i = 0; i < 10 && !chained; i += 1) {
+      controller.update(input([], ['attack']), GROUND);
+      chained = controller.events.includes('attack2');
+    }
+    expect(chained).toBe(true);
+
+    const dasher = new PlayerController({ x: 80, y: 128 });
+    dasher.update(input(), GROUND);
+    dasher.update(input(['right'], ['dash']), GROUND);
+    expect(dasher.events).toContain('dash');
+  });
+});

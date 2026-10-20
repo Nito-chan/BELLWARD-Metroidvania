@@ -1,4 +1,5 @@
 /** The read-only debug snapshot. This is the contract E2E tests and the F1 overlay use. */
+import type { AudioDebugState } from '../audio/AudioManager';
 
 /** Room/art snapshot for the active scene. */
 export type SceneDebugState = {
@@ -53,6 +54,8 @@ export type GameDebugState = {
   renderer: string;
   /** Active room snapshot; null until the scene mounts. */
   scene: SceneDebugState | null;
+  /** Audio director snapshot: mix, unlock gate, current track, load failures. */
+  audio: AudioDebugState;
   /** Captured runtime errors; empty in a healthy session. */
   errors: string[];
 };

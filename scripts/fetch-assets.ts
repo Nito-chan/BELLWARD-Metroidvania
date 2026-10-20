@@ -24,7 +24,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
-import { chromium } from '@playwright/test';
+import { chromium, type Locator } from '@playwright/test';
 import extract from 'extract-zip';
 import { ASSET_PACKS, type FetchEntry } from './lib/asset-packs';
 import type { ManifestAsset } from './lib/manifest';
@@ -93,12 +93,42 @@ function materialize(entry: FetchEntry, extractedRoot: string): number {
     const rel = relatives[i];
     if (!file || !rel) continue;
     if (!keep.has(extname(file).toLowerCase())) continue;
+    if (entry.include && !entry.include.test(rel)) continue;
     const dest = join(targetDir, rel);
     mkdirSync(dirname(dest), { recursive: true });
     copyFileSync(file, dest);
     copied += 1;
   }
   return copied;
+}
+
+/** Copies a single downloaded file (non-archive pack) into its target folder. */
+function materializeFile(entry: FetchEntry, downloadedPath: string, fallbackName: string): number {
+  const targetDir = join(ASSETS_ROOT, entry.target);
+  rmSync(targetDir, { recursive: true, force: true });
+  mkdirSync(targetDir, { recursive: true });
+
+  const name =
+    entry.source.strategy === 'file' ? (entry.source.saveAs ?? fallbackName) : fallbackName;
+  copyFileSync(downloadedPath, join(targetDir, name));
+  return 1;
+}
+
+/** True when this pack (or file) was already downloaded into the local cache. */
+function findCachedDownload(entry: FetchEntry, fileMatch?: RegExp): string | null {
+  if (!existsSync(CACHE_DIR)) return null;
+  const candidates = readdirSync(CACHE_DIR).filter((file) => file.startsWith(`${entry.id}-`));
+  candidates.sort(
+    (a, b) => statSync(join(CACHE_DIR, b)).mtimeMs - statSync(join(CACHE_DIR, a)).mtimeMs,
+  );
+  for (const candidate of candidates) {
+    // Cache names replace spaces with dashes; test the pattern against both spellings.
+    if (fileMatch && !fileMatch.test(candidate) && !fileMatch.test(candidate.replace(/-/g, ' '))) {
+      continue;
+    }
+    return join(CACHE_DIR, candidate);
+  }
+  return null;
 }
 
 function writeLicense(entry: FetchEntry, downloadedOn: string): void {
@@ -142,6 +172,16 @@ function mergeManifest(entry: FetchEntry, downloadedOn: string): void {
   );
 }
 
+/** True when the locator becomes visible within the timeout; never throws. */
+async function isVisible(locator: Locator, timeout: number): Promise<boolean> {
+  try {
+    await locator.waitFor({ state: 'visible', timeout });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function downloadDirect(entry: FetchEntry, url: string): Promise<string> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -157,29 +197,37 @@ async function downloadDirect(entry: FetchEntry, url: string): Promise<string> {
   return zipPath;
 }
 
-async function downloadItch(entry: FetchEntry, pageUrl: string): Promise<string> {
+async function downloadItch(
+  entry: FetchEntry,
+  pageUrl: string,
+  fileMatch?: RegExp,
+): Promise<string> {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ acceptDownloads: true });
     await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
-    // "Download Now" leads to the name-your-price page.
+    // Some itch pages list the download rows inline; others gate them behind a
+    // "Download Now" → "No thanks, just take me to the downloads" flow.
     const downloadNow = page.getByRole('link', { name: /download now/i }).first();
-    await downloadNow.waitFor({ state: 'visible', timeout: 30_000 });
-    await downloadNow.click();
+    if (await isVisible(downloadNow, 10_000)) {
+      await downloadNow.click();
+      const noThanks = page.getByText(/no thanks/i).first();
+      if (await isVisible(noThanks, 10_000)) await noThanks.click();
+    }
 
-    // Free assets expose a "No thanks, just take me to the downloads" bypass. It is a
-    // JavaScript-driven link (no href), so wait for the resulting /download/ URL.
-    const noThanks = page.getByText(/no thanks/i).first();
-    await noThanks.waitFor({ state: 'visible', timeout: 30_000 });
-    await noThanks.click();
-    await page.waitForURL(/\/download\//, { timeout: 60_000 });
-
-    // The file row's "Download" control is JS-driven as well; the resulting transfer
-    // is reported by Playwright as a regular download event.
-    const fileLink = page.getByRole('link', { name: 'Download', exact: true }).first();
+    // The file rows share one widget on every layout: div.upload with an
+    // a.download_btn. `fileMatch` picks one row by file name when several exist.
+    const rows = page.locator('div.upload').filter({ has: page.locator('a.download_btn') });
+    let row = rows.first();
+    if (fileMatch) {
+      const matched = rows.filter({ hasText: fileMatch }).first();
+      await matched.waitFor({ state: 'visible', timeout: 30_000 });
+      row = matched;
+    }
+    const fileLink = row.locator('a.download_btn').first();
     await fileLink.waitFor({ state: 'visible', timeout: 30_000 });
-    const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
+    const downloadPromise = page.waitForEvent('download', { timeout: 300_000 });
     await fileLink.click();
     const download = await downloadPromise;
 
@@ -214,7 +262,7 @@ async function main(): Promise<void> {
     const targetDir = join(ASSETS_ROOT, entry.target);
     const alreadyThere =
       existsSync(join(targetDir, 'LICENSE.txt')) &&
-      walkFiles(targetDir).some((file) => file.endsWith('.png'));
+      walkFiles(targetDir).some((file) => !file.endsWith('LICENSE.txt'));
     if (alreadyThere && !force) {
       log(`SKIP  ${entry.id} — already present (use --force to re-download)`);
       present += 1;
@@ -223,19 +271,35 @@ async function main(): Promise<void> {
 
     log(`FETCH ${entry.id} — ${entry.name}`);
     try {
-      const zipPath =
-        entry.source.strategy === 'direct'
-          ? await downloadDirect(entry, entry.source.url)
-          : await downloadItch(entry, entry.source.pageUrl);
+      const source = entry.source;
+      // Big archives (music packs) are cached; re-runs only re-materialize from them.
+      let downloadedPath = force
+        ? null
+        : findCachedDownload(entry, source.strategy === 'itch' ? source.fileMatch : undefined);
+      if (downloadedPath) {
+        log(`  reuse cached download — ${relative(CACHE_DIR, downloadedPath)}`);
+      } else {
+        downloadedPath =
+          source.strategy === 'itch'
+            ? await downloadItch(entry, source.pageUrl, source.fileMatch)
+            : await downloadDirect(entry, source.url);
+      }
 
-      const extractRoot = join(CACHE_DIR, `${entry.id}-unzipped`);
-      rmSync(extractRoot, { recursive: true, force: true });
-      mkdirSync(extractRoot, { recursive: true });
-      await extract(zipPath, { dir: resolve(extractRoot) });
-
-      const copied = materialize(entry, extractRoot);
+      let copied: number;
+      if (source.strategy === 'file') {
+        const fallback = decodeURIComponent(
+          new URL(source.url).pathname.split('/').pop() ?? `${entry.id}.bin`,
+        );
+        copied = materializeFile(entry, downloadedPath, fallback);
+      } else {
+        const extractRoot = join(CACHE_DIR, `${entry.id}-unzipped`);
+        rmSync(extractRoot, { recursive: true, force: true });
+        mkdirSync(extractRoot, { recursive: true });
+        await extract(downloadedPath, { dir: resolve(extractRoot) });
+        copied = materialize(entry, extractRoot);
+      }
       if (copied === 0) {
-        throw new Error('extracted no files with the allowed extensions');
+        throw new Error('extracted no files with the allowed extensions/filters');
       }
       writeLicense(entry, downloadedOn);
       mergeManifest(entry, downloadedOn);

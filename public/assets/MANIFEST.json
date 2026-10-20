@@ -2,6 +2,18 @@
   "manifestVersion": 1,
   "assets": [
     {
+      "name": "Cathedral in the forest (ambient loop)",
+      "kind": "audio-music",
+      "path": "music-cathedral",
+      "author": "congusbongus",
+      "sourceUrl": "https://opengameart.org/content/cathedral-in-the-forest-ambient-loop",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "Cathedral in the forest by congusbongus — CC0 — https://opengameart.org/content/cathedral-in-the-forest-ambient-loop"
+    },
+    {
       "name": "Fantasy Knight — Free Pixelart Animated Character",
       "kind": "character-sprite-sheets",
       "path": "aamatniekss-knight",
@@ -12,6 +24,18 @@
       "commercialUse": true,
       "dateDownloaded": "2026-10-19",
       "attribution": "Fantasy Knight by aamatniekss — https://aamatniekss.itch.io/fantasy-knight-free-pixelart-animated-character. Included in this repository with the author’s permission (see comments, 2026); not redistributed as a standalone asset pack."
+    },
+    {
+      "name": "Free 6 Dark Fantasy Boss Battle Tracks (loops)",
+      "kind": "audio-music",
+      "path": "alkakrab-boss-loops",
+      "author": "alkakrab",
+      "sourceUrl": "https://alkakrab.itch.io/6-dark-fantasy-boss-battle-tracks",
+      "license": "Custom-Free-Commercial",
+      "licenseUrl": "https://alkakrab.itch.io/6-dark-fantasy-boss-battle-tracks",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "Dark Fantasy Boss Battle Tracks by alkakrab — https://alkakrab.itch.io/6-dark-fantasy-boss-battle-tracks"
     },
     {
       "name": "GothicVania — Church Pack",
@@ -36,6 +60,30 @@
       "commercialUse": true,
       "dateDownloaded": "2026-10-19",
       "attribution": "GothicVania Town by Luis Zuno (ansimuz) — CC0 — https://opengameart.org/content/gothicvania-town"
+    },
+    {
+      "name": "Impact Sounds",
+      "kind": "audio-sfx",
+      "path": "kenney-impact-sounds",
+      "author": "Kenney (kenney.nl)",
+      "sourceUrl": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "Impact Sounds by Kenney (kenney.nl) — CC0"
+    },
+    {
+      "name": "RPG Audio",
+      "kind": "audio-sfx",
+      "path": "kenney-rpg-audio",
+      "author": "Kenney (kenney.nl)",
+      "sourceUrl": "https://kenney.nl/assets/rpg-audio",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-19",
+      "attribution": "RPG Audio by Kenney (kenney.nl) — CC0"
     },
     {
       "name": "Warped Caves — Pixel Art Pack",

@@ -77,6 +77,17 @@ export const PLAYER = {
   skidMinSpeed: 70,
   /** Speed (px/s) below which the hero counts as standing still. */
   idleSpeed: 6,
+  /**
+   * Footstep cadence while running, in ticks. 25 matches the 50-tick run cycle's two
+   * footfalls per stride, so the sound lands where the art says it should.
+   */
+  footstepTicks: 25,
+  /** Ticks into a fresh run before the first footfall (stepping off mid-stride). */
+  firstFootstepTicks: 14,
+  /** Impact speed (px/s) below which a touchdown is silent (small steps and ledges). */
+  landSoundSpeed: 140,
+  /** Impact speed (px/s) at which a touchdown reads as heavy. A full jump lands ~610. */
+  landHeavySoundSpeed: 700,
   /** Down + jump ignores one-way platforms for this many ticks. */
   dropThroughTicks: 12,
   /** Downward nudge that starts a drop-through, px/s. */

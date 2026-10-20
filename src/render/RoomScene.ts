@@ -6,7 +6,7 @@ import { BellwardError } from '../core/Errors';
 import type { Rng } from '../core/Rng';
 import type { SceneDebugState } from '../debug/DebugState';
 import type { InputSnapshot } from '../input/InputState';
-import { PlayerController } from '../player/PlayerController';
+import { PlayerController, type PlayerEvent } from '../player/PlayerController';
 import type { Room } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
 import { Camera } from './Camera';
@@ -95,8 +95,8 @@ export class RoomScene {
     this.view.addChild(moteLayer);
   }
 
-  /** Advances the simulation by one fixed tick with this tick's input. */
-  update(tickCount: number, input: InputSnapshot): void {
+  /** Advances the simulation by one fixed tick and returns what that tick produced. */
+  update(tickCount: number, input: InputSnapshot): readonly PlayerEvent[] {
     this.player.update(input, this.room.tilemap);
 
     const feet = this.player.feet;
@@ -115,6 +115,7 @@ export class RoomScene {
       feet.y + CAMERA.focusOffsetY,
     );
     this.updateMotes(tickCount);
+    return this.player.events;
   }
 
   /** Samples the interpolated camera and snaps the world to whole pixels. */

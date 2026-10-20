@@ -12,6 +12,7 @@ export default defineConfig({
         'src/input/**',
         'src/physics/**',
         'src/player/**',
+        'src/audio/AudioManager.ts',
         'src/render/Camera.ts',
         'src/render/SpriteAnimator.ts',
         'scripts/lib/**',
