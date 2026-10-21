@@ -206,6 +206,7 @@ export class Game {
     // Boot is not a start: the title owns the first frame and the first gesture. The loop
     // still renders the terrace at rest behind the opaque card, so beginning is instant.
     this.loop.pause();
+    this.run.scene?.setHudVisible(false);
     this.title.open();
   }
 
@@ -322,6 +323,7 @@ export class Game {
    */
   private beginRun(newRun: boolean): void {
     if (newRun) this.run.newRun();
+    this.run.scene?.setHudVisible(true);
     this.input.reset();
     this.menuKeysDown.clear();
     this.menuLatch = true;
@@ -352,6 +354,7 @@ export class Game {
   private openEnding(title: string, subtitle: string): void {
     const progress = this.run.progress;
     this.touch.hide();
+    this.run.scene?.hideBanner();
     this.input.reset();
     this.loop.pause();
     this.endingOverlay.open(title, subtitle, {

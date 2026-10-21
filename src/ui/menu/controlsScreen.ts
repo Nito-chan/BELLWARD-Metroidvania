@@ -45,8 +45,8 @@ export function buildControls(model: MenuModel): ControlsContent {
   header.setAttribute('aria-hidden', 'true');
   header.append(
     el('span', 'binding-name', 'Action'),
-    el('span', 'binding-slot', 'Key 1'),
-    el('span', 'binding-slot', 'Key 2'),
+    el('span', 'binding-slot', 'Key I'),
+    el('span', 'binding-slot', 'Key II'),
     el('span', 'binding-slot', 'Pad'),
   );
   table.append(header);

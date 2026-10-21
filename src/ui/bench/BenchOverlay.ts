@@ -105,11 +105,14 @@ export class BenchOverlay {
     charmsTitle.id = 'bench-charms-title';
     this.charmList = el('div', 'bench-charm-list');
     charms.append(charmsTitle, this.charmList);
-    this.body.append(this.slots, forge, charms);
+
+    const workbench = el('div', 'bench-workbench');
+    workbench.append(forge, charms);
+    this.body.append(this.slots, workbench);
 
     const footer = el('footer', 'menu-footer');
     footer.append(makeHint('Esc', 'Leave'), makeHint('Enter', 'Select'));
-    const leave = makeButton('Leave the bench', 'leave', 'bench-leave');
+    const leave = makeButton('Leave the bench', 'leave', 'menu-back-button bench-leave');
     leave.dataset.focusId = 'bench:leave';
     leave.addEventListener('click', () => this.close());
 
@@ -149,15 +152,49 @@ export class BenchOverlay {
     const active = document.activeElement;
     const focusId = active instanceof HTMLElement ? active.dataset.focusId : undefined;
     const state = this.options.getState();
-    this.slots.textContent = `${state.benchName} · CHARM SLOTS ${state.slotsUsed}/${state.slotsTotal} · ◈ ${state.shards}`;
+    this.renderSlots(state);
     this.renderForge(state);
     this.renderCharms(state);
     if (focusId) this.focusById(focusId);
   }
 
+  private renderSlots(state: BenchState): void {
+    this.slots.replaceChildren();
+    const place = el('span', 'bench-slots-place', state.benchName);
+    const belt = el('span', 'bench-belt');
+    const notches = el('span', 'bench-notches');
+    notches.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < state.slotsTotal; index += 1) {
+      notches.append(el('span', index < state.slotsUsed ? 'bench-notch is-filled' : 'bench-notch'));
+    }
+    belt.append(
+      el('span', 'bench-belt-label', 'Charm belt'),
+      notches,
+      el('span', 'bench-belt-count', `${state.slotsUsed}/${state.slotsTotal}`),
+    );
+    const shards = el('span', 'bench-shards');
+    shards.append(
+      el('span', 'bench-shards-mark', '◈'),
+      el('span', 'bench-shards-value', String(state.shards)),
+    );
+    this.slots.append(place, belt, shards);
+  }
+
   private renderForge(state: BenchState): void {
     this.forgeBody.replaceChildren();
-    const level = el('p', 'bench-forge-copy', `Nail +${state.nailLevel} of +${state.nailMax}`);
+    const mark = el('div', 'bench-forge-mark');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.append(
+      el('span', 'bench-forge-level', `+${state.nailLevel}`),
+      el('span', 'bench-forge-cap', `OF +${state.nailMax}`),
+    );
+
+    const copy = el('div', 'bench-forge-text');
+    const pips = el('span', 'bench-forge-pips');
+    pips.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < state.nailMax; index += 1) {
+      pips.append(el('span', index < state.nailLevel ? 'bench-pip is-filled' : 'bench-pip'));
+    }
     const detail = el(
       'p',
       'bench-forge-detail',
@@ -165,6 +202,13 @@ export class BenchOverlay {
         ? 'The nail has taken all the bell can give.'
         : `Next temper: ◈ ${state.nextCost}`,
     );
+    copy.append(
+      el('p', 'bench-forge-copy', 'Nail temper'),
+      el('span', 'sr-only', `Nail +${state.nailLevel} of +${state.nailMax}.`),
+      pips,
+      detail,
+    );
+
     const button = makeButton(
       state.nextCost === null ? 'Fully tempered' : 'Temper the nail',
       'forge',
@@ -179,9 +223,7 @@ export class BenchOverlay {
         : `Temper the nail for ${state.nextCost} shards; ${state.shards} held`,
     );
     button.addEventListener('click', () => this.apply(this.options.onBuyNail(), 'forge'));
-    const copy = el('div', 'bench-forge-text');
-    copy.append(level, detail);
-    this.forgeBody.append(copy, button);
+    this.forgeBody.append(mark, copy, button);
   }
 
   private renderCharms(state: BenchState): void {
@@ -203,8 +245,20 @@ export class BenchOverlay {
         el('span', 'bench-charm-name', charm.name),
         el('span', 'bench-charm-description', charm.description),
       );
-      const cost = el('span', 'bench-charm-cost', charm.owned ? `${charm.cost} ◇` : '—');
-      button.append(mark, copy, cost);
+      const meta = el('span', 'bench-charm-meta');
+      meta.append(
+        el(
+          'span',
+          'bench-charm-cost',
+          charm.owned ? `${charm.cost} SLOT${charm.cost === 1 ? '' : 'S'}` : '—',
+        ),
+        el(
+          'span',
+          'bench-charm-state',
+          charm.owned ? (charm.equipped ? 'EQUIPPED' : 'CARRIED') : 'MISSING',
+        ),
+      );
+      button.append(mark, copy, meta);
       button.addEventListener('click', () =>
         this.apply(this.options.onToggleCharm(charm.id), `charm:${charm.id}`),
       );

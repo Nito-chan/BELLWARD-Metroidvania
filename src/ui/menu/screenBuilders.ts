@@ -12,17 +12,32 @@ export function buildPauseScreen(): HTMLElement {
   const nav = el('nav', 'menu-options');
   nav.setAttribute('aria-label', 'Pause menu');
   const items = [
-    { label: 'Resume', command: 'resume', focusId: 'pause:resume' },
-    { label: 'Settings', command: 'settings', focusId: 'pause:settings' },
-    { label: 'Controls', command: 'controls', focusId: 'pause:controls' },
-    { label: 'Map', command: 'map', focusId: 'pause:map' },
+    { label: 'Resume', detail: 'Return to the climb', command: 'resume', focusId: 'pause:resume' },
+    {
+      label: 'Settings',
+      detail: 'Sound and access',
+      command: 'settings',
+      focusId: 'pause:settings',
+    },
+    {
+      label: 'Controls',
+      detail: 'Keys and pad',
+      command: 'controls',
+      focusId: 'pause:controls',
+    },
+    { label: 'Map', detail: 'The drowned region', command: 'map', focusId: 'pause:map' },
   ];
   items.forEach((item, index) => {
     const button = makeButton('', item.command, 'menu-option');
-    button.append(
-      el('span', 'menu-option-index', String(index + 1).padStart(2, '0')),
+    const copy = el('span', 'menu-option-copy');
+    copy.append(
       el('span', 'menu-option-label', item.label),
-      el('span', 'menu-option-mark', '›'),
+      el('span', 'menu-option-detail', item.detail),
+    );
+    button.append(
+      el('span', 'menu-option-index', ['I', 'II', 'III', 'IV'][index] ?? String(index + 1)),
+      copy,
+      el('span', 'menu-option-mark', '◆'),
     );
     button.setAttribute('aria-label', item.label);
     markNav(button, item.focusId, index, 0);
@@ -34,6 +49,7 @@ export function buildPauseScreen(): HTMLElement {
 export function buildSettingsScreen(model: MenuModel): HTMLElement {
   const wrap = el('div', 'settings-screen');
   const list = el('div', 'settings-list');
+  list.append(sectionLabel('Sound mix'));
 
   BUSES.forEach((bus, index) => {
     const row = el('div', 'setting-row');
@@ -51,7 +67,8 @@ export function buildSettingsScreen(model: MenuModel): HTMLElement {
     input.value = String(Math.round(value * 100));
     input.dataset.bus = bus;
     input.setAttribute('aria-valuetext', `${Math.round(value * 100)}%`);
-    markNav(input, `settings:${bus}`, index, 0);
+    input.style.setProperty('--fill', `${Math.round(value * 100)}%`);
+    markNav(input, `settings:${bus}`, index + 1, 0);
     const output = el('output', 'setting-value', `${Math.round(value * 100)}%`);
     output.htmlFor = id;
     output.dataset.output = bus;
@@ -59,6 +76,7 @@ export function buildSettingsScreen(model: MenuModel): HTMLElement {
     list.append(row);
   });
 
+  list.append(sectionLabel('Access'));
   const mute = makeButton('', 'mute', 'setting-row setting-toggle');
   mute.setAttribute('role', 'switch');
   const muted = model.audioIsMuted();
@@ -69,7 +87,7 @@ export function buildSettingsScreen(model: MenuModel): HTMLElement {
     el('span', 'setting-toggle-state', muted ? 'Muted' : 'On'),
     el('span', 'setting-toggle-track'),
   );
-  let nextRow = BUSES.length;
+  let nextRow = BUSES.length + 2;
   markNav(mute, 'settings:mute', nextRow, 0);
   nextRow += 1;
   list.append(mute);
@@ -93,6 +111,12 @@ export function buildSettingsScreen(model: MenuModel): HTMLElement {
   wrap.append(list);
   wrap.append(buildBackRow(nextRow));
   return wrap;
+}
+
+function sectionLabel(text: string): HTMLElement {
+  const label = el('p', 'settings-section-label', text);
+  label.setAttribute('aria-hidden', 'true');
+  return label;
 }
 
 export function buildControlsScreen(model: MenuModel): HTMLElement {

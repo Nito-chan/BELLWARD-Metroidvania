@@ -4,6 +4,7 @@ import { formatKeyCode } from '../../input/bindingLabels';
 import { buildMapScreen } from '../map/mapScreen';
 import type { MapSnapshot } from '../map/mapTypes';
 import type { MenuModel } from './MenuModel';
+import type { MenuScreen } from './menuTypes';
 import { SCREEN_COPY, defaultFocusId } from './menuContent';
 import { el, makeBellMark, makeHint } from './menuDom';
 import { buildControlsScreen, buildPauseScreen, buildSettingsScreen } from './screenBuilders';
@@ -24,6 +25,7 @@ export class MenuView {
   private readonly status: HTMLElement;
   private readonly body: HTMLElement;
   private readonly footer: HTMLElement;
+  private readonly world: HTMLElement;
 
   constructor(private readonly handlers: MenuViewHandlers) {
     this.root = el('div', 'menu-root');
@@ -53,8 +55,11 @@ export class MenuView {
 
     this.body = el('div', 'menu-body');
     this.footer = el('footer', 'menu-footer');
+    this.world = el('aside', 'menu-world');
+    this.world.hidden = true;
+    this.world.setAttribute('aria-hidden', 'true');
     this.panel.append(makeBellMark(), header, this.status, this.body, this.footer);
-    this.root.append(scrim, this.panel);
+    this.root.append(scrim, this.panel, this.world);
 
     this.panel.addEventListener('click', this.onClick);
     this.panel.addEventListener('input', this.onInput);
@@ -85,10 +90,12 @@ export class MenuView {
     this.body.replaceChildren();
     this.body.classList.toggle('is-entering', animate);
 
+    const snapshot = screen === 'map' || screen === 'pause' ? this.handlers.getMap() : null;
     if (screen === 'pause') this.body.append(buildPauseScreen());
     if (screen === 'settings') this.body.append(buildSettingsScreen(model));
     if (screen === 'controls') this.body.append(buildControlsScreen(model));
-    if (screen === 'map') this.body.append(buildMapScreen(this.handlers.getMap()));
+    if (screen === 'map' && snapshot) this.body.append(buildMapScreen(snapshot));
+    this.renderWorld(screen, snapshot);
 
     const hints =
       screen === 'map'
@@ -115,6 +122,7 @@ export class MenuView {
     if (input) {
       input.value = String(percentage);
       input.setAttribute('aria-valuetext', `${percentage}%`);
+      input.style.setProperty('--fill', `${percentage}%`);
     }
     const output = this.panel.querySelector<HTMLOutputElement>(`[data-output="${bus}"]`);
     if (output) output.textContent = `${percentage}%`;
@@ -231,6 +239,37 @@ export class MenuView {
     this.updateVolume(bus, value);
   };
 
+  /**
+   * The pause screen keeps one foot in the world: the chamber and run facts sit on a
+   * separate plaque so the panel never has to become a dashboard.
+   */
+  private renderWorld(screen: MenuScreen, snapshot: MapSnapshot | null): void {
+    this.world.hidden = screen !== 'pause' || !snapshot;
+    if (screen !== 'pause' || !snapshot) {
+      this.world.replaceChildren();
+      return;
+    }
+
+    const current = snapshot.nodes.find((node) => node.roomId === snapshot.currentRoomId);
+    const crest = el('div', 'menu-world-crest');
+    crest.append(makeBellMark(), el('span', 'menu-world-crest-label', 'The bell keeps'));
+    const kicker = el('p', 'menu-world-kicker', 'Current chamber');
+    const room = el(
+      'p',
+      'menu-world-room',
+      current ? `${current.kicker} · ${current.label}` : 'Uncharted',
+    );
+    const detail = el('p', 'menu-world-detail', current?.detail ?? 'The chart is blank here.');
+    const rule = el('span', 'menu-world-rule');
+    const stats = el('dl', 'menu-world-stats');
+    stats.append(
+      worldStat('Charted', `${snapshot.visitedCount} / ${snapshot.totalCount}`),
+      worldStat('Sigils', `${snapshot.sigilCount} / ${snapshot.bossCount}`),
+      worldStat('Last rest', snapshot.checkpoint?.name ?? 'None'),
+    );
+    this.world.replaceChildren(crest, kicker, room, detail, rule, stats);
+  }
+
   private setStatus(text: string, tone: 'info' | 'error' | 'capture'): void {
     this.status.textContent = text;
     this.status.dataset.tone = tone;
@@ -254,4 +293,10 @@ export class MenuView {
 
 function isAudioBus(value: string | undefined): value is AudioBus {
   return value === 'master' || value === 'music' || value === 'sfx';
+}
+
+function worldStat(label: string, value: string): HTMLElement {
+  const stat = el('div', 'menu-world-stat');
+  stat.append(el('dt', 'menu-world-stat-label', label), el('dd', 'menu-world-stat-value', value));
+  return stat;
 }

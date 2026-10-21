@@ -237,6 +237,16 @@ export class RoomScene {
   }
 
   /** HP carried into the next room or reset. */
+  /** The title screen shows the room without its combat HUD; gameplay turns it back on. */
+  setHudVisible(visible: boolean): void {
+    this.hud.view.visible = visible;
+  }
+
+  /** The ending plates repeat the trigger's banner copy, so the world banner is retired. */
+  hideBanner(): void {
+    this.banner.hide();
+  }
+
   get vitals(): { hp: number; maxHp: number } {
     return { hp: this.player.hp, maxHp: this.player.maxHp };
   }

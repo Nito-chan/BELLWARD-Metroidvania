@@ -55,6 +55,12 @@ export class Banner {
     this.view.alpha = 1;
   }
 
+  /** Clears the banner immediately when a DOM overlay takes over its message. */
+  hide(): void {
+    this.ticksLeft = 0;
+    this.view.visible = false;
+  }
+
   tick(): void {
     if (this.ticksLeft <= 0) return;
     this.ticksLeft -= 1;

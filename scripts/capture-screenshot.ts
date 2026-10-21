@@ -19,7 +19,8 @@
  *      (--title captures the boot title card; add --small for the tiny viewport)
  *      (--onboarding starts a fresh run and captures the first-run hints)
  *      (--touch emulates a touch device, starts play and captures the on-screen controls)
- *      (--bench loads the terrace beside the bench and captures the rest prompt)
+ *      (--bench rests at the terrace and captures the bench equipment overlay)
+ *      (--ending opens the Tide-door ending with one sigil and two charms)
  *      (--map charts every room, rests at the nave, claims one sigil, then captures the map)
  *      (--combat walks into the nearest parishioner and shoots on the first impact)
  *      (--boss loads a boss arena through the debug handle; --boss-room=<id> selects it)
@@ -51,13 +52,22 @@ const menuShot =
 const controlsShot = args.includes('--controls');
 const settingsShot = args.includes('--settings');
 const benchShot = args.includes('--bench');
+const endingShot = args.includes('--ending');
 const mapShot = args.includes('--map');
 const titleShot = args.includes('--title');
 const onboardingShot = args.includes('--onboarding');
 const touchShot = args.includes('--touch');
 /** Menus and the chart are normally captured at 1280x720; --small checks the 640x360 view. */
 const smallShot = args.includes('--small');
-const pageShot = overlayShot || menuShot || mapShot || titleShot || onboardingShot || touchShot;
+const pageShot =
+  overlayShot ||
+  menuShot ||
+  mapShot ||
+  titleShot ||
+  onboardingShot ||
+  touchShot ||
+  benchShot ||
+  endingShot;
 const outputPath = resolve(
   args.find((value) => !value.startsWith('--')) ?? 'docs/screenshots/current.png',
 );
@@ -198,6 +208,56 @@ async function main(): Promise<void> {
         undefined,
         { timeout: 10_000 },
       );
+      await page.keyboard.press('KeyE');
+      await page
+        .getByRole('dialog', { name: 'The Bench' })
+        .waitFor({ state: 'visible', timeout: 5_000 });
+    }
+    if (endingShot) {
+      const collect = async (
+        roomId: string,
+        x: number,
+        y: number,
+        pickupId: string,
+      ): Promise<void> => {
+        await page.evaluate(
+          ({ id, spawnX, spawnY }) => window.__game?.debugLoadRoom(id, { x: spawnX, y: spawnY }),
+          { id: roomId, spawnX: x, spawnY: y },
+        );
+        await page.waitForFunction(
+          (id) => window.__game?.debugState().scene?.roomId === id,
+          roomId,
+          { timeout: 10_000 },
+        );
+        await page.evaluate(() => window.__game?.debugProtectPlayer());
+        await page.waitForFunction(
+          (id) => window.__game?.debugState().run.pickups.includes(id) === true,
+          pickupId,
+          { timeout: 10_000 },
+        );
+      };
+
+      await page.evaluate(() => window.__game?.debugLoadRoom('bellthief-arena'));
+      await page.waitForFunction(
+        () => window.__game?.debugState().scene?.roomId === 'bellthief-arena',
+        undefined,
+        { timeout: 10_000 },
+      );
+      await page.evaluate(() => window.__game?.debugProtectPlayer());
+      await page.evaluate(() => window.__game?.debugDefeatBoss());
+      await page.waitForFunction(
+        () =>
+          window.__game?.debugState().run.sigils.includes('bellThief') === true &&
+          window.__game?.debugState().save.lastWrite === 'reward',
+        undefined,
+        { timeout: 15_000 },
+      );
+      await collect('bellthief-arena', 660, 320, 'bellthief-sturdy-shell');
+      await collect('bellthief-arena', 760, 320, 'bellthief-tide-bell');
+      await page.evaluate(() => window.__game?.debugLoadRoom('upper-gallery', { x: 600, y: 320 }));
+      await page
+        .getByRole('dialog', { name: /the bell remembers/i })
+        .waitFor({ state: 'visible', timeout: 10_000 });
     }
     if (mapShot) {
       const visitRoom = async (roomId: string): Promise<void> => {
@@ -223,7 +283,23 @@ async function main(): Promise<void> {
         undefined,
         { timeout: 10_000 },
       );
+      // The bench overlay freezes the run; close it before charting the arenas.
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(
+        () => document.querySelector('.bench-root')?.hasAttribute('hidden') === true,
+        undefined,
+        { timeout: 5_000 },
+      );
       await visitRoom('bellbearer-arena');
+      await page.evaluate(() => window.__game?.debugProtectPlayer());
+      await page.waitForFunction(
+        () => {
+          const state = window.__game?.debugState().scene?.boss?.state;
+          return state !== undefined && state !== 'intro';
+        },
+        undefined,
+        { timeout: 10_000 },
+      );
       await page.evaluate(() => window.__game?.debugDefeatBoss());
       await page.waitForFunction(
         () => window.__game?.debugState().run.sigils.includes('bellbearer'),
@@ -240,7 +316,9 @@ async function main(): Promise<void> {
     }
     if (menuShot) {
       await page.keyboard.press('Escape');
-      await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 5_000 });
+      await page
+        .getByRole('dialog', { name: 'Paused' })
+        .waitFor({ state: 'visible', timeout: 5_000 });
       if (controlsShot) {
         await page.getByRole('button', { name: 'Controls', exact: true }).click();
         await page.getByRole('dialog', { name: 'Bindings' }).waitFor({ timeout: 5_000 });
@@ -261,7 +339,9 @@ async function main(): Promise<void> {
           }),
       );
       await page.keyboard.press('Escape');
-      await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 5_000 });
+      await page
+        .getByRole('dialog', { name: 'Paused' })
+        .waitFor({ state: 'visible', timeout: 5_000 });
       // The menu is a DOM sibling of the canvas; hide it after pausing so a canvas
       // screenshot shows the frozen arena, not the pause overlay on top of it.
       await page.evaluate(() => {
@@ -276,8 +356,8 @@ async function main(): Promise<void> {
           ? 1_250
           : menuShot || mapShot
             ? 320
-            : benchShot
-              ? 120
+            : benchShot || endingShot
+              ? 360
               : combatShot
                 ? 40
                 : bossPhaseShot

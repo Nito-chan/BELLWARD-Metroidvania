@@ -1,6 +1,6 @@
 /**
- * The first screen. Boots into a cinematic, fully accessible start card while the
- * simulation stays paused behind it. Starting is a real user gesture, which is also
+ * The first screen. Boots into a game-first command plate over the live terrace while
+ * the simulation stays paused behind it. Starting is a real user gesture, which is also
  * what unlocks browser audio. All navigation is DOM-native: buttons, focus, labels.
  */
 import './start.css';
@@ -66,13 +66,31 @@ export class TitleScreen {
     this.dialog.setAttribute('aria-labelledby', 'title-heading');
     this.dialog.setAttribute('aria-describedby', 'title-tagline title-save');
 
+    const main = el('div', 'title-main');
     const header = el('header', 'title-header');
-    const eyebrow = el('p', 'title-eyebrow', 'The Drowned Belfry');
+    const eyebrow = el('p', 'title-eyebrow');
+    eyebrow.append(el('span', 'title-eyebrow-mark'), el('span', undefined, "A Pilgrim's Arrival"));
     const heading = el('h1', 'title-word', 'BELLWARD');
     heading.id = 'title-heading';
-    const tagline = el('p', 'title-tagline', 'The water is listening.');
+    const tagline = el('p', 'title-tagline', 'The water is listening');
     tagline.id = 'title-tagline';
-    header.append(eyebrow, heading, el('span', 'title-rule'), tagline);
+    const rule = el('span', 'title-rule');
+    header.append(eyebrow, heading, rule, tagline);
+
+    this.primary = makeAction(
+      options.hasSave ? 'Continue the climb' : 'Enter the belfry',
+      'primary',
+      options.hasSave ? 'Return to the last bell' : 'A new climb through the drowned city',
+    );
+    this.primary.classList.add('title-action-primary');
+
+    this.newRun = makeAction('Begin anew', 'new', 'Erase the old record');
+    this.newRun.classList.add('title-action-secondary');
+    this.newRun.hidden = !options.hasSave;
+
+    const actions = el('nav', 'title-actions');
+    actions.setAttribute('aria-label', 'Start the game');
+    actions.append(this.primary, this.newRun);
 
     const save = el('div', 'title-save');
     save.id = 'title-save';
@@ -98,27 +116,15 @@ export class TitleScreen {
     }
     if (options.summary && options.summary.complete) save.classList.add('is-complete');
 
-    this.primary = makeAction(
-      options.hasSave ? 'Continue the climb' : 'Enter the belfry',
-      'primary',
-    );
-    this.primary.classList.add('title-action-primary');
-
-    this.newRun = makeAction('Begin anew', 'new');
-    this.newRun.classList.add('title-action-secondary');
-    this.newRun.hidden = !options.hasSave;
-
-    const actions = el('nav', 'title-actions');
-    actions.setAttribute('aria-label', 'Start the game');
-    actions.append(this.primary, this.newRun);
-
     this.status = el('p', 'title-status');
     this.status.setAttribute('role', 'status');
     this.status.setAttribute('aria-live', 'polite');
     this.status.setAttribute('aria-atomic', 'true');
 
-    this.dialog.append(header, save, actions, this.status);
-    this.root.append(atmosphere, this.dialog, this.buildFooter());
+    main.append(header, actions, save, this.status);
+    this.dialog.append(main, this.buildRecord());
+    this.root.append(this.buildTopbar(), atmosphere, this.dialog, this.buildFooter());
+
     this.primary.addEventListener('click', () => this.begin());
     this.newRun.addEventListener('click', () => this.requestNewRun());
 
@@ -165,7 +171,7 @@ export class TitleScreen {
       open: this.openValue,
       hasSave: this.options.hasSave,
       newRunArmed: this.armed,
-      primaryLabel: this.primary.textContent ?? '',
+      primaryLabel: actionLabel(this.primary),
       focus: this.focusId(),
     };
   }
@@ -181,9 +187,9 @@ export class TitleScreen {
     if (!this.openValue || !this.options.hasSave) return;
     if (!this.armed) {
       this.armed = true;
-      this.newRun.textContent = 'Confirm new run';
-      this.newRun.classList.add('is-armed');
+      setActionLabel(this.newRun, 'Confirm new run', 'Erase the saved climb');
       this.newRun.setAttribute('aria-label', 'Confirm new run and erase the saved climb');
+      this.newRun.classList.add('is-armed');
       this.status.textContent =
         'This erases the saved climb. Choose Confirm new run again to begin fresh.';
       this.play('uiMove');
@@ -199,32 +205,84 @@ export class TitleScreen {
   /** Escape backs out of the destructive confirmation without touching the save. */
   private disarmNewRun(): void {
     this.armed = false;
-    this.newRun.textContent = 'Begin anew';
+    setActionLabel(this.newRun, 'Begin anew', 'Erase the old record');
     this.newRun.classList.remove('is-armed');
-    this.newRun.removeAttribute('aria-label');
     this.status.textContent = 'New run cancelled. The saved climb is untouched.';
     this.play('uiBack');
     this.focusPrimary();
+  }
+
+  private buildTopbar(): HTMLElement {
+    const bar = el('header', 'title-topbar');
+    bar.setAttribute('aria-hidden', 'true');
+    const brand = el('div', 'title-topbar-brand');
+    brand.append(
+      el('span', 'title-topbar-mark', '◆'),
+      el('span', 'title-topbar-copy', 'The Drowned Belfry'),
+    );
+    const build = el('div', 'title-topbar-build');
+    build.append(
+      el('span', 'title-topbar-label', 'Slot I'),
+      el('span', 'title-topbar-rule'),
+      el('span', 'title-topbar-label', 'Build I'),
+    );
+    bar.append(brand, build);
+    return bar;
+  }
+
+  private buildRecord(): HTMLElement {
+    const record = el('aside', 'title-record');
+    record.setAttribute('aria-label', 'Pilgrim record');
+    const top = el('div', 'title-record-top');
+    top.append(
+      el('p', 'title-record-kicker', 'Pilgrim record'),
+      el('span', 'title-record-slot', 'SLOT I'),
+    );
+
+    const seal = el('div', 'title-record-seal');
+    seal.setAttribute('aria-hidden', 'true');
+    seal.append(makeBellMark(), el('span', 'title-record-seal-word', 'Bell'));
+
+    const state = el(
+      'p',
+      'title-record-state',
+      this.options.hasSave
+        ? this.options.summary?.complete
+          ? 'REMEMBERED'
+          : 'THE CLIMB IS UNFINISHED'
+        : 'NO PILGRIMAGE RECORDED',
+    );
+
+    record.append(top, seal, state);
+    if (this.options.hasSave && this.options.summary) {
+      const summary = this.options.summary;
+      const stats = el('dl', 'title-record-stats');
+      stats.setAttribute('aria-hidden', 'true');
+      stats.append(
+        recordStat('Bells', `${summary.sigils} / ${summary.sigilTarget}`),
+        recordStat('Charted', `${summary.rooms} / ${summary.roomTarget}`),
+      );
+      record.append(stats);
+    } else {
+      const empty = el('p', 'title-record-empty', 'The ledger is clean.');
+      record.append(empty);
+    }
+    return record;
   }
 
   private buildFooter(): HTMLElement {
     const footer = el('footer', 'title-footer');
     const hints = el('div', 'title-hints');
     if (this.options.touch) {
-      hints.append(hint('', 'Touch controls'), hint('', 'Landscape'), hint('', 'Pause'));
-      footer.append(hints, el('p', 'title-footnote', 'Touch · Wide screen · Headphones'));
+      hints.append(hint('', 'Tap to choose'), hint('', 'Landscape'), hint('', 'Headphones'));
+      footer.append(hints, el('p', 'title-footnote', 'Touch · Wide screen · Audio'));
       return footer;
     }
 
-    const keyboard = this.options.bindings.keyboard;
     hints.append(
-      hint(
-        `${formatKeyCode(keyboard.left[0] ?? '')} ${formatKeyCode(keyboard.right[0] ?? '')}`,
-        'Move',
-      ),
-      hint(formatKeyCode(keyboard.jump[0] ?? ''), 'Jump'),
-      hint(formatKeyCode(keyboard.attack[0] ?? ''), 'Strike'),
-      hint(formatKeyCode(keyboard.pause[0] ?? ''), 'Pause'),
+      hint('↑ ↓', 'Choose'),
+      hint('Enter / A', 'Confirm'),
+      hint(formatKeyCode(AUDIO.muteKey), 'Mute'),
     );
     footer.append(hints, el('p', 'title-footnote', 'Keyboard · Gamepad · Headphones'));
     return footer;
@@ -339,12 +397,44 @@ export class TitleScreen {
   }
 }
 
-function makeAction(label: string, action: string): HTMLButtonElement {
+function makeAction(label: string, action: string, detail: string): HTMLButtonElement {
   const button = el('button', 'title-action');
   button.type = 'button';
   button.dataset.action = action;
-  button.textContent = label;
+  button.setAttribute('aria-label', label);
+
+  const ordinal = el('span', 'title-action-ordinal', action === 'primary' ? 'I' : 'II');
+  ordinal.setAttribute('aria-hidden', 'true');
+  const copy = el('span', 'title-action-copy');
+  const labelNode = el('span', 'title-action-label', label);
+  const detailNode = el('span', 'title-action-detail', detail);
+  detailNode.setAttribute('aria-hidden', 'true');
+  copy.append(labelNode, detailNode);
+  const mark = el('span', 'title-action-mark', '◆');
+  mark.setAttribute('aria-hidden', 'true');
+  button.append(ordinal, copy, mark);
   return button;
+}
+
+function setActionLabel(button: HTMLButtonElement, label: string, detail: string): void {
+  const labelNode = button.querySelector<HTMLElement>('.title-action-label');
+  const detailNode = button.querySelector<HTMLElement>('.title-action-detail');
+  if (labelNode) labelNode.textContent = label;
+  if (detailNode) detailNode.textContent = detail;
+  button.setAttribute('aria-label', label);
+}
+
+function actionLabel(button: HTMLButtonElement): string {
+  return button.querySelector<HTMLElement>('.title-action-label')?.textContent ?? '';
+}
+
+function recordStat(label: string, value: string): HTMLElement {
+  const stat = el('div', 'title-record-stat');
+  stat.append(
+    el('dt', 'title-record-stat-label', label),
+    el('dd', 'title-record-stat-value', value),
+  );
+  return stat;
 }
 
 function hint(keys: string, label: string): HTMLElement {

@@ -23,6 +23,7 @@ export class EndingOverlay {
   private readonly title: HTMLElement;
   private readonly subtitle: HTMLElement;
   private readonly stats: HTMLElement;
+  private readonly sealPips: HTMLElement;
   private readonly panel: HTMLElement;
   private openValue = false;
 
@@ -45,13 +46,22 @@ export class EndingOverlay {
     this.subtitle.id = 'ending-subtitle';
     header.append(this.title, this.subtitle);
 
+    const seal = el('div', 'ending-seal');
+    seal.setAttribute('aria-hidden', 'true');
+    this.sealPips = el('span', 'ending-seal-pips');
+    seal.append(makeBellMark(), el('span', 'ending-seal-word', 'Tide-bell'), this.sealPips);
+
     this.stats = el('div', 'ending-stats');
     const body = el('div', 'menu-body ending-body');
-    body.append(this.stats);
+    body.append(seal, el('p', 'ending-ledger-label', 'Final account'), this.stats);
 
     const footer = el('footer', 'menu-footer');
     footer.append(makeHint('Esc', 'Return'), makeHint('Enter', 'Continue'));
-    const leave = makeButton('Return to the belfry', 'continue', 'bench-leave');
+    const leave = makeButton(
+      'Return to the belfry',
+      'continue',
+      'menu-back-button ending-continue',
+    );
     leave.dataset.focusId = 'ending:continue';
     leave.addEventListener('click', () => this.close());
     footer.append(leave);
@@ -76,6 +86,12 @@ export class EndingOverlay {
       this.stat('SHARDS', String(stats.shards)),
       this.stat('CHARMS', String(stats.charms)),
     );
+    this.sealPips.replaceChildren();
+    for (let index = 0; index < stats.bossCount; index += 1) {
+      this.sealPips.append(
+        el('span', index < stats.sigils ? 'ending-pip is-filled' : 'ending-pip'),
+      );
+    }
     this.root.hidden = false;
     this.panel.querySelector<HTMLElement>('[data-focus-id]')?.focus();
     this.options.announce(`${title}. ${subtitle}`);
@@ -90,7 +106,7 @@ export class EndingOverlay {
 
   private stat(label: string, value: string): HTMLElement {
     const row = el('div', 'ending-stat');
-    row.append(el('span', 'ending-stat-value', value), el('span', 'ending-stat-label', label));
+    row.append(el('span', 'ending-stat-label', label), el('span', 'ending-stat-value', value));
     return row;
   }
 

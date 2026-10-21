@@ -1,4 +1,5 @@
 import './style.css';
+import './ui/game-ui.css';
 import { Game } from './core/Game';
 import { formatError } from './core/Errors';
 
