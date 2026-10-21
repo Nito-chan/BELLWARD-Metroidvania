@@ -1,10 +1,26 @@
 # Controls
 
 Status: **implemented (M2; utility keys M3; menus and binding editor M5; map, benches and run saves
-M7; Focus healing, Wall Claw, bench equipment, Ordeals and the Tide ending M8)**. These are the live
-defaults, sourced from `src/config/input.ts` and round-tripped by the binding editor; this table is
-the contract that editor edits. Keyboard events are matched on `KeyboardEvent.code` (physical key),
-so layouts like AZERTY still use the same physical positions.
+M7; Focus healing, Wall Claw, bench equipment, Ordeals and the Tide ending M8; title, onboarding and
+screen-shake access M9)**. These are the live defaults, sourced from `src/config/input.ts` and
+round-tripped by the binding editor; this table is the contract that editor edits. Keyboard events are
+matched on `KeyboardEvent.code` (physical key), so layouts like AZERTY still use the same physical
+positions.
+
+## Title and first run
+
+Boot opens **BELLWARD** over the already-rendered terrace. The simulation is frozen; music still plays
+once audio is unlocked. **Enter the belfry** starts a fresh run; when a save exists the primary action
+is **Continue the climb**, with progress counts and no story spoilers. **Begin anew** is destructive
+and takes two presses: the first arms it, the second starts over. `Escape` cancels the armed state.
+`Tab` / `Shift+Tab`, arrow keys and WASD move focus; `Enter` / `Space` or gamepad A/Start activate;
+gamepad B/Select moves back. Clicking or pressing any start control is the first user gesture and
+unlocks audio. Merely viewing the title writes nothing: the first boot save is written when a run
+actually begins.
+
+A non-modal **First steps** strip appears after a fresh start, naming the live keyboard bindings for
+movement, jump, strike, rest/use and pause. It auto-hides after 16 seconds, stays while focused, and has
+a **Dismiss first steps** button. It never traps focus or pauses the game.
 
 ## Keyboard (defaults)
 
@@ -47,10 +63,11 @@ is ordinary geometry, not a lift, so the jump timing is the same in every run.
 | F1  | Toggle the diagnostics overlay (development builds only) |
 | B   | Mute / unmute all audio (persisted across reloads)       |
 
-These are handled in `Game`, never reach `InputManager`, and therefore cannot be rebound. They apply
-while playing; while the pause dialog is open it owns the keyboard, so use **Sound → Silence all**
-instead. Audio starts on the first key press or pointer press, as browser autoplay policy requires;
-there is no separate click-to-start screen.
+These are handled in `Game` or the title card, never reach `InputManager`, and therefore cannot be
+rebound. `F1` applies while playing; the title, pause, bench and ending dialogs own the keyboard.
+`B` works while playing and on the title card; while a pause, bench or ending dialog is open it owns the
+keyboard, so use **Sound → Silence all** (or close the dialog) instead. Audio starts on the first key
+press or pointer press, including the title's start gesture, as browser autoplay policy requires.
 
 ## Pause menu and binding editor
 
@@ -69,6 +86,12 @@ it closes.
 | Close the map        | Escape or the live `map` key          | B / Select              |
 | Close the menu       | Escape from Pause                     | Start (outside capture) |
 | Leave the focus trap | Tab / Shift+Tab                       | —                       |
+
+**Accessibility.** **Settings → Camera shake** toggles the camera's impact kicks without changing
+combat timing, hit-stop or damage. It defaults to the inverse of the operating system's
+`prefers-reduced-motion` preference and persists separately as `bellward.accessibility.v1`; changing
+it applies immediately to the mounted room, and the next room inherits it. The menu switch reads
+**On** or **Off** and survives reloads.
 
 **Remapping.** Select a binding cell and press Enter/Space/A (pointer click also starts capture),
 then press the new key or gamepad button. Each action exposes two keyboard slots and its primary
@@ -105,13 +128,15 @@ Escape/B leaves. Every change is written immediately and applies to the live her
 is the same boss with 1.35× health and wind-up/recovery shortened to 0.85×; the first clear pays 40
 shards and cannot be repeated. Ordeals are optional and do not replace the normal sigil reward.
 
-**Persistence.** A run saves on first boot, each room entry, each rest, each equipment change, each first
-boss or Ordeal clear, each pickup/secret and each respawn. Reloading resumes at the last saved room entry
-with saved masks, sigils, charted rooms, checkpoint, pickups, secrets, charms, nail level, shards,
-Ordeals and ending flag; death instead returns to the last bench (or the terrace if none). Claimed bosses
-stay claimed and their arenas stay silent. The document is versioned at `bellward.save.v1` (schema v2);
-a valid v1 document migrates in place, while an invalid, partial or future-versioned record is discarded
-whole and a fresh run starts. Unavailable storage never interrupts play, but progress cannot be written.
+**Persistence.** A new run saves when it leaves the title; a restored run already has its document and
+is not rewritten just by starting. Thereafter a run saves on each room entry, each rest, each equipment
+change, each first boss or Ordeal clear, each pickup/secret and each respawn. Reloading resumes at the
+last saved room entry with saved masks, sigils, charted rooms, checkpoint, pickups, secrets, charms,
+nail level, shards, Ordeals and ending flag; death instead returns to the last bench (or the terrace if
+none). Claimed bosses stay claimed and their arenas stay silent. The document is versioned at
+`bellward.save.v1` (schema v2); a valid v1 document migrates in place, while an invalid, partial or
+future-versioned record is discarded whole and a fresh run starts. Unavailable storage never interrupts
+play, but progress cannot be written.
 
 **Map.** Press `map` (M by default) or choose **Map** in the pause menu. The simulation freezes while
 the DOM chart is open. It shows discovered chambers among the twelve authored rooms, current location,
@@ -127,10 +152,10 @@ remain available. The ending stays complete across reloads and cannot retrigger.
 ## Gamepad (standard mapping)
 
 Left stick / D-pad = move; A = jump; X = attack; B = dash; Y = heal (hold); RB = cast;
-D-pad up = interact; Start = pause; Back = map. While the menu is open, stick/D-pad navigates,
-A confirms, B/Select goes back and Start closes. Axes use a 0.4 deadzone and are combined with the
-D-pad. Implemented against the standard mapping and unit-tested with an injected pad; not yet
-verified on physical hardware.
+D-pad up = interact; Start = pause; Back = map. On the title card, stick/D-pad moves focus, A or Start
+activates and B/Select moves back. While the menu is open, stick/D-pad navigates, A confirms, B/Select
+goes back and Start closes. Axes use a 0.4 deadzone and are combined with the D-pad. Implemented against
+the standard mapping and unit-tested with an injected pad; not yet verified on physical hardware.
 
 ## Touch overlay
 

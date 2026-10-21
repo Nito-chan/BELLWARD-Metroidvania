@@ -35,8 +35,8 @@ export class RunProgress {
   private nailLevelValue = 0;
   private shardsValue = 0;
   private sliceCompleteValue = false;
-  private readonly resumeValue: RunSave | null;
-  private readonly loadedValue: boolean;
+  private resumeValue: RunSave | null;
+  private loadedValue: boolean;
   private presentValue = false;
   private lastWriteValue: SaveReason | null = null;
 
@@ -63,6 +63,34 @@ export class RunProgress {
   /** True when boot restored a valid document (possibly migrated from v1). */
   get loaded(): boolean {
     return this.loadedValue;
+  }
+
+  /** True once this session has written a valid document. */
+  get present(): boolean {
+    return this.presentValue;
+  }
+
+  /**
+   * Discards every durable run fact before a new run overwrites the save slot. The
+   * storage key is intentionally not removed: the following boot save replaces it
+   * atomically, so a crash between reset and save cannot leave a half-deleted run.
+   */
+  reset(): void {
+    this.sigilsValue.clear();
+    this.visitedValue.clear();
+    this.pickupsValue.clear();
+    this.brokenSecretsValue.clear();
+    this.charmsOwnedValue.clear();
+    this.charmsEquippedValue.clear();
+    this.ordealsValue.clear();
+    this.checkpointValue = null;
+    this.nailLevelValue = 0;
+    this.shardsValue = 0;
+    this.sliceCompleteValue = false;
+    this.resumeValue = null;
+    this.loadedValue = false;
+    this.presentValue = false;
+    this.lastWriteValue = null;
   }
 
   /** The document boot restored, consumed exactly once by Game. */

@@ -876,4 +876,98 @@ the only proof (rejected: not a contract).
 
 ---
 
-(appended M8; append new entries at the bottom — never edit old ones — correct them with a new entry)
+(appended M8–M9; append new entries at the bottom — never edit old ones — correct them with a new entry)
+
+## D054 — 2026-10-21 — The title is a paused DOM threshold; the first save waits for a real start
+
+**Decision:** Boot mounts the terrace scene, then opens a full-screen, accessible **BELLWARD** title
+dialog and pauses the fixed-step loop. The simulation stays frozen while the opaque card owns the frame;
+rendering and any already-requested music continue. **Continue** is the primary action when a valid save
+was restored, **Begin anew** is secondary and requires a second press (Escape disarms it), and the card
+shows only counts — sigils, rooms charted, completion — never story spoilers. The first-ever boot save
+is written only after the player leaves the title and only when no valid document exists; starting a
+restored run does not rewrite its save.
+
+**Why:** A title screen is the correct place for the browser's required first gesture, the choice between
+continuation and a clean run, and a calm introduction to the visual language. Reusing the already-mounted
+room avoids a second loading state, while pausing before the first tick keeps the deterministic simulation
+untouched. Deferring the save is important: merely opening the page must not create a climb that makes the
+next visit offer **Continue**. A DOM dialog inherits native focus, screen-reader labels and the existing
+two-step destructive-action pattern; a canvas-only title would be inaccessible.
+
+**Alternatives:** boot straight into play (rejected for M9's onboarding/accessibility scope); draw the
+title in Pixi (rejected: no native focus or dialog semantics); save at boot for simplicity (rejected:
+accidental saves and false **Continue**); a separate loading screen (rejected: unnecessary for a 12-room
+slice).
+
+## D055 — 2026-10-21 — Onboarding is a non-modal hint strip with live bindings
+
+**Decision:** A fresh or newly reset run shows a compact **First steps** strip over the playfield. It
+lists movement, jump, strike, rest/use and pause using the current keyboard bindings, auto-hides after
+16 seconds, pauses that timer while the strip has focus, and can be dismissed with a native button. It
+never traps focus, pauses the simulation or blocks input. It is intentionally not persisted, so the next
+fresh run teaches again; it is not shown when continuing an existing run.
+
+**Why:** Teaching should not become a modal gate before the player has moved once. A focusable, native
+strip stays usable for keyboard and screen-reader players without interrupting the first steps. Reading
+bindings live means a rebind cannot leave stale keycaps on screen. Not persisting it keeps the save about
+run progress rather than UI tutorials, and one fresh-run exposure is enough.
+
+**Alternatives:** a blocking tutorial modal (rejected: extra friction on every new run); a permanent
+checklist in the pause menu (deferred: more UI than the slice needs); hard-coded default key names
+(rejected: breaks as soon as the player rebinds).
+
+## D056 — 2026-10-21 — Screen shake is a separate, live accessibility preference
+
+**Decision:** **Settings → Camera shake** is stored in its own all-or-nothing document under
+`bellward.accessibility.v1`. On first load it defaults to the inverse of the operating system's
+`prefers-reduced-motion` preference. Toggling it updates the mounted room immediately through
+`Camera.setShakeEnabled`, cancels any active kick and applies to every room entered afterwards. It changes
+presentation only: combat timing, hit-stop, damage and the simulation RNG are untouched.
+
+**Why:** Motion sensitivity is a player preference, not run progress; putting it in the save would erase it
+whenever **Begin anew** resets the climb. The OS preference is the best zero-configuration default, but an
+explicit in-game choice must be able to override it. The camera already owns all shake requests, so a
+single guard there removes every kick without scattering conditionals through combat and bosses. Guarded
+storage and whole-document validation match the save and binding policies.
+
+**Alternatives:** put the flag in the run save (rejected: lost on a new run); rely only on CSS
+`prefers-reduced-motion` (rejected: the canvas camera cannot be toggled that way); disable all feedback
+when shake is off (rejected: flash, sound and hit-stop still communicate impact).
+
+## D057 — 2026-10-21 — UI feedback reuses the existing licensed RPG pack; no new assets
+
+**Decision:** Menu move, confirm and back cues and the title's start sound reuse already-approved CC0
+files from the Kenney RPG audio pack (`metalClick`, `metalLatch`, `cloth1`, `doorOpen_2`). They join
+the existing `SFX` table with low volumes and no simulation-tick cooldown; the title's first-gesture
+sound is a door opening. No new third-party files, packs or licenses enter the repository.
+
+**Why:** These sounds are dry, quiet and already licensed, and they keep the interface feeling like the
+same physical belfry as the gameplay mix. Reusing files avoids a second audio pipeline, new manifest
+entries and any licensing ambiguity. The data-driven `SFX` table means the cues can be retuned or
+replaced without touching menu logic. Tick cooldowns are intentionally zero for these cues: overlays
+pause the simulation clock, so a positive cooldown would silence every move after the first; the menu
+only emits a move cue when focus actually changes.
+
+**Alternatives:** synthesize UI tones (rejected: brittle across browsers and less cohesive); pull new
+Freesound/Kenney files (rejected: unnecessary asset and license churn); leave the menus silent (rejected:
+weaker feedback and no confirmation of capture/back actions).
+
+## D058 — 2026-10-21 — M9 extracts bench, objective and boss ownership; two files stay above target
+
+**Decision:** `BenchController` owns the bench overlay, purchases and charm toggles; `RoomObjectives` owns
+pickups, breakable secrets, boss/Ordeal reward queues and the Tide-door trigger; `BossDirector` owns boss
+spawning, the Ordeal prompt and boss debug delegates. `RoomScene` keeps rendering, collision and the tick
+pipeline; `Game` keeps composition and overlay pause/resume ownership. `RunSession.newRun()` and
+`RunProgress.reset()` make the title's fresh-start path explicit.
+
+**Why:** These are the seams that were actually drifting: the scene had accumulated save-facing reward
+state and the composition root had accumulated equipment policy. Moving them makes each mutation path
+testable and keeps the render loop easier to read. The extraction is behavior-preserving; the M8 suite
+remains the contract and will be rerun with M10.
+
+**Alternatives:** leave the monoliths for M10 (rejected: M9 was the agreed polish pass); split by render
+layer only (rejected: the state/presentation seams were the real coupling). **Debt:** `RoomScene` is 440
+non-empty lines and `Game` 438, still above the ~300 guideline; `TitleScreen` (338) is the largest new UI
+file. Further extraction is deferred until after the deferred M9+M10 gates, so unchecked refactors do not
+pile onto unverified code.

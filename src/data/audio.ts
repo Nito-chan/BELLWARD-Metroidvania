@@ -107,6 +107,17 @@ export const SFX = {
   },
   bossPhase: { urls: [impact('impactBell_heavy_004.ogg')], volume: 0.8, cooldownTicks: 20 },
   bossDefeat: { urls: [impact('impactSoft_heavy_001.ogg')], volume: 0.9, cooldownTicks: 30 },
+  /**
+   * DOM menu and title feedback. Quiet, dry, and deliberately outside the combat mix.
+   * UI cooldowns are zero because the simulation clock is intentionally frozen while an
+   * overlay owns the frame; a tick-based cooldown would silence every move after the first.
+   * The menu itself only emits a move cue when focus actually changes.
+   */
+  uiMove: { urls: [rpg('metalClick.ogg')], volume: 0.32, cooldownTicks: 0 },
+  uiConfirm: { urls: [rpg('metalLatch.ogg')], volume: 0.45, cooldownTicks: 0 },
+  uiBack: { urls: [rpg('cloth1.ogg')], volume: 0.34, cooldownTicks: 0 },
+  /** The title's first gesture: a door opening onto the run. */
+  start: { urls: [rpg('doorOpen_2.ogg')], volume: 0.55, cooldownTicks: 30 },
 } as const satisfies Record<string, SfxDef>;
 
 export type SfxKey = keyof typeof SFX;

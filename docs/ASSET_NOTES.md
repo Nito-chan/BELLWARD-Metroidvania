@@ -48,7 +48,8 @@ the contract for external packs and in-house art dropped in later (design doc §
 - The procedural fallback authors the same eight clip names with the same durations (12 poses,
   32×48 knight, origin (16, 46)); `HeroView` needs no fallback-specific code.
 - Run frames lift the feet a few pixels above the idle contact line; the contact shadow keeps the
-  hero visually grounded. Per-clip foot offsets remain deferred until the M9 polish pass.
+  hero visually grounded. Per-clip foot offsets remain deferred beyond M9; the threshold/polish pass
+  did not change hero art timing.
 
 ### Tiles
 

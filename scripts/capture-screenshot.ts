@@ -16,6 +16,8 @@
  *      (--controls opens the pause overlay, then the bindings screen)
  *      (--settings opens the pause overlay, then the sound screen)
  *      (--small captures any menu screen at the 640x360 E2E viewport)
+ *      (--title captures the boot title card; add --small for the tiny viewport)
+ *      (--onboarding starts a fresh run and captures the first-run hints)
  *      (--bench loads the terrace beside the bench and captures the rest prompt)
  *      (--map charts every room, rests at the nave, claims one sigil, then captures the map)
  *      (--combat walks into the nearest parishioner and shoots on the first impact)
@@ -49,9 +51,11 @@ const controlsShot = args.includes('--controls');
 const settingsShot = args.includes('--settings');
 const benchShot = args.includes('--bench');
 const mapShot = args.includes('--map');
+const titleShot = args.includes('--title');
+const onboardingShot = args.includes('--onboarding');
 /** Menus and the chart are normally captured at 1280x720; --small checks the 640x360 view. */
 const smallShot = args.includes('--small');
-const pageShot = overlayShot || menuShot || mapShot;
+const pageShot = overlayShot || menuShot || mapShot || titleShot || onboardingShot;
 const outputPath = resolve(
   args.find((value) => !value.startsWith('--')) ?? 'docs/screenshots/current.png',
 );
@@ -70,8 +74,26 @@ async function main(): Promise<void> {
     await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
       timeout: 15_000,
     });
+    // Boot owns the title card. Gameplay and menu captures begin through the real
+    // primary action so the shot reflects the shipped start flow.
+    if (!titleShot) {
+      await page.locator('[data-testid="title-root"] [data-action="primary"]').click();
+      await page.waitForFunction(
+        () =>
+          window.__game?.debugState().title.open === false &&
+          (window.__game?.debugState().tickCount ?? 0) > 0,
+        undefined,
+        { timeout: 15_000 },
+      );
+    }
+    if (!titleShot && !onboardingShot) {
+      await page
+        .locator('[data-testid="onboarding-root"] .onboarding-dismiss')
+        .click({ timeout: 2_000 })
+        .catch(() => undefined);
+    }
     // The run shot drives real input so the frame shows the player controller, not a pose.
-    // Audio may only start after a gesture; the first arrow press is that gesture.
+    // The title's start click already supplied the audio gesture; the arrow adds motion.
     if (runShot || overlayShot) await page.keyboard.down('ArrowRight');
     if (overlayShot) await page.keyboard.press('F1');
     // A diagnostics shot should show a live audio path, not a context still starting
@@ -241,17 +263,21 @@ async function main(): Promise<void> {
       });
     }
     await page.waitForTimeout(
-      menuShot || mapShot
-        ? 320
-        : benchShot
-          ? 120
-          : combatShot
-            ? 40
-            : bossPhaseShot
+      titleShot
+        ? 1_400
+        : onboardingShot
+          ? 1_250
+          : menuShot || mapShot
+            ? 320
+            : benchShot
               ? 120
-              : bossShot
-                ? 30
-                : settleMs,
+              : combatShot
+                ? 40
+                : bossPhaseShot
+                  ? 120
+                  : bossShot
+                    ? 30
+                    : settleMs,
     );
     await mkdir(dirname(outputPath), { recursive: true });
     // DOM overlays only appear in a whole-page shot; gameplay uses the canvas alone.

@@ -50,7 +50,15 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   belt, two nail levels and optional harder Ordeal rematches support the three bosses; the Tide door
   ends the slice once. The save is now v2 and migrates v1 in place, and `level:check` plus a full-run
   Playwright audit guard the whole region. All gates green.
-- Next: M9 — polish pass; not started.
+- **M9 — Title, onboarding and accessibility: code complete, verification pending.** Boot now waits on
+  an accessible title card over the live terrace: **Continue** restores the saved run, **Begin anew**
+  needs a second confirmation (Escape cancels), and the first real gesture unlocks audio. A non-modal
+  first-run hint strip reads the live bindings, yields its auto-hide timer on focus and never blocks
+  play. Settings gained a persisted **Camera shake** switch that defaults from the OS reduced-motion
+  preference and applies immediately. Bench, objective and boss ownership moved out of `Game` and
+  `RoomScene`. Per the milestone instruction, no typecheck, lint, unit, build or E2E gate has been run
+  yet; all M9 and M10 verification runs together after M10.
+- Next: M10 — mobile/touch and shipping pass, then the deferred M9+M10 verification sweep.
 
 ## Quick start
 
@@ -97,9 +105,9 @@ src/audio       audio manager and the Howler backend seam (nothing else imports 
 src/world       semantic tile roles (including breakable/sealed), tilemap and room model
 src/render      art provider, procedural fallbacks, camera, character/enemy views, FX, pickups, room scene
 src/debug       F1 overlay + debug state contract
-scripts         level/content check, asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map)
-tests/unit      Vitest (core, world, input, bindings, menus, map, saves, progression, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest)
-tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run)
+scripts         level/content check, asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map / --title / --onboarding; add --small for 640x360)
+tests/unit      Vitest (core, world, input, bindings, menus, map, saves, progression, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest, accessibility)
+tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run, M9 title/onboarding/accessibility)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

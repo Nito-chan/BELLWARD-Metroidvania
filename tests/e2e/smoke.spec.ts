@@ -1,7 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { COMBAT } from '../../src/config/combat';
-import { bootGame, debugState, strikeNearestParishioner, takeHitsUntilDeath } from './support';
+import {
+  bootGame,
+  debugState,
+  openTitle,
+  reloadGame,
+  startFromTitle,
+  strikeNearestParishioner,
+  takeHitsUntilDeath,
+} from './support';
 
 /**
  * Waits until the soundtrack is actually audible. Audio may only start after a gesture,
@@ -115,8 +123,8 @@ test.describe('M2 smoke', () => {
     expect(running.scene?.player.animation).toMatch(/idle|run/);
     expect(running.scene?.player.facing).toBe(1);
     expect(running.errors).toEqual([]);
-    // The first key press opened the audio gate; the context itself starts on its own
-    // schedule, so wait for it before expecting a sound to be audible.
+    // The title's start action opened the audio gate; the context itself starts on its
+    // own schedule, so wait for it before expecting a sound to be audible.
     expect(running.audio.unlocked).toBe(true);
     // Trace capture and SwiftShader can delay WebAudio's resume far beyond a desktop
     // frame; use the same generous window as the dedicated audio tests.
@@ -361,14 +369,16 @@ test.describe('M3 audio', () => {
   test('stays silent until the first gesture, then the terrace track plays', async ({
     page,
   }, testInfo) => {
-    await bootGame(page);
+    await openTitle(page);
     const before = await debugState(page);
     expect(before.audio.music).toBe('terrace');
     expect(before.audio.unlocked).toBe(false);
     expect(before.audio.musicPlaying).toBe(false);
     expect(before.audio.failed).toEqual([]);
 
-    await page.keyboard.press('ArrowRight');
+    // The title's start action is the first gesture: it opens the audio gate and begins
+    // the run in one deliberate press.
+    await startFromTitle(page);
     await page.waitForFunction(
       () => window.__game?.debugState().audio.unlocked === true,
       undefined,
@@ -387,6 +397,9 @@ test.describe('M3 audio', () => {
     expect(after.audio.failed).toEqual([]);
     expect(after.errors).toEqual([]);
 
+    await page.getByRole('button', { name: 'Dismiss first steps' }).click();
+    await expect(page.getByTestId('onboarding-root')).toBeHidden();
+
     // The overlay reports the mix, because a broken audio path must be visible.
     await page.keyboard.press('F1');
     const overlay = page.getByTestId('debug-overlay');
@@ -403,7 +416,6 @@ test.describe('M3 audio', () => {
     page,
   }) => {
     await bootGame(page);
-    await page.keyboard.press('ArrowRight'); // unlock
     await waitForLiveMusic(page);
 
     await page.keyboard.press('KeyB');
@@ -412,10 +424,7 @@ test.describe('M3 audio', () => {
     // Muting is a master fade, not a stop: the track keeps its place in the region.
     expect(muted.audio.musicPlaying).toBe(true);
 
-    await page.reload();
-    await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
-      timeout: 15_000,
-    });
+    await reloadGame(page);
     expect((await debugState(page)).audio.muted).toBe(true);
 
     await page.keyboard.press('KeyB');

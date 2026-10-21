@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { bootGame, debugState } from './support';
+import { bootGame, debugState, reloadGame } from './support';
 
 test.describe('M5 menus', () => {
   test('freezes the simulation while paused, then resumes cleanly', async ({ page }, testInfo) => {
@@ -80,10 +80,7 @@ test.describe('M5 menus', () => {
     await expect(mute).toHaveAttribute('aria-checked', 'true');
     expect((await debugState(page)).audio.muted).toBe(true);
 
-    await page.reload();
-    await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
-      timeout: 15_000,
-    });
+    await reloadGame(page);
     const restored = await debugState(page);
     expect(restored.audio.volumes.master).toBeCloseTo(0.85, 2);
     expect(restored.audio.muted).toBe(true);
@@ -157,10 +154,7 @@ test.describe('M5 menus', () => {
       { timeout: 5_000 },
     );
 
-    await page.reload();
-    await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
-      timeout: 15_000,
-    });
+    await reloadGame(page);
     const restored = await debugState(page);
     expect(restored.menu.bindings.keyboard.jump?.[0]).toBe('KeyQ');
 

@@ -69,11 +69,29 @@ export function buildSettingsScreen(model: MenuModel): HTMLElement {
     el('span', 'setting-toggle-state', muted ? 'Muted' : 'On'),
     el('span', 'setting-toggle-track'),
   );
-  markNav(mute, 'settings:mute', BUSES.length, 0);
+  let nextRow = BUSES.length;
+  markNav(mute, 'settings:mute', nextRow, 0);
+  nextRow += 1;
   list.append(mute);
 
+  if (model.supportsScreenShake()) {
+    const shake = makeButton('', 'screen-shake', 'setting-row setting-toggle');
+    shake.setAttribute('role', 'switch');
+    const enabled = model.screenShakeEnabled();
+    shake.setAttribute('aria-checked', String(enabled));
+    shake.setAttribute('aria-label', 'Camera shake');
+    shake.append(
+      el('span', 'setting-label', 'Camera shake'),
+      el('span', 'setting-toggle-state', enabled ? 'On' : 'Off'),
+      el('span', 'setting-toggle-track'),
+    );
+    markNav(shake, 'settings:screen-shake', nextRow, 0);
+    nextRow += 1;
+    list.append(shake);
+  }
+
   wrap.append(list);
-  wrap.append(buildBackRow(4));
+  wrap.append(buildBackRow(nextRow));
   return wrap;
 }
 

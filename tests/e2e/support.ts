@@ -1,18 +1,48 @@
 import type { Page } from '@playwright/test';
 import type { GameDebugState } from '../../src/debug/DebugState';
 
-export async function bootGame(page: Page): Promise<void> {
+/** Navigates to the game and leaves the title card open for inspection. */
+export async function openTitle(page: Page): Promise<void> {
   await page.goto('/');
   await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
     timeout: 15_000,
   });
+  await page.locator('[data-testid="title-root"]').waitFor({ state: 'visible', timeout: 5_000 });
 }
 
-/** Reloads the page and waits for the autosaved run to boot. */
+/** Clicks the title's primary action and waits for simulation time to run. */
+export async function startFromTitle(page: Page): Promise<void> {
+  const title = page.locator('[data-testid="title-root"]');
+  await title.locator('[data-action="primary"]').click();
+  await page.waitForFunction(
+    () =>
+      window.__game?.debugState().title.open === false &&
+      (window.__game?.debugState().tickCount ?? 0) > 0,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
+export async function bootGame(page: Page): Promise<void> {
+  await openTitle(page);
+  await startFromTitle(page);
+}
+
+/** Reloads the page, continues the autosaved run past the title, and waits for the room. */
 export async function reloadGame(page: Page): Promise<void> {
   await page.reload();
+  await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
+    timeout: 15_000,
+  });
+  // ready is set just before the title mounts, so wait for the card itself instead of
+  // sampling isVisible() during that one-frame gap.
+  await page.locator('[data-testid="title-root"]').waitFor({ state: 'visible', timeout: 5_000 });
+  await startFromTitle(page);
   await page.waitForFunction(
-    () => window.__game?.debugState().ready === true && window.__game?.debugState().scene !== null,
+    () =>
+      window.__game?.debugState().ready === true &&
+      window.__game?.debugState().scene !== null &&
+      (window.__game?.debugState().tickCount ?? 0) > 0,
     undefined,
     { timeout: 15_000 },
   );

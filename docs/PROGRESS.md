@@ -1019,7 +1019,110 @@ Not started. Scope will be confirmed before any M8 code is written; this run end
 - **No touch controls or packaging.** Keyboard/gamepad remain the supported inputs; mobile and desktop
   packaging stay M10 scope.
 
-### Next milestone preview (M9)
+---
 
-Polish pass: title/start flow, onboarding, the file-size extraction identified above, and a final
-visual/audio/accessibility sweep. Not started.
+## M9 — The threshold: title, onboarding and accessibility (2026-10-21)
+
+**Commit:** this milestone’s code commit · **Status:** implementation drafted; every verification gate is
+intentionally deferred. No typecheck, lint, unit, build, asset, format or Playwright command has been run
+for M9, by explicit instruction. M9 and M10 are verified together after M10.
+
+### Shipped (code drafted, not yet verified)
+
+- **Title/start flow (`src/ui/start/TitleScreen.ts`, `src/ui/start/start.css`).** Boot mounts the terrace,
+  then opens a full-screen **BELLWARD** dialog and pauses the fixed-step loop; rendering and requested
+  music continue behind the opaque card. The card offers **Continue the climb** when a valid save loaded,
+  otherwise **Enter the belfry**, plus **Begin anew** when a save exists. New run is a two-step destructive
+  action; Escape cancels the armed state. The title shows sigil/room counts and completion, never story
+  spoilers. Native buttons, a focus trap, `aria-modal`, `inert` on the canvas and gamepad navigation keep
+  it keyboard/screen-reader usable. The first start gesture unlocks browser audio and plays a door cue.
+- **The first save waits for a real start.** `RunSession.begin()` and `newRun()` mount the room without
+  writing; `Game` calls `RunSession.saveStart()` only after the title closes. The method writes only when
+  no valid document exists, so starting a restored run does not rewrite its save. Looking at the title no
+  longer creates a climb that offers **Continue** on the next visit. `RunProgress.reset()` clears every
+  durable run fact atomically in memory before the fresh boot save replaces the slot.
+- **First-run onboarding (`src/ui/start/Onboarding.ts`).** A non-modal **First steps** strip lists the
+  live keyboard bindings for movement, jump, strike, rest/use and pause; it auto-hides after 16 seconds,
+  stops its timer while focused, and has a native dismiss button. It is shown on a fresh start or a new
+  run, never when continuing, and is not persisted. It never traps focus or pauses the simulation.
+- **Screen-shake accessibility.** A separate `bellward.accessibility.v1` document stores the preference
+  all-or-nothing, defaulting to the inverse of the OS `prefers-reduced-motion` value. **Settings →
+  Camera shake** applies immediately through `Camera.setShakeEnabled`, cancelling an active kick and
+  applying to later rooms. Gameplay timing, hit-stop, damage and RNG are untouched.
+- **UI feedback.** Menu move/confirm/back/capture and the title start use the existing approved Kenney
+  RPG CC0 files; no new assets or licenses. Capture cancellation through Escape now has an explicit back
+  cue, and focus moves only play a cue when focus actually changes.
+- **Extraction and fresh-start plumbing.** `BenchController` (115 non-empty) owns bench equipment;
+  `RoomObjectives` (173) owns pickups, breakable secrets, boss/Ordeal reward queues and the ending
+  trigger; `BossDirector` (127) owns boss spawn, Ordeal prompt/relight and boss debug delegates.
+  `RoomScene` fell from 554 to 440 non-empty lines. `Game` is 438 (M8: 419) after adding title,
+  onboarding, accessibility and start wiring; `TitleScreen` is 338. No mechanics were intentionally
+  changed.
+
+### Drafted verification (not run)
+
+- `tests/e2e/m9.spec.ts`: five flows — title focus/keyboard start/no boot save, saved continue plus
+  two-step new run and Escape cancel, progress-preserving continue, screen-shake persistence through
+  reload, and OS reduced-motion default. Title-aware `bootGame`/`reloadGame` helpers and updates to the
+  smoke/menu reload paths are in place.
+- `tests/unit/accessibility.test.ts` (+4): OS default, persistence, corrupt/future documents and missing
+  storage. `tests/unit/menu-model.test.ts` (+1): screen-shake toggle through the accessibility port.
+  `tests/unit/camera.test.ts` (+1): disabling cancels and ignores shakes, re-enabling works.
+- `scripts/capture-screenshot.ts` supports `--title` and `--onboarding`; no M9 screenshot files have been
+  generated yet.
+
+### Gates (all intentionally pending at commit)
+
+| Gate                          | Result                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `npm run typecheck`           | **Pending** — not run for M9                                           |
+| `npm run lint`                | **Pending** — not run for M9                                           |
+| `npm run level:check`         | **Pending** — M8 contract unchanged, but not rerun                     |
+| `npm run test`                | **Pending** — M9 unit additions drafted, full suite not run            |
+| `npm run build`               | **Pending** — not run for M9                                           |
+| `npm run test:e2e`            | **Pending** — M9 flows and updated reload helpers not run              |
+| `npm run assets:check:strict` | **Pending** — four existing SFX reused; no new files                   |
+| `npm run format:check`        | **Pending** — not run for M9                                           |
+| Screenshots                   | **Pending** — `--title` / `--onboarding` supported, captures not made   |
+
+### Findings & adjustments made while drafting
+
+- **A viewed title was creating a save.** The original boot path persisted `'boot'` inside
+  `RunSession.begin()`, so opening the page and walking away would later show **Continue**. The initial
+  save now waits for the title's start action, and the M9 E2E asserts no save before that point.
+- **The reload helper sampled `isVisible()` before the title mounted.** `ready` is set one frame before
+  `title.open()`, so a reload could skip the click and wait forever on a paused loop. `reloadGame` now
+  waits for `[data-testid="title-root"]` to be visible, then starts it deterministically.
+- **The settings menu gained a fifth row.** The back button's focus row is now computed from the number
+  of rendered settings instead of the old literal `4`; screen shake is only rendered when the
+  accessibility port exists.
+- **Destructive new-run confirmation is cancellable.** Escape disarms **Confirm new run**, restores the
+  **Begin anew** label and moves focus back to Continue, so the second press is always deliberate.
+- **Onboarding does not disappear under a keyboard reader.** Focus inside the strip clears the auto-hide
+  timer; the player dismisses it explicitly. Rebinding calls `Onboarding.refresh()` so keycaps stay live.
+- **Title and gameplay keys stay separate.** The title owns the keyboard while open, except `B` mute;
+  once it closes, the canvas is focused and the normal input path resumes with menu latches cleared.
+- **Starting a restored run must not rewrite its save.** `saveStart()` writes only when no document is
+  present. A fresh run still writes `boot`; **Continue** keeps the existing save and its `lastWrite`
+  history unchanged, so the pre-M9 reload assertions stay meaningful.
+- **Paused overlays froze the UI sound clock.** `AudioManager` rate-limits by simulation tick, but the
+  loop is intentionally paused behind menus. Menu cues therefore use zero tick cooldowns; focus-change
+  gating and the short clips prevent chatter. The first pointer gesture and the start action now share
+  one in-flight `unlock()` promise, so the start cue cannot race a still-suspended audio context.
+
+### Explicitly deferred / risks
+
+- **All M9 verification is deferred.** Expect possible type/lint/style adjustments and E2E timing fixes;
+  this report deliberately makes no green claims. Run M9 and M10 gates together and fix both together.
+- **M9 captures are missing.** Generate `--title` and `--onboarding` (at 1280×720 and 640×360) before the
+  final report.
+- **`RoomScene` and `Game` remain above the size guideline.** Further extraction is deliberately paused
+  until the deferred gates pass; the new controllers are cohesive and behavior-preserving.
+- **Gamepad title navigation is wired through the existing `MenuPad` polling path, but M9 adds no gamepad-specific E2E coverage and it remains unverified on physical hardware.** Touch controls remain out of scope until M10.
+- **No new story, rooms, enemies, bosses or pickups.** M9 is a threshold/accessibility/polish milestone.
+
+### Next milestone preview (M10)
+
+Mobile/touch controls and the shipping pass, followed immediately by the combined M9+M10 verification
+sweep: typecheck, lint, `level:check`, unit, build, Playwright, strict assets and formatting, then M9
+screenshot capture and report correction.

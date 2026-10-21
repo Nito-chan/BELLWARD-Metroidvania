@@ -5,19 +5,21 @@ import { AUDIO } from '../config/audio';
 import { DEBUG } from '../config/debug';
 import { PALETTE } from '../config/palette';
 import { BOSS_KINDS } from '../config/enemies';
-import { CHARMS, CHARM_ORDER, CHARM_SLOTS, type CharmId } from '../config/progression';
 import { RENDER } from '../config/render';
 import { SIM, VIEW, WORLD } from '../config/world';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
 import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
+import { AccessibilitySettings } from '../settings/AccessibilitySettings';
 import { Announcer } from '../ui/Announcer';
-import { BenchOverlay, type BenchChange, type BenchState } from '../ui/bench/BenchOverlay';
+import { BenchController } from '../ui/bench/BenchController';
 import { EndingOverlay } from '../ui/ending/EndingOverlay';
 import { MenuSystem } from '../ui/menu/MenuSystem';
 import type { MenuScreen } from '../ui/menu/menuTypes';
-import type { BenchRef } from '../data/benches';
+import { Onboarding } from '../ui/start/Onboarding';
+import { TitleScreen, type TitleSummary } from '../ui/start/TitleScreen';
+import { ALL_ROOMS, getRoom } from '../data/rooms';
 import { ArtProvider } from '../render/ArtProvider';
 import type { RoomSpawn } from '../world/Room';
 import { BellwardError, formatError } from './Errors';
@@ -50,6 +52,8 @@ export class Game {
   private readonly announcer = new Announcer();
   private readonly audio = new AudioManager(new HowlerBackend(), { rng: this.rng.fork() });
   private readonly run = new RunSession();
+  private readonly resumedRun = this.run.progress.loaded;
+  private readonly accessibility = new AccessibilitySettings();
   private readonly loop = new Loop({
     dt: SIM.dt,
     maxFrameTime: SIM.maxFrameTime,
@@ -60,9 +64,10 @@ export class Game {
   private bindings: Bindings;
   private readonly input: InputManager;
   private readonly menu: MenuSystem;
-  private readonly benchOverlay: BenchOverlay;
+  private readonly bench: BenchController;
   private readonly endingOverlay: EndingOverlay;
-  private benchRef: BenchRef | null = null;
+  private readonly title: TitleScreen;
+  private readonly onboarding: Onboarding;
 
   private ready = false;
   private lastWholeSecond = 0;
@@ -78,27 +83,45 @@ export class Game {
     this.menu = new MenuSystem({
       bindings: this.bindings,
       audio: this.audio,
+      accessibility: {
+        screenShake: () => this.accessibility.screenShake,
+        setScreenShake: (enabled) => this.accessibility.setScreenShake(enabled),
+      },
       applyBindings: (next) => {
         this.bindings = next;
         this.menuKeysDown.clear();
         this.input.setBindings(next);
         saveBindings(next);
+        this.onboarding.refresh();
       },
       onClose: () => this.resumeFromMenu(),
+      onScreenShakeChanged: (enabled) => this.run.scene?.setScreenShake(enabled),
       getMap: () => this.run.mapSnapshot(),
       mapKeyCodes: () => this.bindings.keyboard.map,
     });
-    this.benchOverlay = new BenchOverlay({
-      getState: () => this.benchState(),
-      onToggleCharm: (id) => this.toggleCharm(id),
-      onBuyNail: () => this.buyNail(),
-      onClose: () => this.resumeFromOverlay(),
+    this.bench = new BenchController({
+      run: this.run,
       announce: (text) => this.announcer.say(text),
+      onPause: () => {
+        this.input.reset();
+        this.loop.pause();
+      },
+      onResume: () => this.resumeFromOverlay(),
     });
     this.endingOverlay = new EndingOverlay({
       onClose: () => this.resumeFromOverlay(),
       announce: (text) => this.announcer.say(text),
     });
+    this.title = new TitleScreen({
+      hasSave: this.resumedRun,
+      summary: this.titleSummary(),
+      bindings: this.bindings,
+      onBegin: () => this.beginRun(false),
+      onNewRun: () => this.beginRun(true),
+      onSfx: (key) => this.audio.playSfx(key),
+      onMute: () => this.audio.toggleMute(),
+    });
+    this.onboarding = new Onboarding({ getBindings: () => this.bindings });
   }
 
   /** Initializes the renderer, mounts the canvas, starts the loop. Throws on failure. */
@@ -139,14 +162,17 @@ export class Game {
       rng: this.rng,
       stage: this.app.stage,
       announce: (text) => this.announcer.say(text),
-      onBench: (bench) => this.openBench(bench),
+      onBench: (bench) => this.bench.open(bench),
       onEnding: (title, subtitle) => this.openEnding(title, subtitle),
+      screenShake: () => this.accessibility.screenShake,
     });
     window.addEventListener('resize', this.onResize);
     this.onResize();
 
     this.overlay.mount();
     this.menu.mount();
+    this.title.mount();
+    this.onboarding.mount();
     window.addEventListener('keydown', this.onMenuKeyDown, true);
     window.addEventListener('keyup', this.onMenuKeyUp, true);
     window.addEventListener('keydown', this.onKeyDown);
@@ -160,6 +186,10 @@ export class Game {
 
     this.ready = true;
     this.loop.start();
+    // Boot is not a start: the title owns the first frame and the first gesture. The loop
+    // still renders the terrace at rest behind the opaque card, so beginning is instant.
+    this.loop.pause();
+    this.title.open();
   }
 
   /** Read-only runtime snapshot (F1 overlay, E2E smoke tests). Allocates a small object. */
@@ -180,6 +210,11 @@ export class Game {
       save: this.run.progress.debugSave(),
       audio: this.audio.debugState(),
       menu: this.menu.debugState(),
+      title: this.title.debugState(),
+      onboarding: this.onboarding.debugState(),
+      accessibility: {
+        screenShake: this.accessibility.screenShake,
+      },
       errors: [...this.errors],
     };
   }
@@ -209,7 +244,14 @@ export class Game {
   }
 
   private onTick(): void {
-    if (this.menu.isOpen || this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
+    if (
+      this.title.isOpen ||
+      this.menu.isOpen ||
+      this.bench.isOpen ||
+      this.endingOverlay.isOpen
+    ) {
+      return;
+    }
     const snapshot = this.input.snapshot();
 
     if (this.menuLatch) {
@@ -242,10 +284,45 @@ export class Game {
 
   /** Freezes the simulation but keeps rendering the scene behind the overlay. */
   private openMenu(screen: MenuScreen): void {
-    if (this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
+    if (this.title.isOpen || this.bench.isOpen || this.endingOverlay.isOpen) return;
     this.input.reset();
     this.loop.pause();
     this.menu.open(screen);
+  }
+
+  /** The title card's only save-facing copy: counts, never a hidden spoiler. */
+  private titleSummary(): TitleSummary | null {
+    if (!this.resumedRun) return null;
+    return {
+      sigils: this.run.progress.sigils.length,
+      sigilTarget: BOSS_KINDS.length,
+      rooms: this.run.progress.visitedRooms.length,
+      roomTarget: ALL_ROOMS.length,
+      complete: this.run.progress.sliceComplete,
+    };
+  }
+
+  /**
+   * Leaves the title and starts the clock. The click or key press that got here is the
+   * audio gesture, so the unlock is deliberate and the opening sound plays after it.
+   */
+  private beginRun(newRun: boolean): void {
+    if (newRun) this.run.newRun();
+    this.input.reset();
+    this.menuKeysDown.clear();
+    this.menuLatch = true;
+    this.loop.resume();
+    this.app.canvas.focus();
+    if (newRun || !this.resumedRun) this.onboarding.show();
+    // The run is only persisted once the player actually crosses the threshold.
+    this.run.saveStart();
+
+    const room = getRoom(this.run.roomId);
+    this.announcer.say(newRun ? 'A new climb begins.' : `${room.name}.`);
+    this.audio
+      .unlock()
+      .then(() => this.audio.playSfx('start'))
+      .catch((error: unknown) => this.recordError('audio unlock failed', error));
   }
 
   /** Resumes from the overlay without letting a held pause/map input re-open it. */
@@ -254,79 +331,6 @@ export class Game {
     this.input.reset();
     this.loop.resume();
     this.app.canvas.focus();
-  }
-
-  private benchState(): BenchState {
-    const progress = this.run.progress;
-    const nails = progress.nails;
-    const slotsUsed = [...progress.charmsEquipped].reduce(
-      (total, id) => total + CHARMS[id].cost,
-      0,
-    );
-    return {
-      benchName: this.benchRef?.name ?? 'The Bench',
-      shards: progress.shards,
-      nailLevel: nails.level,
-      nailMax: nails.maxLevel,
-      nextCost: nails.nextCost,
-      slotsUsed,
-      slotsTotal: CHARM_SLOTS,
-      charms: CHARM_ORDER.map((id) => ({
-        id,
-        name: CHARMS[id].name,
-        description: CHARMS[id].description,
-        cost: CHARMS[id].cost,
-        owned: progress.charmsOwned.includes(id),
-        equipped: progress.charmsEquipped.includes(id),
-      })),
-    };
-  }
-
-  private toggleCharm(id: CharmId): BenchChange {
-    const progress = this.run.progress;
-    const name = CHARMS[id].name;
-    if (!progress.charmsOwned.includes(id)) {
-      return { ok: false, message: `${name} has not been found yet.` };
-    }
-    const wasEquipped = progress.charmsEquipped.includes(id);
-    if (!progress.toggleCharm(id)) {
-      return { ok: false, message: 'No free charm slots. Set another charm aside first.' };
-    }
-    this.afterBenchChange();
-    return {
-      ok: true,
-      message: wasEquipped ? `${name} set aside.` : `${name} equipped.`,
-    };
-  }
-
-  private buyNail(): BenchChange {
-    const progress = this.run.progress;
-    const cost = progress.nails.nextCost;
-    if (cost === null) return { ok: false, message: 'The nail is already fully tempered.' };
-    if (progress.shards < cost) {
-      return {
-        ok: false,
-        message: `The forge wants ${cost} shards. You carry ${progress.shards}.`,
-      };
-    }
-    if (!progress.buyNailUpgrade()) {
-      return { ok: false, message: 'The forge refuses; nothing was spent.' };
-    }
-    this.afterBenchChange();
-    return { ok: true, message: `The nail is tempered to +${progress.nails.level}.` };
-  }
-
-  /** Equipment changes are durable immediately and visible on the loaded hero. */
-  private afterBenchChange(): void {
-    this.run.scene?.applyProgress(this.run.progress.loadout, this.run.progress.shards);
-    this.run.saveAtBench();
-  }
-
-  private openBench(bench: BenchRef): void {
-    this.benchRef = bench;
-    this.input.reset();
-    this.loop.pause();
-    this.benchOverlay.open();
   }
 
   private openEnding(title: string, subtitle: string): void {
@@ -342,7 +346,6 @@ export class Game {
   }
 
   private resumeFromOverlay(): void {
-    this.benchRef = null;
     this.menuLatch = true;
     this.input.reset();
     this.loop.resume();
@@ -413,7 +416,14 @@ export class Game {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (this.menu.isOpen || this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
+    if (
+      this.title.isOpen ||
+      this.menu.isOpen ||
+      this.bench.isOpen ||
+      this.endingOverlay.isOpen
+    ) {
+      return;
+    }
     if (event.defaultPrevented) return;
     if (event.key === 'F1') {
       event.preventDefault();
@@ -432,7 +442,14 @@ export class Game {
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
-    if (this.menu.isOpen || this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
+    if (
+      this.title.isOpen ||
+      this.menu.isOpen ||
+      this.bench.isOpen ||
+      this.endingOverlay.isOpen
+    ) {
+      return;
+    }
     if (event.defaultPrevented) return;
     if (this.input.handleKey(event.code, false)) event.preventDefault();
   };

@@ -176,4 +176,30 @@ describe('MenuModel sound settings', () => {
     expect(model.toggleMute()).toBe(false);
     expect(audio.muted).toBe(false);
   });
+
+  it('toggles the accessibility camera shake only when the port is present', () => {
+    let enabled = true;
+    const model = new MenuModel({
+      bindings: defaultBindings(),
+      audio: fakeAudio(),
+      accessibility: {
+        screenShake: () => enabled,
+        setScreenShake: (next) => {
+          enabled = next;
+          return enabled;
+        },
+      },
+      applyBindings: () => undefined,
+    });
+    expect(model.supportsScreenShake()).toBe(true);
+    expect(model.screenShakeEnabled()).toBe(true);
+    expect(model.toggleScreenShake()).toBe(false);
+    expect(model.status).toContain('disabled');
+    expect(model.toggleScreenShake()).toBe(true);
+    expect(model.status).toContain('enabled');
+
+    const withoutPort = makeModel().model;
+    expect(withoutPort.supportsScreenShake()).toBe(false);
+    expect(withoutPort.toggleScreenShake()).toBe(true);
+  });
 });

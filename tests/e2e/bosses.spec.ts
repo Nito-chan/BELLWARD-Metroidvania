@@ -218,7 +218,6 @@ test.describe('M6 boss audio', () => {
 
   test('the Warden arena requests and plays its boss loop', async ({ page }) => {
     await bootGame(page);
-    await page.keyboard.press('ArrowRight');
     await page.waitForFunction(
       () => window.__game?.debugState().audio.context === 'running',
       undefined,

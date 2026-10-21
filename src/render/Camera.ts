@@ -19,6 +19,7 @@ export class Camera {
   private shakeTicks = 0;
   private shakeDuration = 0;
   private shakePhase = 0;
+  private shakeEnabledValue = true;
 
   constructor(bounds: Rect) {
     validateBounds(bounds);
@@ -89,7 +90,7 @@ export class Camera {
    * ignored while the current shake is still running, so overlapping hits never jitter.
    */
   shake(strength: number, ticks: number): void {
-    if (ticks <= 0 || strength <= 0) return;
+    if (!this.shakeEnabledValue || ticks <= 0 || strength <= 0) return;
     if (this.shakeTicks > 0 && strength < this.shakeStrength) return;
     this.shakeStrength = strength;
     this.shakeTicks = ticks;
@@ -100,6 +101,20 @@ export class Camera {
   /** True while a shake is being applied (exposed for tests and debug). */
   get shakeActive(): boolean {
     return this.shakeTicks > 0;
+  }
+
+  /**
+   * Accessibility setting: disabling this cancels the current kick and makes future
+   * requests inert. The simulation is untouched, so gameplay remains deterministic.
+   */
+  setShakeEnabled(enabled: boolean): void {
+    this.shakeEnabledValue = enabled;
+    if (!enabled) {
+      this.shakeStrength = 0;
+      this.shakeTicks = 0;
+      this.shakeDuration = 0;
+      this.shakePhase = 0;
+    }
   }
 
   /** Top-left of the visible world rect, interpolated between the last two ticks. */

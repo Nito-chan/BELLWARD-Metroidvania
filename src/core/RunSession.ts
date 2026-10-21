@@ -31,6 +31,8 @@ export type RunSessionDeps = {
   readonly onBench?: (bench: BenchRef) => void;
   /** Called when the Tide-door ending fires. */
   readonly onEnding?: (title: string, subtitle: string) => void;
+  /** Current accessibility preference for camera kicks. */
+  readonly screenShake?: () => boolean;
 };
 
 export class RunSession {
@@ -58,7 +60,23 @@ export class RunSession {
       this.enter(resume.roomId, resume.spawn, { hp: resume.hp, maxHp: this.progress.maxHp }, null);
       return;
     }
-    this.enter(DEFAULT_ROOM_ID, undefined, undefined, 'boot');
+    this.enter(DEFAULT_ROOM_ID, undefined, undefined, null);
+  }
+
+  /** Discards the restored run and mounts a fresh one at the terrace. */
+  newRun(): void {
+    this.progress.reset();
+    this.enter(DEFAULT_ROOM_ID, undefined, undefined, null);
+  }
+
+  /**
+   * Writes the first-ever save only once the player actually leaves the title, so merely
+   * looking at the threshold never creates a climb to continue. A loaded run already has
+   * a valid document; starting it must not rewrite storage with a boot marker.
+   */
+  saveStart(): void {
+    if (this.progress.present) return;
+    this.persist('boot');
   }
 
   /** Advances the active scene and resolves every run-level consequence of that tick. */
@@ -183,6 +201,7 @@ export class RunSession {
       endingComplete: this.progress.sliceComplete,
       announce: deps.announce,
       arrival,
+      screenShake: deps.screenShake?.(),
     });
 
     const previous = this.sceneValue;

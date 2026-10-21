@@ -66,6 +66,8 @@ function defaultStorage(): AudioStorage | null {
 
 export class AudioManager {
   private unlocked = false;
+  /** The one in-flight unlock, shared so later gesture handlers can await the same start. */
+  private unlockPromise: Promise<void> | null = null;
   private muted = false;
   private requestedMusic: MusicKey | null = null;
   private playingMusic: MusicKey | null = null;
@@ -104,11 +106,16 @@ export class AudioManager {
    * Runs the unlock pass from the first user gesture. The gate opens synchronously — a
    * gesture means audio is permitted, and the simulation must not stall behind a context
    * that takes a moment to start. The soundtrack begins once the context is live.
-   * Safe to call repeatedly.
+   * Safe to call repeatedly; concurrent callers share the same in-flight promise.
    */
-  async unlock(): Promise<void> {
-    if (this.unlocked) return;
+  unlock(): Promise<void> {
+    if (this.unlockPromise) return this.unlockPromise;
     this.unlocked = true;
+    this.unlockPromise = this.finishUnlock();
+    return this.unlockPromise;
+  }
+
+  private async finishUnlock(): Promise<void> {
     await this.backend.unlock();
     this.nextBellTick = this.tickCount + AUDIO.bell.firstTicks;
     if (this.requestedMusic) this.startMusic(this.requestedMusic);

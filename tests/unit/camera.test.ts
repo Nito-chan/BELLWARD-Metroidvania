@@ -106,6 +106,23 @@ describe('Camera', () => {
     expect(camera.view(0)).toEqual(base);
   });
 
+  it('cancels and ignores shakes when the accessibility toggle is off', () => {
+    const camera = new Camera(BIG_ROOM);
+    const base = camera.view(0);
+    camera.shake(4, 8);
+    expect(camera.shakeActive).toBe(true);
+
+    camera.setShakeEnabled(false);
+    expect(camera.shakeActive).toBe(false);
+    camera.shake(6, 12);
+    expect(camera.shakeActive).toBe(false);
+    expect(camera.view(0)).toEqual(base);
+
+    camera.setShakeEnabled(true);
+    camera.shake(3, 2);
+    expect(camera.shakeActive).toBe(true);
+  });
+
   it('is deterministic for identical input sequences', () => {
     const a = new Camera(BIG_ROOM);
     const b = new Camera(BIG_ROOM);

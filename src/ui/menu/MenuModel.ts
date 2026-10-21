@@ -14,11 +14,19 @@ import {
   type Bindings,
 } from '../../input/bindings';
 import { ACTION_LABELS, slotLabel } from './menuContent';
-import type { BindingKind, CaptureTarget, MenuAudio, MenuScreen, StatusTone } from './menuTypes';
+import type {
+  BindingKind,
+  CaptureTarget,
+  MenuAccessibility,
+  MenuAudio,
+  MenuScreen,
+  StatusTone,
+} from './menuTypes';
 
 export type MenuModelOptions = {
   bindings: Bindings;
   audio: MenuAudio;
+  accessibility?: MenuAccessibility;
   /** Applies and persists a new binding document. */
   applyBindings: (next: Bindings) => void;
 };
@@ -216,6 +224,26 @@ export class MenuModel {
     this.toneValue = 'info';
     this.statusValue = muted ? 'Audio muted.' : 'Audio unmuted.';
     return muted;
+  }
+
+  /** True when the settings screen can offer the motion toggle. */
+  supportsScreenShake(): boolean {
+    return this.options.accessibility !== undefined;
+  }
+
+  screenShakeEnabled(): boolean {
+    return this.options.accessibility?.screenShake() ?? true;
+  }
+
+  toggleScreenShake(): boolean {
+    const accessibility = this.options.accessibility;
+    if (!accessibility) return true;
+    const enabled = accessibility.setScreenShake(!accessibility.screenShake());
+    this.toneValue = 'info';
+    this.statusValue = enabled
+      ? 'Camera shake enabled.'
+      : 'Camera shake disabled. Impact is still shown by flash and hit-stop.';
+    return enabled;
   }
 
   private commit(next: Bindings): void {

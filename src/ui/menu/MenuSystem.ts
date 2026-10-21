@@ -8,20 +8,24 @@
 import './menu.css';
 import type { MenuDebugState } from '../../debug/DebugState';
 import type { ActionName } from '../../config/input';
+import type { SfxKey } from '../../data/audio';
 import type { Bindings } from '../../input/bindings';
 import type { MapSnapshot } from '../map/mapTypes';
 import { MenuModel } from './MenuModel';
 import { MenuPad, type MenuDirection } from './MenuPad';
 import { MenuView } from './MenuView';
 import { ACTION_ORDER, bindingFocusId } from './menuContent';
-import type { MenuAudio, MenuScreen } from './menuTypes';
+import type { MenuAccessibility, MenuAudio, MenuScreen } from './menuTypes';
 
 export type MenuSystemOptions = {
   bindings: Bindings;
   audio: MenuAudio;
+  accessibility?: MenuAccessibility;
   applyBindings: (next: Bindings) => void;
   /** Called after the menu hides itself; Game resumes the loop here. */
   onClose: () => void;
+  /** Applies the live screen-shake preference to the mounted room. */
+  onScreenShakeChanged?: (enabled: boolean) => void;
   /** Current chart data, built when the map screen renders. */
   getMap: () => MapSnapshot;
   /** Live keyboard codes for the map action, so M toggles the map closed too. */
@@ -40,6 +44,7 @@ export class MenuSystem {
     this.model = new MenuModel({
       bindings: options.bindings,
       audio: options.audio,
+      accessibility: options.accessibility,
       applyBindings: options.applyBindings,
     });
     this.view = new MenuView({
@@ -52,6 +57,7 @@ export class MenuSystem {
       onCaptureCancel: () => {
         const capture = this.model.capture;
         this.model.cancelCapture();
+        this.playUi('uiBack');
         this.syncView(
           capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined,
         );
@@ -59,11 +65,12 @@ export class MenuSystem {
       onCaptureButton: (index) => {
         const capture = this.model.capture;
         this.model.usePadButton(index);
+        this.playUi('uiMove');
         this.syncView(
           capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined,
         );
       },
-      onPause: () => this.requestClose(),
+      onPause: () => this.requestClose(true),
       onBack: () => this.handleBack(),
       onConfirm: () => this.view.activateFocused(),
       onDirection: (direction) => this.applyDirection(direction),
@@ -109,7 +116,8 @@ export class MenuSystem {
     };
   }
 
-  private requestClose(): void {
+  private requestClose(fromPad = false): void {
+    if (fromPad) this.playUi('uiBack');
     this.close();
     this.options.onClose();
   }
@@ -118,10 +126,12 @@ export class MenuSystem {
     if (!this.openValue) return;
 
     if (command === 'resume') {
+      this.playUi('uiConfirm');
       this.requestClose();
       return;
     }
     if (command === 'settings' || command === 'controls' || command === 'map') {
+      this.playUi('uiConfirm');
       this.model.navigate(command);
       this.view.render(this.model, null, true);
       return;
@@ -131,17 +141,27 @@ export class MenuSystem {
       return;
     }
     if (command === 'mute') {
+      this.playUi('uiConfirm');
       this.model.toggleMute();
       this.syncView('settings:mute');
       return;
     }
+    if (command === 'screen-shake') {
+      this.playUi('uiConfirm');
+      const enabled = this.model.toggleScreenShake();
+      this.options.onScreenShakeChanged?.(enabled);
+      this.syncView('settings:screen-shake');
+      return;
+    }
     if (command === 'reset') {
+      this.playUi('uiConfirm');
       this.model.requestReset();
       this.syncView('controls:reset');
       return;
     }
     if (command === 'cancel-capture') {
       const capture = this.model.capture;
+      this.playUi('uiBack');
       this.model.cancelCapture();
       this.syncView(
         capture ? bindingFocusId(capture.action, capture.kind, capture.slot) : undefined,
@@ -160,6 +180,7 @@ export class MenuSystem {
       }
       const slot = Number(slotText);
       if (!Number.isInteger(slot) || slot < 0) return;
+      this.playUi('uiMove');
       this.model.beginCapture(action, kind, slot);
       this.view.render(this.model, bindingFocusId(action, kind, slot), false);
     }
@@ -168,6 +189,7 @@ export class MenuSystem {
   private handleBack(): void {
     const capture = this.model.capture;
     const result = this.model.back();
+    this.playUi('uiBack');
     if (result === 'closed') {
       this.requestClose();
       return;
@@ -195,6 +217,7 @@ export class MenuSystem {
         return;
       }
       if (code === 'Escape') {
+        this.playUi('uiBack');
         this.model.cancelCapture();
         this.syncView(bindingFocusId(capture.action, capture.kind, capture.slot));
       } else if (capture.kind === 'key') {
@@ -230,19 +253,19 @@ export class MenuSystem {
         break;
       case 'ArrowUp':
       case 'KeyW':
-        this.view.moveFocus('up');
+        this.moveFocus('up');
         break;
       case 'ArrowDown':
       case 'KeyS':
-        this.view.moveFocus('down');
+        this.moveFocus('down');
         break;
       case 'ArrowLeft':
       case 'KeyA':
-        this.view.moveFocus('left');
+        this.moveFocus('left');
         break;
       case 'ArrowRight':
       case 'KeyD':
-        this.view.moveFocus('right');
+        this.moveFocus('right');
         break;
       case 'Enter':
       case 'Space':
@@ -250,6 +273,7 @@ export class MenuSystem {
         break;
       case 'Tab':
         this.view.trapTab(event.shiftKey);
+        this.playUi('uiMove');
         break;
       default:
         break;
@@ -263,9 +287,23 @@ export class MenuSystem {
   private applyDirection(direction: MenuDirection): void {
     if (direction === 'left' || direction === 'right') {
       const steps = direction === 'left' ? -1 : 1;
-      if (this.view.stepFocusedRange(steps)) return;
+      if (this.view.stepFocusedRange(steps)) {
+        this.playUi('uiMove');
+        return;
+      }
     }
+    this.moveFocus(direction);
+  }
+
+  /** Moves focus only when it actually changes, so holding a direction cannot machine-gun. */
+  private moveFocus(direction: MenuDirection): void {
+    const before = this.view.focusId();
     this.view.moveFocus(direction);
+    if (this.view.focusId() !== before) this.playUi('uiMove');
+  }
+
+  private playUi(key: SfxKey): void {
+    this.options.audio.playSfx?.(key);
   }
 
   private setGameInert(inert: boolean): void {

@@ -175,6 +175,25 @@ export type SaveDebugState = {
   lastWrite: SaveReason | null;
 };
 
+/** The first-run start card's state, used by E2E and the diagnostics overlay. */
+export type TitleDebugState = {
+  open: boolean;
+  /** True when boot restored a run; the card then leads with Continue. */
+  hasSave: boolean;
+  /** True after the first Begin anew click; the second erases the run. */
+  newRunArmed: boolean;
+  primaryLabel: string;
+  focus: string | null;
+};
+
+export type OnboardingDebugState = {
+  open: boolean;
+};
+
+export type AccessibilityDebugState = {
+  screenShake: boolean;
+};
+
 export type GameDebugState = {
   /** True once boot() finished (renderer up, scene mounted, loop running). */
   ready: boolean;
@@ -203,6 +222,12 @@ export type GameDebugState = {
   audio: AudioDebugState;
   /** Pause overlay snapshot; bindings are visible even while the menu is closed. */
   menu: MenuDebugState;
+  /** Boot title card state. */
+  title: TitleDebugState;
+  /** First-run hint strip state. */
+  onboarding: OnboardingDebugState;
+  /** Persisted accessibility preferences. */
+  accessibility: AccessibilityDebugState;
   /** Captured runtime errors; empty in a healthy session. */
   errors: string[];
 };
