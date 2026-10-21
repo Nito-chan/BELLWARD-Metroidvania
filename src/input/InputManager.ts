@@ -30,6 +30,8 @@ export class InputManager {
   private readonly pendingReleased = new Set<ActionName>();
   private readonly keysDown = new Set<string>();
   private readonly padHeld = new Set<ActionName>();
+  /** Touch controls press actions directly; kept separate so releases can merge sources. */
+  private readonly virtualHeld = new Set<ActionName>();
   private readonly boundCodes = new Set<string>();
   private bindings: Bindings;
 
@@ -79,16 +81,44 @@ export class InputManager {
 
     if (!this.keysDown.delete(code)) return true;
     for (const action of this.actionsBoundTo(code)) {
-      if (!this.isKeyHeld(action) && !this.padHeld.has(action) && this.held.delete(action)) {
+      if (
+        !this.isKeyHeld(action) &&
+        !this.padHeld.has(action) &&
+        !this.virtualHeld.has(action) &&
+        this.held.delete(action)
+      ) {
         this.pendingReleased.add(action);
       }
     }
     return true;
   }
 
+  /**
+   * Presses or releases an action from an on-screen control. Virtual input shares the
+   * held set with keyboard and pad so any source can keep an action down; edges still
+   * queue between fixed ticks, which makes quick taps reliable.
+   */
+  setVirtual(action: ActionName, down: boolean): void {
+    if (down) {
+      if (this.virtualHeld.has(action)) return;
+      this.virtualHeld.add(action);
+      if (!this.held.has(action)) {
+        this.held.add(action);
+        this.pendingPressed.add(action);
+      }
+      return;
+    }
+
+    if (!this.virtualHeld.delete(action)) return;
+    if (!this.isKeyHeld(action) && !this.padHeld.has(action) && this.held.delete(action)) {
+      this.pendingReleased.add(action);
+    }
+  }
+
   /** Clears every held key (window blur): nothing is worse than a stuck run key. */
   blur(): void {
     this.keysDown.clear();
+    this.virtualHeld.clear();
     for (const action of [...this.held]) {
       if (!this.padHeld.has(action) && this.held.delete(action)) {
         this.pendingReleased.add(action);
@@ -105,6 +135,7 @@ export class InputManager {
     this.pendingReleased.clear();
     this.keysDown.clear();
     this.padHeld.clear();
+    this.virtualHeld.clear();
   }
 
   /** Takes this tick's snapshot; pressed/released edges are consumed by the call. */
@@ -159,7 +190,12 @@ export class InputManager {
       }
     }
     for (const action of this.padHeld) {
-      if (!now.has(action) && !this.isKeyHeld(action) && this.held.delete(action)) {
+      if (
+        !now.has(action) &&
+        !this.isKeyHeld(action) &&
+        !this.virtualHeld.has(action) &&
+        this.held.delete(action)
+      ) {
         this.pendingReleased.add(action);
       }
     }

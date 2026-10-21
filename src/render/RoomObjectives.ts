@@ -141,11 +141,7 @@ export class RoomObjectives {
     this.options.tileLayer.removeRole('breakable');
     this.secretBrokenValue = true;
     this.secretBrokenThisVisitValue = true;
-    this.options.effects.spark(
-      hitbox.x + hitbox.w / 2,
-      hitbox.y + hitbox.h / 2,
-      player.facing,
-    );
+    this.options.effects.spark(hitbox.x + hitbox.w / 2, hitbox.y + hitbox.h / 2, player.facing);
     this.options.audio.playSfx('bossWard');
     this.options.camera.shake(4, 12);
     this.options.banner.show('A HIDDEN PASSAGE', 'The cracked stone gives way.', 150);

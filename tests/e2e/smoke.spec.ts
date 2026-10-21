@@ -4,6 +4,7 @@ import { COMBAT } from '../../src/config/combat';
 import {
   bootGame,
   debugState,
+  dismissOnboarding,
   openTitle,
   reloadGame,
   startFromTitle,
@@ -38,8 +39,14 @@ async function waitForLiveMusic(page: Page, timeout = 60_000): Promise<void> {
 test.describe('M2 smoke', () => {
   test('boots into the belfry terrace with packed art', async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
+    // Chromium on a Windows host can report a transient network-adapter change while
+    // Vite serves the art. The packed-art assertions below prove every texture loaded,
+    // so ignore only this transport code; application and page errors stay fatal.
+    const transientNetworkError = /net::ERR_NETWORK_CHANGED/;
     page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
+      if (message.type() === 'error' && !transientNetworkError.test(message.text())) {
+        consoleErrors.push(message.text());
+      }
     });
     page.on('pageerror', (error) => consoleErrors.push(String(error)));
 
@@ -397,7 +404,7 @@ test.describe('M3 audio', () => {
     expect(after.audio.failed).toEqual([]);
     expect(after.errors).toEqual([]);
 
-    await page.getByRole('button', { name: 'Dismiss first steps' }).click();
+    await dismissOnboarding(page);
     await expect(page.getByTestId('onboarding-root')).toBeHidden();
 
     // The overlay reports the mix, because a broken audio path must be visible.

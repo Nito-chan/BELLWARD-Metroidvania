@@ -22,6 +22,8 @@ export type TitleScreenOptions = {
   readonly hasSave: boolean;
   readonly summary: TitleSummary | null;
   readonly bindings: Bindings;
+  /** Touch devices get on-screen control hints instead of keyboard keycaps. */
+  readonly touch?: boolean;
   readonly onBegin: () => void;
   readonly onNewRun: () => void;
   readonly onSfx?: (key: SfxKey) => void;
@@ -208,6 +210,12 @@ export class TitleScreen {
   private buildFooter(): HTMLElement {
     const footer = el('footer', 'title-footer');
     const hints = el('div', 'title-hints');
+    if (this.options.touch) {
+      hints.append(hint('', 'Touch controls'), hint('', 'Landscape'), hint('', 'Pause'));
+      footer.append(hints, el('p', 'title-footnote', 'Touch · Wide screen · Headphones'));
+      return footer;
+    }
+
     const keyboard = this.options.bindings.keyboard;
     hints.append(
       hint(

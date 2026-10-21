@@ -18,6 +18,7 @@
  *      (--small captures any menu screen at the 640x360 E2E viewport)
  *      (--title captures the boot title card; add --small for the tiny viewport)
  *      (--onboarding starts a fresh run and captures the first-run hints)
+ *      (--touch emulates a touch device, starts play and captures the on-screen controls)
  *      (--bench loads the terrace beside the bench and captures the rest prompt)
  *      (--map charts every room, rests at the nave, claims one sigil, then captures the map)
  *      (--combat walks into the nearest parishioner and shoots on the first impact)
@@ -53,9 +54,10 @@ const benchShot = args.includes('--bench');
 const mapShot = args.includes('--map');
 const titleShot = args.includes('--title');
 const onboardingShot = args.includes('--onboarding');
+const touchShot = args.includes('--touch');
 /** Menus and the chart are normally captured at 1280x720; --small checks the 640x360 view. */
 const smallShot = args.includes('--small');
-const pageShot = overlayShot || menuShot || mapShot || titleShot || onboardingShot;
+const pageShot = overlayShot || menuShot || mapShot || titleShot || onboardingShot || touchShot;
 const outputPath = resolve(
   args.find((value) => !value.startsWith('--')) ?? 'docs/screenshots/current.png',
 );
@@ -65,7 +67,12 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
   try {
     const page = await browser.newPage({
-      viewport: pageShot && !smallShot ? { width: 1280, height: 720 } : { width: 640, height: 360 },
+      viewport: touchShot
+        ? { width: 844, height: 390 }
+        : pageShot && !smallShot
+          ? { width: 1280, height: 720 }
+          : { width: 640, height: 360 },
+      hasTouch: touchShot,
     });
     const response = await page.goto(url).catch(() => null);
     if (!response || !response.ok()) {

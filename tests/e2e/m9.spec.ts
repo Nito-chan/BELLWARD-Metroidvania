@@ -53,9 +53,7 @@ test.describe('M9 title, onboarding and accessibility', () => {
     expect((await debugState(page)).onboarding.open).toBe(false);
   });
 
-  test('continues the saved room, and Begin anew needs a second confirmation', async ({
-    page,
-  }) => {
+  test('continues the saved room, and Begin anew needs a second confirmation', async ({ page }) => {
     await bootGame(page);
     await loadRoom(page, 'belfry-antechamber', { x: 90, y: 320 });
     expect((await debugState(page)).scene?.roomId).toBe('belfry-antechamber');
@@ -109,7 +107,7 @@ test.describe('M9 title, onboarding and accessibility', () => {
 
   test('continues a saved room without lowering its progress', async ({ page }) => {
     await bootGame(page);
-    await loadRoom(page, 'drowned-gallery', { x: 240, y: 208 });
+    await loadRoom(page, 'drowned-gallery', { x: 300, y: 256 });
     const before = await debugState(page);
 
     await page.reload();

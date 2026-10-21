@@ -12,6 +12,9 @@ body {
   height: 100%;
   background: #05070a;
   overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #app {
@@ -19,15 +22,95 @@ body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
 }
 
 #app canvas {
   display: block;
+  max-width: 100vw;
+  max-height: 100dvh;
   image-rendering: pixelated;
   box-shadow:
     0 0 0 1px #1c2530,
     0 24px 80px rgb(0 0 0 / 60%);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The renderer and art load before the title can mount; this keeps the first paint
+   intentional instead of a black rectangle. `main.ts` removes it once boot resolves. */
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.55rem;
+  padding: 1.5rem;
+  background: radial-gradient(ellipse at 50% 42%, #102a27 0%, #07110f 48%, #010403 100%), #020607;
+  color: #ede3cd;
+  text-align: center;
+}
+
+.boot-splash-kicker {
+  margin: 0;
+  color: #c8a66a;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  text-transform: uppercase;
+}
+
+.boot-splash-word {
+  margin: 0;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.8rem, 11vw, 6rem);
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  line-height: 0.9;
+  text-indent: 0.14em;
+  text-shadow: 0 0 2.5rem rgb(200 166 106 / 16%);
+}
+
+.boot-splash-note {
+  margin: 0.8rem 0 0;
+  color: #9aa79b;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.boot-splash-note::after {
+  display: inline-block;
+  width: 1.4em;
+  overflow: hidden;
+  vertical-align: bottom;
+  content: '...';
+  animation: boot-ellipsis 1.6s steps(4, end) infinite;
+}
+
+@keyframes boot-ellipsis {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 1.4em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-splash-note::after {
+    width: 1.4em;
+    animation: none;
+  }
 }
 
 body > noscript {

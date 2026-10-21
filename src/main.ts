@@ -4,6 +4,7 @@ import { formatError } from './core/Errors';
 
 /** Renders an unmissable fatal error state — the game never fails silently. */
 function showFatalError(detail: string): void {
+  document.getElementById('boot-splash')?.remove();
   const box = document.createElement('div');
   box.className = 'fatal-error';
   box.setAttribute('role', 'alert');
@@ -23,9 +24,15 @@ function showFatalError(detail: string): void {
   }
 }
 
+/** The title is already mounted underneath; the splash has done its job once boot resolves. */
+function dismissBootSplash(): void {
+  document.getElementById('boot-splash')?.remove();
+}
+
 async function main(): Promise<void> {
   const game = new Game();
   await game.boot();
+  dismissBootSplash();
 
   if (import.meta.env.DEV) {
     // Read-only debug surface for tooling and the E2E suite. DEV-only by design (D004).

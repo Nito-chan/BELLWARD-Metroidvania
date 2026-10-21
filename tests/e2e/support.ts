@@ -28,6 +28,17 @@ export async function bootGame(page: Page): Promise<void> {
   await startFromTitle(page);
 }
 
+/**
+ * Dismisses the hint strip when it is still up. Audio tests can legitimately wait past the
+ * 16 s auto-hide before reaching this point, so a missed click is not a failure; callers
+ * still assert the final hidden state.
+ */
+export async function dismissOnboarding(page: Page): Promise<void> {
+  const dismiss = page.getByRole('button', { name: 'Dismiss first steps' });
+  if (!(await dismiss.isVisible().catch(() => false))) return;
+  await dismiss.click({ timeout: 2_000 }).catch(() => undefined);
+}
+
 /** Reloads the page, continues the autosaved run past the title, and waits for the room. */
 export async function reloadGame(page: Page): Promise<void> {
   await page.reload();

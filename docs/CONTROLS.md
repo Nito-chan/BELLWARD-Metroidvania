@@ -159,4 +159,19 @@ the standard mapping and unit-tested with an injected pad; not yet verified on p
 
 ## Touch overlay
 
-Not in the vertical slice scope until M10 (mobile pass). Landscape-first layout.
+On touch devices the game mounts a landscape-first on-screen control set; mouse/keyboard desktops never
+see it. The left thumb gets **left**, **down** and **right**; the right thumb gets **Focus** (hold to
+heal), **Rest** (interact), **Dash**, **Strike** and **Jump**. **Pause** sits at the top-right and opens
+the same accessible pause dialog as `Escape`. Movement + attack/jump are multi-touch: each button owns
+its own pointer, and holding **down** while tapping **Jump** drops through a one-way platform.
+
+Buttons feed `InputManager.setVirtual`, so the 60 Hz simulation receives the same held/pressed/released
+snapshot contract as keyboard and gamepad input. Buttons release on pointer-up/cancel, window blur,
+visibility loss and whenever a menu, bench, ending card or the title takes over; no virtual action can
+stick across a pause. The title and first-run strip show touch wording instead of keyboard keycaps on
+these devices. The canvas scales to the available viewport (fractional scale on touch, whole-pixel scale
+on desktop), and safe-area insets keep the controls clear of notches and home indicators.
+
+Touch input is covered by the Playwright touch context and the `InputManager` unit suite; physical
+phone/tablet testing is still outstanding. **Cast** has no player action in the slice and therefore has no
+touch button; the map is reachable from the pause menu.

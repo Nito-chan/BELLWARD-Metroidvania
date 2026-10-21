@@ -1,0 +1,221 @@
+/* Landscape-first touch controls: thumb-sized targets, safe-area aware, never blocking. */
+.touch-root {
+  --touch-ink: #f1e7d3;
+  --touch-muted: #a4b1a5;
+  --touch-brass: #c8a66a;
+  --touch-brass-bright: #e4c992;
+  --touch-line: rgb(200 166 106 / 34%);
+  --touch-ui: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  overflow: hidden;
+  color: var(--touch-ink);
+  font-family: var(--touch-ui);
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.touch-root[hidden] {
+  display: none;
+}
+
+.touch-cluster {
+  position: absolute;
+  bottom: max(0.9rem, env(safe-area-inset-bottom));
+  display: grid;
+  gap: 0.42rem;
+  pointer-events: none;
+}
+
+.touch-move {
+  left: max(0.85rem, env(safe-area-inset-left));
+  grid-template-columns: repeat(3, 3.5rem);
+  align-items: end;
+}
+
+.touch-actions {
+  right: max(0.85rem, env(safe-area-inset-right));
+  grid-template-areas:
+    'heal interact dash'
+    'attack jump jump';
+  grid-template-columns: repeat(3, 3.35rem);
+  align-items: end;
+}
+
+.touch-button {
+  display: grid;
+  min-width: 2.6rem;
+  min-height: 2.6rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--touch-line);
+  border-radius: 0.85rem;
+  background:
+    linear-gradient(180deg, rgb(15 35 32 / 82%) 0%, rgb(3 10 9 / 86%) 100%), rgb(4 12 11 / 82%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 5%),
+    0 0.35rem 1.1rem rgb(0 0 0 / 38%);
+  color: var(--touch-ink);
+  font-family: var(--touch-ui);
+  font-size: 0.54rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: auto;
+  touch-action: none;
+  transition:
+    transform 90ms ease-out,
+    border-color 90ms ease-out,
+    background-color 90ms ease-out,
+    color 90ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-button.is-pressed {
+  border-color: var(--touch-brass-bright);
+  background:
+    linear-gradient(180deg, rgb(228 201 146 / 92%) 0%, rgb(151 115 65 / 94%) 100%),
+    var(--touch-brass);
+  box-shadow:
+    inset 0 1px 0 rgb(255 250 235 / 35%),
+    0 0 1.2rem rgb(200 166 106 / 24%);
+  color: #08110f;
+  transform: scale(0.94);
+}
+
+.touch-move .touch-button {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+}
+
+.touch-actions .touch-button {
+  width: 100%;
+  height: 2.9rem;
+}
+
+.touch-actions .touch-attack,
+.touch-actions .touch-jump {
+  height: 3.9rem;
+  border-radius: 1.15rem;
+}
+
+.touch-actions .touch-attack {
+  grid-area: attack;
+  color: var(--touch-brass-bright);
+}
+
+.touch-actions .touch-jump {
+  grid-area: jump;
+  border-color: rgb(200 166 106 / 52%);
+}
+
+.touch-heal {
+  grid-area: heal;
+}
+
+.touch-interact {
+  grid-area: interact;
+}
+
+.touch-dash {
+  grid-area: dash;
+}
+
+.touch-glyph {
+  display: block;
+  font-size: 1.08rem;
+  line-height: 1;
+  transform: translateY(-0.02em);
+}
+
+.touch-label {
+  display: block;
+  padding: 0 0.2rem;
+}
+
+.touch-pause {
+  position: absolute;
+  top: max(0.65rem, env(safe-area-inset-top));
+  right: max(0.85rem, env(safe-area-inset-right));
+  width: auto;
+  min-width: 3.4rem;
+  height: 2.3rem;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  color: var(--touch-muted);
+  pointer-events: auto;
+}
+
+.touch-root:not([hidden]) .touch-cluster,
+.touch-root:not([hidden]) .touch-pause {
+  animation: touch-arrive 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes touch-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-height: 430px) {
+  .touch-cluster {
+    bottom: max(0.45rem, env(safe-area-inset-bottom));
+  }
+
+  .touch-move {
+    grid-template-columns: repeat(3, 3.25rem);
+  }
+
+  .touch-move .touch-button {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+
+  .touch-actions {
+    grid-template-columns: repeat(3, 3.1rem);
+  }
+
+  .touch-actions .touch-button {
+    height: 2.65rem;
+  }
+
+  .touch-actions .touch-attack,
+  .touch-actions .touch-jump {
+    height: 3.55rem;
+  }
+
+  .touch-pause {
+    top: max(0.35rem, env(safe-area-inset-top));
+    height: 2rem;
+  }
+}
+
+@media (orientation: portrait) {
+  .touch-pause {
+    top: max(0.65rem, env(safe-area-inset-top));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .touch-button {
+    transition: none;
+  }
+
+  .touch-root:not([hidden]) .touch-cluster,
+  .touch-root:not([hidden]) .touch-pause {
+    animation: none;
+  }
+}

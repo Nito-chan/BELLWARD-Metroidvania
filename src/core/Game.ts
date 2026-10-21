@@ -11,6 +11,7 @@ import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
 import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
+import { isTouchDevice } from '../input/device';
 import { AccessibilitySettings } from '../settings/AccessibilitySettings';
 import { Announcer } from '../ui/Announcer';
 import { BenchController } from '../ui/bench/BenchController';
@@ -19,6 +20,7 @@ import { MenuSystem } from '../ui/menu/MenuSystem';
 import type { MenuScreen } from '../ui/menu/menuTypes';
 import { Onboarding } from '../ui/start/Onboarding';
 import { TitleScreen, type TitleSummary } from '../ui/start/TitleScreen';
+import { TouchControls } from '../ui/touch/TouchControls';
 import { ALL_ROOMS, getRoom } from '../data/rooms';
 import { ArtProvider } from '../render/ArtProvider';
 import type { RoomSpawn } from '../world/Room';
@@ -63,6 +65,9 @@ export class Game {
   });
   private bindings: Bindings;
   private readonly input: InputManager;
+  /** Detect once at boot: rotating a hybrid device must not swap the whole control scheme. */
+  private readonly isTouch = isTouchDevice();
+  private readonly touch: TouchControls;
   private readonly menu: MenuSystem;
   private readonly bench: BenchController;
   private readonly endingOverlay: EndingOverlay;
@@ -80,6 +85,11 @@ export class Game {
   constructor() {
     this.bindings = loadBindings();
     this.input = new InputManager({ bindings: this.bindings });
+    this.touch = new TouchControls({
+      enabled: this.isTouch,
+      onAction: (action, down) => this.input.setVirtual(action, down),
+      onPause: () => this.openMenu('pause'),
+    });
     this.menu = new MenuSystem({
       bindings: this.bindings,
       audio: this.audio,
@@ -103,6 +113,7 @@ export class Game {
       run: this.run,
       announce: (text) => this.announcer.say(text),
       onPause: () => {
+        this.touch.hide();
         this.input.reset();
         this.loop.pause();
       },
@@ -120,8 +131,12 @@ export class Game {
       onNewRun: () => this.beginRun(true),
       onSfx: (key) => this.audio.playSfx(key),
       onMute: () => this.audio.toggleMute(),
+      touch: this.isTouch,
     });
-    this.onboarding = new Onboarding({ getBindings: () => this.bindings });
+    this.onboarding = new Onboarding({
+      getBindings: () => this.bindings,
+      touch: this.isTouch,
+    });
   }
 
   /** Initializes the renderer, mounts the canvas, starts the loop. Throws on failure. */
@@ -173,6 +188,8 @@ export class Game {
     this.menu.mount();
     this.title.mount();
     this.onboarding.mount();
+    this.touch.mount();
+    window.visualViewport?.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onMenuKeyDown, true);
     window.addEventListener('keyup', this.onMenuKeyUp, true);
     window.addEventListener('keydown', this.onKeyDown);
@@ -212,6 +229,7 @@ export class Game {
       menu: this.menu.debugState(),
       title: this.title.debugState(),
       onboarding: this.onboarding.debugState(),
+      touch: this.touch.debugState(),
       accessibility: {
         screenShake: this.accessibility.screenShake,
       },
@@ -244,12 +262,7 @@ export class Game {
   }
 
   private onTick(): void {
-    if (
-      this.title.isOpen ||
-      this.menu.isOpen ||
-      this.bench.isOpen ||
-      this.endingOverlay.isOpen
-    ) {
+    if (this.title.isOpen || this.menu.isOpen || this.bench.isOpen || this.endingOverlay.isOpen) {
       return;
     }
     const snapshot = this.input.snapshot();
@@ -285,6 +298,7 @@ export class Game {
   /** Freezes the simulation but keeps rendering the scene behind the overlay. */
   private openMenu(screen: MenuScreen): void {
     if (this.title.isOpen || this.bench.isOpen || this.endingOverlay.isOpen) return;
+    this.touch.hide();
     this.input.reset();
     this.loop.pause();
     this.menu.open(screen);
@@ -313,6 +327,7 @@ export class Game {
     this.menuLatch = true;
     this.loop.resume();
     this.app.canvas.focus();
+    this.touch.show();
     if (newRun || !this.resumedRun) this.onboarding.show();
     // The run is only persisted once the player actually crosses the threshold.
     this.run.saveStart();
@@ -331,10 +346,12 @@ export class Game {
     this.input.reset();
     this.loop.resume();
     this.app.canvas.focus();
+    this.touch.show();
   }
 
   private openEnding(title: string, subtitle: string): void {
     const progress = this.run.progress;
+    this.touch.hide();
     this.input.reset();
     this.loop.pause();
     this.endingOverlay.open(title, subtitle, {
@@ -350,6 +367,7 @@ export class Game {
     this.input.reset();
     this.loop.resume();
     this.app.canvas.focus();
+    this.touch.show();
   }
 
   /** DEV-only: jump straight into a room (optionally at a validated spawn) for E2E. */
@@ -397,9 +415,15 @@ export class Game {
   }
 
   private readonly onResize = (): void => {
-    // Integer scale keeps pixels crisp; never shrink below native size.
-    const fit = Math.min(window.innerWidth / VIEW.width, window.innerHeight / VIEW.height);
-    const scale = Math.max(1, Math.floor(fit));
+    // Whole-pixel scales keep desktop art crisp; touch screens may use the exact fit,
+    // and a viewport smaller than 640x360 shrinks instead of clipping or scrolling.
+    // visualViewport tracks mobile browser chrome and the on-screen keyboard; fall back
+    // to the window on browsers that do not expose it.
+    const viewport = window.visualViewport;
+    const width = viewport?.width ?? window.innerWidth;
+    const height = viewport?.height ?? window.innerHeight;
+    const fit = Math.min(width / VIEW.width, height / VIEW.height);
+    const scale = this.isTouch || fit < 1 ? fit : Math.max(1, Math.floor(fit));
     this.app.canvas.style.width = `${VIEW.width * scale}px`;
     this.app.canvas.style.height = `${VIEW.height * scale}px`;
   };
@@ -416,12 +440,7 @@ export class Game {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (
-      this.title.isOpen ||
-      this.menu.isOpen ||
-      this.bench.isOpen ||
-      this.endingOverlay.isOpen
-    ) {
+    if (this.title.isOpen || this.menu.isOpen || this.bench.isOpen || this.endingOverlay.isOpen) {
       return;
     }
     if (event.defaultPrevented) return;
@@ -442,12 +461,7 @@ export class Game {
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
-    if (
-      this.title.isOpen ||
-      this.menu.isOpen ||
-      this.bench.isOpen ||
-      this.endingOverlay.isOpen
-    ) {
+    if (this.title.isOpen || this.menu.isOpen || this.bench.isOpen || this.endingOverlay.isOpen) {
       return;
     }
     if (event.defaultPrevented) return;
@@ -457,6 +471,7 @@ export class Game {
   /** Losing focus mid-keypress must not leave the hero running forever. */
   private readonly onBlur = (): void => {
     this.input.blur();
+    this.touch.releaseAll();
     this.menuKeysDown.clear();
   };
 

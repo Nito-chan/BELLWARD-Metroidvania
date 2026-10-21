@@ -964,10 +964,36 @@ pipeline; `Game` keeps composition and overlay pause/resume ownership. `RunSessi
 **Why:** These are the seams that were actually drifting: the scene had accumulated save-facing reward
 state and the composition root had accumulated equipment policy. Moving them makes each mutation path
 testable and keeps the render loop easier to read. The extraction is behavior-preserving; the M8 suite
-remains the contract and will be rerun with M10.
+remains the contract and was rerun in the combined M9+M10 sweep.
 
 **Alternatives:** leave the monoliths for M10 (rejected: M9 was the agreed polish pass); split by render
 layer only (rejected: the state/presentation seams were the real coupling). **Debt:** `RoomScene` is 440
-non-empty lines and `Game` 438, still above the ~300 guideline; `TitleScreen` (338) is the largest new UI
-file. Further extraction is deferred until after the deferred M9+M10 gates, so unchecked refactors do not
-pile onto unverified code.
+non-empty lines and `Game` 448 (438 when this decision landed), still above the ~300 guideline;
+`TitleScreen` is 345 (338 at M9) and the largest new UI file. Further extraction is deferred until after
+the slice, so unchecked refactors do not pile onto shipped code.
+
+## D059 — 2026-10-21 — Touch is a DOM overlay over the same input snapshots
+
+**Decision:** On coarse-pointer/touch devices, `TouchControls` mounts a landscape-first DOM overlay with
+left/down/right movement, Focus, Rest, Dash, Strike, Jump and Pause. Every held button calls
+`InputManager.setVirtual(action, down)`; virtual actions merge with keyboard and gamepad sources so
+releasing one source never drops an action another source still holds. Buttons own their pointer ids
+(multi-touch), release on pointer-up/cancel/blur/visibility loss, and the whole overlay hides and clears
+whenever the title, pause menu, bench or ending card owns the screen. Pause invokes the same
+`openMenu('pause')` path as `Escape`. The device check is captured once at boot from
+`(pointer: coarse)` or `maxTouchPoints > 0`. The title and onboarding read `touch` and render labels
+without keycaps; a boot splash and mobile metadata are presentational only.
+
+**Why:** The simulation must never learn about DOM events or pointer capture. Routing through the existing
+manager preserves one input contract, per-tick edge buffering, source merging and all current gameplay
+code, while a DOM overlay keeps native button labels and CSS safe-area/landscape layout. Hiding on every
+modal prevents a thumb resting on Jump from leaking into a menu or the next tick after resume. Capturing
+the device capability once avoids the control scheme swapping mid-session on a hybrid laptop, and not
+mounting the DOM on desktop keeps keyboard play untouched.
+
+**Alternatives:** inject `PointerEvent`s into the canvas (rejected: game logic would parse DOM coordinates
+and lose semantic actions); a separate touch state consumed by the player controller (rejected: duplicate
+edge logic and source-merging bugs); always mount the overlay and hide it with CSS (rejected: pointless
+focus/click surface and memory on desktop); virtual joystick (not needed for a four-direction platformer
+and harder to read). **Debt:** physical touch hardware remains unverified; Playwright's touch context is
+the current proof.

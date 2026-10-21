@@ -84,6 +84,10 @@ export class DebugOverlay {
       `menu       ${menu.open ? `${menu.screen ?? '-'}${menu.capture ? ` capture ${menu.capture.action}.${menu.capture.kind}` : ''}` : 'closed'}${menu.focus ? ` focus ${menu.focus}` : ''}`,
     );
     if (menu.open && menu.status) lines.push(`menu-note  ${menu.status}`);
+    const { touch } = state;
+    lines.push(
+      `touch      ${touch.enabled ? 'on' : 'off'} ${touch.visible ? 'visible' : 'hidden'}${touch.held.length > 0 ? ` held ${touch.held.join(',')}` : ''}`,
+    );
     if (audio.failed.length > 0) {
       lines.push(`audio-load ${audio.failed.join(', ')}`);
     }

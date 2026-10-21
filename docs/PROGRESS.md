@@ -1023,11 +1023,9 @@ Not started. Scope will be confirmed before any M8 code is written; this run end
 
 ## M9 — The threshold: title, onboarding and accessibility (2026-10-21)
 
-**Commit:** this milestone’s code commit · **Status:** implementation drafted; every verification gate is
-intentionally deferred. No typecheck, lint, unit, build, asset, format or Playwright command has been run
-for M9, by explicit instruction. M9 and M10 are verified together after M10.
+**Commit:** `8083f55` · **Status:** complete, all gates green (verified with M10 in the combined sweep).
 
-### Shipped (code drafted, not yet verified)
+### Shipped
 
 - **Title/start flow (`src/ui/start/TitleScreen.ts`, `src/ui/start/start.css`).** Boot mounts the terrace,
   then opens a full-screen **BELLWARD** dialog and pauses the fixed-step loop; rendering and requested
@@ -1059,7 +1057,7 @@ for M9, by explicit instruction. M9 and M10 are verified together after M10.
   onboarding, accessibility and start wiring; `TitleScreen` is 338. No mechanics were intentionally
   changed.
 
-### Drafted verification (not run)
+### Verification coverage (M9 additions, run with M10)
 
 - `tests/e2e/m9.spec.ts`: five flows — title focus/keyboard start/no boot save, saved continue plus
   two-step new run and Escape cancel, progress-preserving continue, screen-shake persistence through
@@ -1068,24 +1066,24 @@ for M9, by explicit instruction. M9 and M10 are verified together after M10.
 - `tests/unit/accessibility.test.ts` (+4): OS default, persistence, corrupt/future documents and missing
   storage. `tests/unit/menu-model.test.ts` (+1): screen-shake toggle through the accessibility port.
   `tests/unit/camera.test.ts` (+1): disabling cancels and ignores shakes, re-enabling works.
-- `scripts/capture-screenshot.ts` supports `--title` and `--onboarding`; no M9 screenshot files have been
-  generated yet.
+- `scripts/capture-screenshot.ts` supports `--title` and `--onboarding`; the M9 captures are listed in
+  the gate table below.
 
-### Gates (all intentionally pending at commit)
+### Gates (all green; verified with M10)
 
-| Gate                          | Result                                                                 |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `npm run typecheck`           | **Pending** — not run for M9                                           |
-| `npm run lint`                | **Pending** — not run for M9                                           |
-| `npm run level:check`         | **Pending** — M8 contract unchanged, but not rerun                     |
-| `npm run test`                | **Pending** — M9 unit additions drafted, full suite not run            |
-| `npm run build`               | **Pending** — not run for M9                                           |
-| `npm run test:e2e`            | **Pending** — M9 flows and updated reload helpers not run              |
-| `npm run assets:check:strict` | **Pending** — four existing SFX reused; no new files                   |
-| `npm run format:check`        | **Pending** — not run for M9                                           |
-| Screenshots                   | **Pending** — `--title` / `--onboarding` supported, captures not made   |
+| Gate                          | Result                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`           | clean                                                                                                                   |
+| `npm run lint`                | clean, zero warnings                                                                                                    |
+| `npm run level:check`         | OK — 12 rooms, 22 pickups, 3 benches, 3 Ordeals                                                                         |
+| `npm run test`                | 275/275 passed (24 files, ~16 s) — includes M9's 6 and M10's 3 new tests                                                |
+| `npm run build`               | 864 modules, 527.61 kB JS / 150.50 kB gzip, 37.60 kB CSS / 8.17 kB gzip                                                 |
+| `npm run test:e2e`            | 37/37 passed (10.6 min), including all five M9 flows and three M10 touch flows                                          |
+| `npm run assets:check:strict` | OK, 662 files, 0 warnings                                                                                               |
+| `npm run format:check`        | clean                                                                                                                   |
+| Screenshots                   | `M9-title.png` / `M9-title-small.png` (1280×720 / 640×360), `M9-onboarding.png` / `M9-onboarding-small.png` — inspected |
 
-### Findings & adjustments made while drafting
+### Findings & adjustments
 
 - **A viewed title was creating a save.** The original boot path persisted `'boot'` inside
   `RunSession.begin()`, so opening the page and walking away would later show **Continue**. The initial
@@ -1112,17 +1110,114 @@ for M9, by explicit instruction. M9 and M10 are verified together after M10.
 
 ### Explicitly deferred / risks
 
-- **All M9 verification is deferred.** Expect possible type/lint/style adjustments and E2E timing fixes;
-  this report deliberately makes no green claims. Run M9 and M10 gates together and fix both together.
-- **M9 captures are missing.** Generate `--title` and `--onboarding` (at 1280×720 and 640×360) before the
-  final report.
-- **`RoomScene` and `Game` remain above the size guideline.** Further extraction is deliberately paused
-  until the deferred gates pass; the new controllers are cohesive and behavior-preserving.
-- **Gamepad title navigation is wired through the existing `MenuPad` polling path, but M9 adds no gamepad-specific E2E coverage and it remains unverified on physical hardware.** Touch controls remain out of scope until M10.
+- **M9 was verified with M10; no gate is outstanding.** The combined sweep corrected the
+  progress-preserving E2E spawn to a validated `drowned-gallery` standing point and made the M3 audio
+  dismissal tolerate the hint strip's 16 s auto-hide.
+- **`RoomScene` and `Game` remain above the size guideline.** `RoomScene` is 440 non-empty lines; `Game`
+  ended M9 at 438 and is 448 after M10's touch wiring. The M9 controllers are cohesive and
+  behavior-preserving; further extraction is deferred until after the slice.
+- **Gamepad title navigation is wired through the existing `MenuPad` polling path, but M9 adds no
+  gamepad-specific E2E coverage and it remains unverified on physical hardware.** Touch controls now ship
+  in M10.
 - **No new story, rooms, enemies, bosses or pickups.** M9 is a threshold/accessibility/polish milestone.
 
-### Next milestone preview (M10)
+---
 
-Mobile/touch controls and the shipping pass, followed immediately by the combined M9+M10 verification
-sweep: typecheck, lint, `level:check`, unit, build, Playwright, strict assets and formatting, then M9
-screenshot capture and report correction.
+## M10 — Touch controls and the shipping pass (2026-10-21)
+
+**Commit:** this milestone's commit · **Status:** complete, all gates green. M9 and M10 were verified
+together in one sweep after both implementations landed.
+
+### Shipped
+
+- **Touch controls (`src/ui/touch/TouchControls.ts`, `touch.css`).** A landscape-first DOM overlay mounted
+  only when `(pointer: coarse)` or `maxTouchPoints > 0` is true. The left thumb gets left/down/right; the
+  right thumb gets Focus, Rest, Dash, Strike and Jump, with Pause at the top-right. Every target is at
+  least 2.6 rem and grows to 3.5–3.9 rem in landscape. Safe-area insets keep clusters clear of notches
+  and home indicators, and a reduced-motion rule removes the arrive transition.
+- **Virtual input with honest source merging (`InputManager.setVirtual`).** Touch presses join a third
+  held-source set beside keyboard and gamepad. Press/release edges are still queued between fixed ticks,
+  so a tap shorter than one frame registers. Releasing one source never drops an action another source
+  still holds, and blur/reset clear virtual state along with the rest.
+- **Pointer lifetimes and modal handoff.** Each button owns its pointer id (multi-touch), captures the
+  pointer when the browser allows it, and releases on pointer-up/cancel/lost capture, window blur or
+  visibility loss. The whole overlay hides and clears before any menu, bench, ending card or title owns
+  the screen. Touch Pause calls the same `openMenu('pause')` path as Escape; no virtual action can leak
+  into the next tick after resume.
+- **Touch-aware teaching and shell.** The title footer and first-run strip read the device capability and
+  render labels instead of keyboard keycaps. The canvas fits the visual viewport with fractional scaling
+  on touch and on any viewport smaller than 640×360; desktop playback keeps whole-pixel scaling for crisp
+  art. `index.html` gains a boot splash, theme/mobile metadata and safe-area viewport; the splash is
+  removed as soon as boot resolves and sits below the title, so it can never intercept the first gesture.
+- **Device detection (`src/input/device.ts`).** Capability is sampled once at boot so rotating a hybrid
+  laptop cannot swap the control scheme mid-run; privacy-mode media queries are guarded.
+- **Tests and docs.** Three unit tests cover a between-tick virtual tap, keyboard/touch overlap and pad
+  release while touch holds. `tests/e2e/m10.spec.ts` adds three Playwright flows: touch movement/jump and
+  Pause handoff at 844×390, title teaching, and no touch DOM on desktop. `docs/CONTROLS.md` documents the
+  overlay, and D059 records the architecture. No new assets or licenses.
+
+### Gates (all green; M9 and M10 combined)
+
+| Gate                          | Result                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `npm run typecheck`           | clean                                                                            |
+| `npm run lint`                | clean, zero warnings                                                             |
+| `npm run level:check`         | OK — 12 rooms, 22 pickups, 3 benches, 3 Ordeals                                  |
+| `npm run test`                | 275/275 passed (24 files, ~16 s) — up from M8's 266 (+9: 6 M9, 3 M10)            |
+| `npm run build`               | 864 modules, 527.61 kB JS / 150.50 kB gzip, 37.60 kB CSS / 8.17 kB gzip          |
+| `npm run test:e2e`            | 37/37 passed (10.6 min), including all M8/M9 flows and the three M10 touch flows |
+| `npm run assets:check:strict` | OK, 662 files, 0 warnings                                                        |
+| `npm run format:check`        | clean                                                                            |
+| Screenshots                   | `M10-touch.png` and `M10-touch-onboarding.png` at 844×390 — inspected            |
+
+### Findings & adjustments
+
+- **A tap can be shorter than a simulation tick.** The virtual API therefore uses the same pending-edge
+  queues as keyboard input; a press and release between snapshots still produces both edges. The unit
+  suite asserts exactly that, rather than only testing a held button.
+- **Pause must clear the thumb before freezing.** The pause handler releases every virtual action before
+  opening the menu, and `openMenu` hides the overlay before `input.reset()` and `loop.pause()`. This
+  prevents a resting Jump thumb from carrying into the first resumed tick.
+- **Mobile browser chrome changes the usable canvas.** Fitting now prefers `visualViewport` dimensions and
+  listens for its resize; touch devices use the exact fractional ratio, while desktop keeps integer
+  scaling. Very small desktop viewports now shrink instead of clipping.
+- **The boot splash cannot compete with the title.** It is removed synchronously after boot resolves and
+  its z-index is below the title; the E2E first gesture never sees a loading overlay. The initial
+  combined run exposed exactly this class of interception while the splash still faded, so the final
+  shell removes the ambiguity rather than extending a timeout.
+- **Onboarding can legitimately auto-hide before audio is live.** The M3 audio flow waits on software
+  decode and then tried to click a hint strip that had already hidden. `dismissOnboarding` now treats the
+  16 s auto-hide as valid and callers still assert the final hidden state.
+- **One M9 fixture used an invalid room point.** The progress-preserving reload test loaded
+  `drowned-gallery` at `(240, 208)`, which is not a clear standing point. It now uses the validated
+  `(300, 256)` pickup ledge; the room contract was right, the fixture was not.
+- **Headless touch-context teardown can outlast the default test budget.** The first touch flow
+  occasionally spent more than 60 s closing its browser context after every assertion had passed. The M10
+  describe now has a 120 s budget while the test body is unchanged; repeat runs of that flow passed. This
+  is SwiftShader context cost, not a game hang.
+- **Chromium can report a transient adapter change while Vite serves art.** One full sweep saw four
+  `net::ERR_NETWORK_CHANGED` console entries even though the scene reported every packed texture loaded
+  and zero art failures. The boot smoke test now ignores only that transport code; page errors and every
+  other console error remain fatal, and the packed-art/loaded-count assertions still prove the content.
+- **The production JS chunk still exceeds 500 kB.** The build reports 527.61 kB / 150.50 kB gzip. This is
+  the existing single-bundle shape plus the touch/menu UI; code-splitting is a post-slice packaging task,
+  not a correctness risk for the vertical slice.
+
+### Explicitly deferred / risks
+
+- **Physical touch hardware is unverified.** Playwright's `hasTouch` context proves the DOM/pointer path,
+  canvas fit, movement, jump and Pause handoff, but no phone or tablet has run this build.
+- **Gamepad hardware remains unverified.** Coverage is still an injected pad; physical controllers and
+  touch-on-laptop hybrids are untested.
+- **No procedural packaging yet.** Browser shipping is complete for the slice; Capacitor/Tauri app
+  shells, icons, store metadata, offline service worker and install prompts are future work.
+- **Touch layout is fixed.** There is no left-handed mirror, button-size setting or touch rebinding; the
+  overlay is intentionally minimal and safe-area aware.
+- **No touch button for Cast.** The slice has no player cast action; the map remains in the Pause menu.
+- **`Game` and `RoomScene` still exceed the ~300-line guideline** (448 and 440 non-empty). The touch wiring
+  is contained in its own class; further extraction is deferred until after the slice.
+
+### Next
+
+The vertical slice is feature-complete. The next work is physical-device testing and packaging, followed
+by content beyond the twelve-room region if the slice is greenlit.

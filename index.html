@@ -5,15 +5,44 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#07110f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
     <meta
       name="description"
       content="BELLWARD — a souls-like 2D metroidvania vertical slice. Ring the bells. Make the water remember."
     />
+    <meta property="og:title" content="BELLWARD" />
+    <meta
+      property="og:description"
+      content="A souls-like 2D metroidvania vertical slice. The water is listening."
+    />
+    <meta property="og:type" content="website" />
     <title>BELLWARD</title>
   </head>
   <body>
+    <div
+      id="boot-splash"
+      class="boot-splash"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading BELLWARD"
+    >
+      <p class="boot-splash-kicker">The Drowned Belfry</p>
+      <p class="boot-splash-word">BELLWARD</p>
+      <p class="boot-splash-note">Waking the bells…</p>
+    </div>
     <div id="app" aria-label="Game viewport"></div>
-    <noscript>BELLWARD needs JavaScript and WebGL2 to run.</noscript>
+    <noscript>
+      <style>
+        #boot-splash {
+          display: none;
+        }
+      </style>
+      BELLWARD needs JavaScript and WebGL2 to run.
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

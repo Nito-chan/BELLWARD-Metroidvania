@@ -190,6 +190,16 @@ export type OnboardingDebugState = {
   open: boolean;
 };
 
+/** Touch overlay availability and currently held buttons. */
+export type TouchDebugState = {
+  /** True when this device mounted the on-screen controls. */
+  enabled: boolean;
+  /** True while gameplay is live and no DOM overlay owns the screen. */
+  visible: boolean;
+  /** Actions currently held by a pointer, for diagnostics. */
+  held: string[];
+};
+
 export type AccessibilityDebugState = {
   screenShake: boolean;
 };
@@ -226,6 +236,8 @@ export type GameDebugState = {
   title: TitleDebugState;
   /** First-run hint strip state. */
   onboarding: OnboardingDebugState;
+  /** On-screen touch controls (disabled and hidden on mouse/keyboard devices). */
+  touch: TouchDebugState;
   /** Persisted accessibility preferences. */
   accessibility: AccessibilityDebugState;
   /** Captured runtime errors; empty in a healthy session. */

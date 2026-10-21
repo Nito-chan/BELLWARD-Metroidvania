@@ -50,15 +50,22 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   belt, two nail levels and optional harder Ordeal rematches support the three bosses; the Tide door
   ends the slice once. The save is now v2 and migrates v1 in place, and `level:check` plus a full-run
   Playwright audit guard the whole region. All gates green.
-- **M9 — Title, onboarding and accessibility: code complete, verification pending.** Boot now waits on
-  an accessible title card over the live terrace: **Continue** restores the saved run, **Begin anew**
-  needs a second confirmation (Escape cancels), and the first real gesture unlocks audio. A non-modal
-  first-run hint strip reads the live bindings, yields its auto-hide timer on focus and never blocks
-  play. Settings gained a persisted **Camera shake** switch that defaults from the OS reduced-motion
-  preference and applies immediately. Bench, objective and boss ownership moved out of `Game` and
-  `RoomScene`. Per the milestone instruction, no typecheck, lint, unit, build or E2E gate has been run
-  yet; all M9 and M10 verification runs together after M10.
-- Next: M10 — mobile/touch and shipping pass, then the deferred M9+M10 verification sweep.
+- **M9 — Title, onboarding and accessibility: complete.** Boot waits on an accessible title card over the
+  live terrace: **Continue** restores the saved run, **Begin anew** needs a second confirmation (Escape
+  cancels), and the first real gesture unlocks audio. A non-modal first-run hint strip reads the live
+  bindings, yields its auto-hide timer on focus and never blocks play. Settings gained a persisted
+  **Camera shake** switch that defaults from the OS reduced-motion preference and applies immediately.
+  Bench, objective and boss ownership moved out of `Game` and `RoomScene`. M9 was verified together with
+  M10 in the combined sweep; all gates green.
+- **M10 — Touch controls and the shipping pass: complete.** A landscape-first DOM touch overlay feeds
+  virtual actions through the same held/pressed/released snapshot contract as keyboard and gamepad,
+  with multi-touch, safe-area layout, pointer/blur cleanup and clean handoff to every modal. The title
+  and onboarding render touch hints instead of keycaps; the canvas now fits the visual viewport (touch
+  uses exact fractional scaling, desktop keeps whole pixels) and the shell adds a boot splash plus
+  mobile metadata. No new assets. All gates green: 275 unit tests, 37 Playwright tests, strict asset
+  validation at 662 files / 0 warnings.
+- **The Drowned Belfry vertical slice is feature-complete.** Physical touch/gamepad testing and
+  Capacitor/Tauri packaging are the next work, not part of this browser slice.
 
 ## Quick start
 
@@ -94,20 +101,20 @@ First-time E2E setup: `npx playwright install chromium`.
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
 src/config      tunable constants (input, player, combat, enemies, progression, pickups, physics, render, audio, menu, bench, save)
 src/data        art keys/rects/clips, enemy/effect sheets, room/pickup/bench definitions and sound/track catalogs
-src/input       keyboard/gamepad manager, per-tick snapshots and the versioned binding document
+src/input       keyboard/gamepad/virtual-input manager, touch detection, per-tick snapshots and bindings
 src/physics     body model and the tile collision solver
 src/player      player state machine, Focus/healing, Wall Claw, vitals, i-frames and attack windows
 src/enemies     shared FSM, melee/caster behaviors, boss phases/patterns and spawn factory
 src/combat      damage resolver, projectile pool and shared hitbox geometry
 src/save        versioned v2 run document, v1 migration, all-or-nothing validation and progression
-src/ui          combat HUD, bench equipment, ending card, pause flow and the region chart
+src/ui          HUD, title/onboarding, touch overlay, bench, ending, pause flow and the region chart
 src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
 src/world       semantic tile roles (including breakable/sealed), tilemap and room model
 src/render      art provider, procedural fallbacks, camera, character/enemy views, FX, pickups, room scene
 src/debug       F1 overlay + debug state contract
-scripts         level/content check, asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map / --title / --onboarding; add --small for 640x360)
+scripts         level/content check, asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map / --title / --onboarding / --touch; add --small for 640x360)
 tests/unit      Vitest (core, world, input, bindings, menus, map, saves, progression, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest, accessibility)
-tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run, M9 title/onboarding/accessibility)
+tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run, M9 title/onboarding/accessibility, M10 touch)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

@@ -71,7 +71,10 @@ function readDocument(storage: AccessibilityStorage | null): AccessibilityDocume
   }
 }
 
-function writeDocument(storage: AccessibilityStorage | null, document: AccessibilityDocument): void {
+function writeDocument(
+  storage: AccessibilityStorage | null,
+  document: AccessibilityDocument,
+): void {
   if (!storage) return;
   try {
     storage.setItem(ACCESSIBILITY.storageKey, JSON.stringify(document));

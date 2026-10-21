@@ -79,12 +79,14 @@ describe('InputManager', () => {
   it('clears held actions on blur so no key can stick', () => {
     const input = new InputManager();
     input.handleKey('ArrowLeft', true);
+    input.setVirtual('right', true);
     input.snapshot();
     input.blur();
 
     const after = input.snapshot();
     expect(after.held.size).toBe(0);
     expect(after.released.has('left')).toBe(true);
+    expect(after.released.has('right')).toBe(true);
   });
 
   it('reads the standard gamepad mapping', () => {
@@ -122,6 +124,51 @@ describe('InputManager', () => {
     expect(after.released.has('jump')).toBe(false);
   });
 
+  it('queues a quick on-screen tap as both edges between ticks', () => {
+    const input = new InputManager();
+    input.setVirtual('jump', true);
+    input.setVirtual('jump', false);
+
+    const tap = input.snapshot();
+    expect(tap.pressed.has('jump')).toBe(true);
+    expect(tap.released.has('jump')).toBe(true);
+    expect(tap.held.has('jump')).toBe(false);
+  });
+
+  it('keeps an action held while touch and keyboard overlap', () => {
+    const input = new InputManager();
+    input.handleKey('ArrowRight', true);
+    const keyboard = input.snapshot();
+    expect(keyboard.pressed.has('right')).toBe(true);
+
+    input.setVirtual('right', true);
+    const touch = input.snapshot();
+    expect(touch.held.has('right')).toBe(true);
+    expect(touch.pressed.has('right')).toBe(false);
+
+    input.handleKey('ArrowRight', false);
+    const keyUp = input.snapshot();
+    expect(keyUp.held.has('right')).toBe(true);
+    expect(keyUp.released.has('right')).toBe(false);
+
+    input.setVirtual('right', false);
+    const after = input.snapshot();
+    expect(after.held.has('right')).toBe(false);
+    expect(after.released.has('right')).toBe(true);
+  });
+
+  it('does not release a touch-held action when the pad drops it', () => {
+    const { input, setPad } = managerWithPad();
+    setPad({ buttons: [true], axes: [0, 0] });
+    input.setVirtual('jump', true);
+    input.snapshot();
+
+    setPad(null);
+    const after = input.snapshot();
+    expect(after.held.has('jump')).toBe(true);
+    expect(after.released.has('jump')).toBe(false);
+  });
+
   it('serializes the bindings for the settings UI', () => {
     const data: unknown = JSON.parse(new InputManager().serialize());
     expect(data).toMatchObject({ version: 1 });
@@ -150,6 +197,7 @@ describe('InputManager', () => {
   it('resets every input set without emitting release edges', () => {
     const { input, setPad } = managerWithPad();
     input.handleKey('ArrowLeft', true);
+    input.setVirtual('heal', true);
     setPad({ buttons: [true], axes: [0, 0] });
     input.snapshot();
 

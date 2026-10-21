@@ -10,6 +10,8 @@ import { formatKeyCode } from '../../input/bindingLabels';
 export type OnboardingOptions = {
   /** Read on every refresh so live rebinds never leave stale keycaps on screen. */
   readonly getBindings: () => Bindings;
+  /** Touch play teaches the on-screen controls instead of keyboard keys. */
+  readonly touch?: boolean;
 };
 
 export class Onboarding {
@@ -36,7 +38,9 @@ export class Onboarding {
 
     const note = document.createElement('p');
     note.className = 'onboarding-note';
-    note.textContent = 'Rest at a bell to save.';
+    note.textContent = options.touch
+      ? 'Use the on-screen controls. Rest at a bell to save.'
+      : 'Rest at a bell to save.';
 
     const dismiss = document.createElement('button');
     dismiss.type = 'button';
@@ -105,6 +109,17 @@ export class Onboarding {
   }
 
   private renderHints(): void {
+    if (this.options.touch) {
+      this.hints.replaceChildren(
+        hint('', 'Move'),
+        hint('', 'Jump'),
+        hint('', 'Strike'),
+        hint('', 'Rest / use'),
+        hint('', 'Pause'),
+      );
+      return;
+    }
+
     const keyboard = this.options.getBindings().keyboard;
     this.hints.replaceChildren(
       hint(
