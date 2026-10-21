@@ -36,6 +36,10 @@ export const TILE_ROLES = {
   rubble: { solid: false },
   /** Cobweb in a corner (decorative). */
   cobweb: { solid: false },
+  /** Cracked masonry that the nail can shatter, opening a secret. */
+  breakable: { solid: true },
+  /** The Tide door: impassable until the Tide-Bell is owned. */
+  sealedDoor: { solid: true },
 } as const satisfies Readonly<Record<string, TileRoleInfo>>;
 
 export type TileRole = keyof typeof TILE_ROLES;

@@ -6,6 +6,7 @@ import { RENDER } from '../config/render';
 import { BellwardError } from '../core/Errors';
 import type { Rect, Vec2 } from '../core/Types';
 import type { MusicKey } from '../data/audio';
+import { getPickup, isPickupId } from '../data/pickups';
 import { Tilemap } from './Tilemap';
 import type { TileRole } from './tiles';
 
@@ -13,7 +14,7 @@ import type { TileRole } from './tiles';
 export type BackgroundKey = 'far' | 'mid' | 'near';
 
 /** Art keys for props. Resolved by the active art provider. */
-export type PropKey = 'balustrade' | 'column' | 'bell' | 'door' | 'bench';
+export type PropKey = 'balustrade' | 'column' | 'bell' | 'door' | 'bench' | 'altar';
 
 /** Depth band for a prop: behind the hero, or in front of the hero. */
 export type PropLayerName = 'back' | 'front';
@@ -62,6 +63,34 @@ export type EnemySpawn = {
   patrol?: { min: number; max: number };
 };
 
+/** A collectible placed in the room. The registry owns its meaning. */
+export type RoomPickupPlacement = {
+  id: string;
+  /** Feet-level pickup center, in world pixels. It bobs visually but never moves. */
+  x: number;
+  y: number;
+};
+
+/** The altar that relights a claimed arena for the optional hard-mode Ordeal. */
+export type RoomOrdeal = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+/** The one ending trigger in the slice, behind the Tide door. */
+export type RoomEnding = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  title: string;
+  subtitle: string;
+  /** The physical key that must be owned before this can fire. */
+  requiresPickup: string;
+};
+
 /** A world-space trigger that walks the player into another room. */
 export type RoomExit = {
   x: number;
@@ -108,6 +137,12 @@ export type RoomDefinition = {
   labels?: readonly RoomLabel[];
   /** Rest points. Each bench saves its spawn as the run's respawn checkpoint. */
   benches?: readonly RoomBench[];
+  /** Collectibles in this room. Ids are stable save facts. */
+  pickups?: readonly RoomPickupPlacement[];
+  /** Optional Ordeal altar, available only in a claimed arena. */
+  ordeal?: RoomOrdeal;
+  /** The Tide-door ending, present only in the upper gallery. */
+  ending?: RoomEnding;
 };
 
 export type Room = {
@@ -141,6 +176,9 @@ export function createRoom(definition: RoomDefinition): Room {
   validateExits(definition, tilemap);
   validateLabels(definition, tilemap);
   validateBenches(definition, tilemap);
+  validatePickups(definition, tilemap);
+  validateOrdeal(definition, tilemap);
+  validateEnding(definition, tilemap);
 
   return {
     definition,
@@ -341,5 +379,73 @@ function validateBenches(definition: RoomDefinition, tilemap: Tilemap): void {
         `${where}: spawn (${bench.spawn.x},${bench.spawn.y}) is outside its interaction range`,
       );
     }
+  }
+}
+
+/** Pickup ids must be known and unique inside the room, with finite in-bounds anchors. */
+function validatePickups(definition: RoomDefinition, tilemap: Tilemap): void {
+  const ids = new Set<string>();
+  for (const [index, pickup] of (definition.pickups ?? []).entries()) {
+    const where = `room "${definition.id}" pickup ${index}`;
+    if (!isPickupId(pickup.id)) {
+      throw new BellwardError(`${where}: unknown pickup id "${pickup.id}"`);
+    }
+    if (ids.has(pickup.id)) throw new BellwardError(`${where}: duplicate id "${pickup.id}"`);
+    ids.add(pickup.id);
+    if (!Number.isFinite(pickup.x) || !Number.isFinite(pickup.y)) {
+      throw new BellwardError(`${where}: position must be finite`);
+    }
+    if (
+      pickup.x < 0 ||
+      pickup.x >= tilemap.pixelWidth ||
+      pickup.y <= 0 ||
+      pickup.y > tilemap.pixelHeight
+    ) {
+      throw new BellwardError(`${where}: position (${pickup.x},${pickup.y}) leaves the room`);
+    }
+  }
+}
+
+function validateTrigger(
+  where: string,
+  trigger: { x: number; y: number; w: number; h: number },
+  tilemap: Tilemap,
+): void {
+  if (![trigger.x, trigger.y, trigger.w, trigger.h].every(Number.isFinite)) {
+    throw new BellwardError(`${where}: trigger bounds must be finite`);
+  }
+  if (!(trigger.w > 0 && trigger.h > 0)) {
+    throw new BellwardError(`${where}: trigger must have positive size`);
+  }
+  if (
+    trigger.x < 0 ||
+    trigger.y < 0 ||
+    trigger.x + trigger.w > tilemap.pixelWidth ||
+    trigger.y + trigger.h > tilemap.pixelHeight
+  ) {
+    throw new BellwardError(`${where}: trigger leaves the room`);
+  }
+}
+
+function validateOrdeal(definition: RoomDefinition, tilemap: Tilemap): void {
+  if (!definition.ordeal) return;
+  if (!definition.boss) {
+    throw new BellwardError(`room "${definition.id}" has an Ordeal altar but no boss`);
+  }
+  validateTrigger(`room "${definition.id}" ordeal`, definition.ordeal, tilemap);
+}
+
+function validateEnding(definition: RoomDefinition, tilemap: Tilemap): void {
+  if (!definition.ending) return;
+  const where = `room "${definition.id}" ending`;
+  validateTrigger(where, definition.ending, tilemap);
+  if (!definition.ending.title.trim() || !definition.ending.subtitle.trim()) {
+    throw new BellwardError(`${where}: title and subtitle are required`);
+  }
+  if (!isPickupId(definition.ending.requiresPickup)) {
+    throw new BellwardError(`${where}: unknown key "${definition.ending.requiresPickup}"`);
+  }
+  if (getPickup(definition.ending.requiresPickup).kind !== 'key') {
+    throw new BellwardError(`${where}: "${definition.ending.requiresPickup}" is not a key`);
   }
 }

@@ -84,7 +84,7 @@ export class CombatSystem {
           continue;
         }
         const damage = player.attackDamage;
-        enemy.takeDamage(damage, player.feet.x);
+        if (enemy.takeDamage(damage, player.feet.x)) player.gainFocusOnHit();
         events.push({
           type: 'enemyHit',
           enemy,

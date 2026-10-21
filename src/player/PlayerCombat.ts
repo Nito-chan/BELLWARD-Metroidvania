@@ -23,9 +23,17 @@ export class PlayerCombat {
   private stage: 1 | 2 = 1;
   private swingValue = 0;
   private bufferTicks = 0;
+  private damageBonus = 0;
+  private reachScale = 1;
 
   get attackId(): number {
     return this.swingValue;
+  }
+
+  /** Nail level and Long Reach feed the same swing without changing its timing. */
+  setModifiers(damageBonus: number, reachScale: number): void {
+    this.damageBonus = Math.max(0, Math.floor(damageBonus));
+    this.reachScale = Math.max(1, reachScale);
   }
 
   tick(input: InputSnapshot): void {
@@ -50,13 +58,16 @@ export class PlayerCombat {
   attackHitbox(feet: Vec2, facing: -1 | 1, state: string, clipTick: number): Rect | null {
     if (!this.isActive(state, clipTick)) return null;
     const { forward, width, height, top } = COMBAT.player.attackBox;
-    const x = facing === 1 ? feet.x + forward : feet.x - forward - width;
-    return { x, y: feet.y - top, w: width, h: height };
+    const reach = width * this.reachScale;
+    const start = forward * this.reachScale;
+    const x = facing === 1 ? feet.x + start : feet.x - start - reach;
+    return { x, y: feet.y - top, w: reach, h: height };
   }
 
   attackDamage(state: string, clipTick: number): number {
     if (!this.isActive(state, clipTick)) return 0;
-    return this.stage === 1 ? COMBAT.player.damage.stage1 : COMBAT.player.damage.stage2;
+    const base = this.stage === 1 ? COMBAT.player.damage.stage1 : COMBAT.player.damage.stage2;
+    return base + this.damageBonus;
   }
 
   step(host: CombatHost, input: InputSnapshot): void {

@@ -327,10 +327,10 @@ describe('PlayerController in the belfry terrace', () => {
     expect(controller.feet.y).toBeCloseTo(288, 1);
   });
 
-  it('cannot leave the room through its walls', () => {
+  it('walks into the west doorway and stops at the world edge', () => {
     const controller = new PlayerController(room.spawn);
     tick(controller, room.tilemap, 300, ['left']);
-    expect(controller.body.x).toBeCloseTo(64, 1);
+    expect(controller.body.x).toBeCloseTo(0, 1);
     expect(controller.grounded).toBe(true);
   });
 });

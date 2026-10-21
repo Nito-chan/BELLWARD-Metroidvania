@@ -1,4 +1,6 @@
+import { COMBAT } from '../config/combat';
 import { PLAYER } from '../config/player';
+import { NAIL, type CharmId } from '../config/progression';
 import { SIM } from '../config/world';
 import type { Rect, Vec2 } from '../core/Types';
 import type { InputSnapshot } from '../input/InputState';
@@ -7,15 +9,27 @@ import { moveAndCollide, type MoveResult } from '../physics/TileCollision';
 import type { Tilemap } from '../world/Tilemap';
 import { PlayerCombat, type CombatHost } from './PlayerCombat';
 import { PlayerDash, type DashHost } from './PlayerDash';
+import { PlayerFocus } from './PlayerFocus';
+import { PlayerHealing, type HealHost } from './PlayerHealing';
 import { PlayerJump, type JumpHost } from './PlayerJump';
+import { hasCharm, STARTER_LOADOUT, type PlayerLoadout } from './PlayerLoadout';
 import { applyGravity, stepRun } from './playerMotion';
 import { PlayerPose } from './PlayerPose';
 import { PlayerReaction, type ReactionHost } from './PlayerReaction';
 import { inputDirection } from './playerSensors';
 import type { PlayerEvent, PlayerStateName } from './PlayerTypes';
 import { PlayerVitals } from './PlayerVitals';
+import { PlayerWall, type WallHost } from './PlayerWall';
 
 export type { PlayerEvent, PlayerStateName } from './PlayerTypes';
+
+export type PlayerOptions = {
+  maxHp?: number;
+  hp?: number;
+  maxFocus?: number;
+  focus?: number;
+  loadout?: PlayerLoadout;
+};
 
 /**
  * The player's locomotion state machine. Pure simulation: no Pixi, no DOM, no wall clock.
@@ -31,16 +45,20 @@ export class PlayerController {
   /** Health, invulnerability and death live in their own small component. */
   readonly vitals: PlayerVitals;
   private readonly pose = new PlayerPose();
+  readonly focus: PlayerFocus;
   private readonly combat = new PlayerCombat();
   private readonly jump = new PlayerJump();
   private readonly dash = new PlayerDash();
   private readonly reaction = new PlayerReaction();
+  private readonly healing = new PlayerHealing();
+  private readonly wall = new PlayerWall();
+  private loadoutValue: PlayerLoadout = STARTER_LOADOUT;
   private facingValue: -1 | 1 = 1;
   private jumpPeakYValue: number | null = null;
   private lastJumpPeakYValue: number | null = null;
   private footstepCounter = 0;
 
-  constructor(spawn: Vec2, options: { maxHp?: number; hp?: number } = {}) {
+  constructor(spawn: Vec2, options: PlayerOptions = {}) {
     this.body = createBody(
       spawn.x - PLAYER.size.w / 2,
       spawn.y - PLAYER.size.h,
@@ -48,6 +66,9 @@ export class PlayerController {
       PLAYER.size.h,
     );
     this.vitals = new PlayerVitals(options.maxHp, options.hp);
+    this.focus = new PlayerFocus(options.maxFocus ?? PLAYER.focus.max);
+    this.focus.gain(options.focus ?? 0);
+    this.applyLoadout(options.loadout ?? STARTER_LOADOUT);
   }
 
   get facing(): -1 | 1 {
@@ -112,9 +133,78 @@ export class PlayerController {
     return this.vitals.maxHp;
   }
 
-  /** Boss reward: permanently (for this run) raises the mask ceiling. */
+  /** Focus bar value and ceiling for the HUD. */
+  get focusValue(): number {
+    return this.focus.current;
+  }
+
+  get maxFocus(): number {
+    return this.focus.max;
+  }
+
+  /** 0..1 heal channel fill, or 0 when idle. */
+  get healProgress(): number {
+    return this.healing.progress;
+  }
+
+  get wallContact(): -1 | 0 | 1 {
+    return this.wall.contact;
+  }
+
+  get wallSliding(): boolean {
+    return this.wall.sliding;
+  }
+
+  get loadout(): PlayerLoadout {
+    return this.loadoutValue;
+  }
+
+  get nailLevel(): number {
+    return this.loadoutValue.nailLevel;
+  }
+
+  /** Applies a new charm/nail/ability snapshot mid-run (bench, pickup, debug). */
+  applyLoadout(loadout: PlayerLoadout): void {
+    this.loadoutValue = {
+      charms: [...loadout.charms],
+      nailLevel: Math.max(0, Math.min(NAIL.maxLevel, Math.floor(loadout.nailLevel))),
+      wallClaw: loadout.wallClaw,
+    };
+    const nailBonus = this.loadoutValue.nailLevel * NAIL.damagePerLevel;
+    const nailReach = this.loadoutValue.nailLevel * NAIL.reachPerLevel;
+    const charmReach = hasCharm(this.loadoutValue, 'longReach')
+      ? COMBAT.player.attackBox.width / 3
+      : 0;
+    const reachScale =
+      (COMBAT.player.attackBox.width + nailReach + charmReach) / COMBAT.player.attackBox.width;
+    this.combat.setModifiers(nailBonus, reachScale);
+    this.dash.setCooldownScale(hasCharm(this.loadoutValue, 'lightStep') ? 0.5 : 1);
+    const healTicks = hasCharm(this.loadoutValue, 'quickMend')
+      ? PLAYER.heal.ticks * PLAYER.heal.quickMendScale
+      : PLAYER.heal.ticks;
+    this.healing.setDuration(Math.round(healTicks));
+    this.healing.setSturdyShell(hasCharm(this.loadoutValue, 'sturdyShell'));
+    this.wall.setEnabled(this.loadoutValue.wallClaw);
+  }
+
+  /** Boss or mask-shard reward: permanently (for this run) raises the mask ceiling. */
   grantMaxHp(amount: number): void {
     this.vitals.grantMaxHp(amount);
+  }
+
+  /** Restores health from a pickup or bench. Returns masks actually restored. */
+  heal(amount: number): number {
+    return this.vitals.heal(amount);
+  }
+
+  /** Focus gathered by a landed nail hit, with Ember Greed applied. */
+  gainFocusOnHit(): void {
+    const scale = hasCharm(this.loadoutValue, 'emberGreed') ? 1.5 : 1;
+    this.focus.gain(Math.round(PLAYER.focus.gainPerHit * scale));
+  }
+
+  hasCharm(id: CharmId): boolean {
+    return hasCharm(this.loadoutValue, id);
   }
 
   /** Remaining invulnerability ticks. */
@@ -170,6 +260,11 @@ export class PlayerController {
    * from the source, and a face-the-attacker turn so the hit reads.
    */
   takeDamage(amount: number, sourceX: number): boolean {
+    if (!this.vitals.canBeHit) return false;
+    if (this.healing.healing && this.healing.absorbHit(this.healHost)) {
+      this.vitals.grantInvulnerability(PLAYER.heal.shieldInvulnerableTicks);
+      return false;
+    }
     return this.reaction.takeDamage(this.reactionHost, amount, sourceX);
   }
 
@@ -182,26 +277,46 @@ export class PlayerController {
   update(input: InputSnapshot, tilemap: Tilemap): void {
     this.pose.beginTick();
     this.vitals.tick();
+    this.wall.tick();
 
     if (this.state === 'dead') {
+      this.healing.cancel();
       this.reaction.stepDead(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
     }
     if (this.reaction.hurt) {
+      this.healing.cancel();
       this.reaction.stepHurt(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
     }
 
     this.tickTimers(input);
+    this.wall.scan(this.body, tilemap);
+
+    // The heal channel roots the hero. A completed channel resolves after the physics
+    // step so the body never tunnels through a ledge while the animation finishes.
+    if (this.state === 'heal') {
+      this.healing.step(input, this.healHost);
+      this.stepChannelPhysics(tilemap);
+      return;
+    }
+    if (this.healing.tryStart(input, this.healHost)) {
+      this.stepChannelPhysics(tilemap);
+      return;
+    }
 
     const wasGrounded = this.body.grounded;
 
     if (this.dash.tryStart(this.dashHost, input)) {
       // The dash owns the tick.
     } else if (!this.combat.tryStart(this.combatHost)) {
-      this.jump.tryStart(input, tilemap, this.jumpHost);
+      if (this.wall.tryJump(this.wallHost, this.jump.hasBuffer)) {
+        this.jump.consumeBuffer();
+      } else {
+        this.jump.tryStart(input, tilemap, this.jumpHost);
+      }
     }
 
     if (this.state === 'dash') {
@@ -210,8 +325,9 @@ export class PlayerController {
       this.combat.step(this.combatHost, input);
       applyGravity(this.body, this.jump.heldButton);
     } else {
-      this.stepMove(input);
+      if (!this.wall.locked) this.stepMove(input);
       applyGravity(this.body, this.jump.heldButton);
+      this.wall.applySlide(this.body);
     }
 
     // The speed the fall carries into this tick's collision. Sampled before the
@@ -219,6 +335,12 @@ export class PlayerController {
     const impactSpeed = this.body.vy;
     const move = moveAndCollide(tilemap, this.body, SIM.dt);
     this.finalizeState(input, move, wasGrounded, impactSpeed);
+    this.trackJumpPeak();
+  }
+
+  private stepChannelPhysics(tilemap: Tilemap): void {
+    applyGravity(this.body, this.jump.heldButton);
+    moveAndCollide(tilemap, this.body, SIM.dt);
     this.trackJumpPeak();
   }
 
@@ -245,6 +367,25 @@ export class PlayerController {
 
   private get jumpHost(): JumpHost {
     return { body: this.body, pose: this.pose };
+  }
+
+  private get wallHost(): WallHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      setFacing: (direction) => {
+        this.facingValue = direction;
+      },
+    };
+  }
+
+  private get healHost(): HealHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      vitals: this.vitals,
+      focus: this.focus,
+    };
   }
 
   private get reactionHost(): ReactionHost {
@@ -318,7 +459,8 @@ export class PlayerController {
     if (this.state === 'attack') return;
 
     if (!this.body.grounded) {
-      if (this.body.vy < 0) this.pose.setState('jump', 'jump');
+      if (this.wall.sliding) this.pose.setState('wallslide', 'fall');
+      else if (this.body.vy < 0) this.pose.setState('jump', 'jump');
       else this.pose.setState('fall', 'fall');
       return;
     }

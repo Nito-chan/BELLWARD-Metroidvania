@@ -149,6 +149,9 @@ export const PLAYER_SFX: Record<PlayerEvent, SfxKey> = {
   attack1: 'attack1',
   attack2: 'attack2',
   dash: 'dash',
+  wallJump: 'jump',
+  heal: 'bell',
+  shield: 'bossWard',
   hurt: 'playerHurt',
   // The region answers a death with its signature sound: the distant bell.
   death: 'bell',

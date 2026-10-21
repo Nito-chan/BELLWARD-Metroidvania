@@ -1,0 +1,50 @@
+/* The Tide-door ending card, reusing the pause panel shell. */
+.ending-root .menu-panel {
+  width: min(36rem, calc(100vw - 1.5rem));
+}
+
+.ending-panel {
+  text-align: center;
+}
+
+.ending-panel .menu-header::after {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.ending-body {
+  padding-top: 0.4rem;
+  padding-bottom: 1rem;
+}
+
+.ending-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0 auto;
+  width: min(24rem, 100%);
+}
+
+.ending-stat {
+  display: flex;
+  min-height: 3.4rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  border: 1px solid var(--menu-line);
+  background: rgb(200 166 106 / 4%);
+}
+
+.ending-stat-value {
+  color: var(--menu-brass-bright);
+  font-family: var(--menu-display);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ending-stat-label {
+  color: var(--menu-muted);
+  font-size: 0.55rem;
+  letter-spacing: 0.16em;
+}

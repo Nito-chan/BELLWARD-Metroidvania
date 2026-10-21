@@ -9,6 +9,7 @@ export const PROP_SIZES: Record<PropKey, { w: number; h: number }> = {
   bell: { w: 64, h: 96 },
   door: { w: 48, h: 88 },
   bench: { w: 64, h: 38 },
+  altar: { w: 48, h: 46 },
 };
 
 export const PROP_PAINTERS: Record<PropKey, Painter> = {
@@ -148,5 +149,26 @@ export const PROP_PAINTERS: Record<PropKey, Painter> = {
     ctx.fill();
     ctx.fillStyle = hex(PALETTE.ember);
     ctx.fillRect(31, 18, 2, 2);
+  },
+  altar: (ctx) => {
+    // A low reliquary table with a restless ember in its bowl.
+    ctx.fillStyle = hex(PALETTE.stone);
+    ctx.fillRect(6, 30, 36, 8);
+    ctx.fillRect(10, 38, 6, 8);
+    ctx.fillRect(32, 38, 6, 8);
+    ctx.fillStyle = hex(PALETTE.stoneLit);
+    ctx.fillRect(6, 30, 36, 2);
+    ctx.fillStyle = hex(PALETTE.cavern);
+    ctx.fillRect(12, 36, 24, 2);
+    ctx.fillStyle = hex(PALETTE.brassDark);
+    ctx.fillRect(16, 24, 16, 6);
+    ctx.fillStyle = hex(PALETTE.void);
+    ctx.fillRect(18, 25, 12, 3);
+    ctx.fillStyle = hex(PALETTE.ember);
+    ctx.beginPath();
+    ctx.arc(24, 23, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = hex(PALETTE.bone);
+    ctx.fillRect(23, 20, 2, 2);
   },
 };

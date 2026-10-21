@@ -106,4 +106,38 @@ export const TILE_PAINTERS: Record<TileRole, Painter> = {
     ctx.stroke();
     ctx.globalAlpha = 1;
   },
+  breakable: (ctx) => {
+    brick(ctx, PALETTE.stone, PALETTE.void, PALETTE.cavern, PALETTE.void);
+    ctx.strokeStyle = hex(PALETTE.void);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(3, 0);
+    ctx.lineTo(7, 5);
+    ctx.lineTo(4, 9);
+    ctx.lineTo(9, 16);
+    ctx.moveTo(7, 5);
+    ctx.lineTo(13, 6);
+    ctx.moveTo(9, 12);
+    ctx.lineTo(14, 13);
+    ctx.stroke();
+    ctx.fillStyle = hex(PALETTE.brassDark);
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(5, 6, 2, 2);
+    ctx.fillRect(11, 12, 1, 1);
+    ctx.globalAlpha = 1;
+  },
+  sealedDoor: (ctx) => {
+    brick(ctx, PALETTE.stone, PALETTE.void, PALETTE.stoneLit, PALETTE.cavern);
+    ctx.fillStyle = hex(PALETTE.deepWater);
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(2, 3, 12, 12);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = hex(PALETTE.echo);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(8, 8, 4, Math.PI * 0.15, Math.PI * 1.85);
+    ctx.stroke();
+    ctx.fillStyle = hex(PALETTE.brass);
+    ctx.fillRect(7, 7, 2, 2);
+  },
 };

@@ -18,7 +18,7 @@ export type BossEncounterOptions = {
   audio: EncounterAudio;
   effects: EffectsLayer;
   camera: Camera;
-  onDefeated: (kind: BossKind) => void;
+  onDefeated: (kind: BossKind, ordeal: boolean) => void;
   announce?: (text: string) => void;
 };
 
@@ -44,8 +44,8 @@ export class BossEncounter {
     this.hud.setBoss(this.info());
     // A short title card tells the player which named encounter they just entered;
     // the persistent HUD carries the same name after the card fades.
-    this.banner.show(boss.stats.displayName.toUpperCase(), boss.phase.name, 90);
-    options.announce?.(`${boss.stats.displayName} awakens.`);
+    this.banner.show(boss.title.toUpperCase(), boss.phase.name, 90);
+    options.announce?.(`${boss.title} awakens.`);
   }
 
   get alive(): boolean {
@@ -81,11 +81,12 @@ export class BossEncounter {
     const pattern = this.boss.pattern;
     return {
       kind: this.boss.kind,
-      name: this.boss.stats.displayName,
+      name: this.boss.title,
       x: this.boss.feet.x,
       y: this.boss.feet.y,
       hp: this.boss.hp,
-      maxHp: this.boss.stats.hp,
+      maxHp: this.boss.maxHp,
+      ordeal: this.boss.variant === 'ordeal',
       phase: this.boss.phaseIndex,
       phaseCount: this.boss.phaseCount,
       phaseName: this.boss.phase.name,
@@ -110,9 +111,9 @@ export class BossEncounter {
     alive: boolean;
   } {
     return {
-      name: this.boss.stats.displayName,
+      name: this.boss.title,
       hp: this.boss.hp,
-      maxHp: this.boss.stats.hp,
+      maxHp: this.boss.maxHp,
       phaseIndex: this.boss.phaseIndex,
       phaseCount: this.boss.phaseCount,
       phaseName: this.boss.phase.name,
@@ -130,8 +131,8 @@ export class BossEncounter {
       case 'phase':
         this.options.audio.playSfx('bossPhase');
         this.options.camera.shake(3, 12);
-        this.banner.show(this.boss.stats.displayName.toUpperCase(), event.name, 100);
-        this.options.announce?.(`${this.boss.stats.displayName}: ${event.name}.`);
+        this.banner.show(this.boss.title.toUpperCase(), event.name, 100);
+        this.options.announce?.(`${this.boss.title}: ${event.name}.`);
         return;
       case 'wardBreak':
         this.options.audio.playSfx('bossWard');
@@ -156,10 +157,16 @@ export class BossEncounter {
     this.defeatedHandled = true;
     this.options.audio.playSfx('bossDefeat');
     this.options.camera.shake(6, 20);
-    this.banner.show('SIGIL RECOVERED', this.boss.definition.rewardName, 220);
-    this.options.announce?.(
-      `${this.boss.stats.displayName} felled. ${this.boss.definition.rewardName} recovered.`,
-    );
-    this.options.onDefeated(kind);
+    const ordeal = this.boss.variant === 'ordeal';
+    if (ordeal) {
+      this.banner.show('ORDEAL BROKEN', 'The arena remembers a harder silence', 220);
+      this.options.announce?.(`${this.boss.title} felled. The Ordeal is broken.`);
+    } else {
+      this.banner.show('SIGIL RECOVERED', this.boss.definition.rewardName, 220);
+      this.options.announce?.(
+        `${this.boss.title} felled. ${this.boss.definition.rewardName} recovered.`,
+      );
+    }
+    this.options.onDefeated(kind, ordeal);
   }
 }

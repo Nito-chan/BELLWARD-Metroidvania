@@ -1,0 +1,174 @@
+/* Bench equipment, sharing the pause flow's panel shell and tokens. */
+.bench-root .menu-panel {
+  width: min(42rem, calc(100vw - 1.5rem));
+}
+
+.bench-root .menu-header {
+  padding-bottom: 0.35rem;
+}
+
+.bench-root .menu-body {
+  gap: 0.55rem;
+  overflow-y: auto;
+  padding-bottom: 0.4rem;
+  scrollbar-color: var(--menu-line-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.bench-slots {
+  margin: 0;
+  color: var(--menu-muted);
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.bench-section-title {
+  margin: 0.35rem 0 0.15rem;
+  color: var(--menu-brass);
+  font-family: var(--menu-ui);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.bench-forge-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid var(--menu-line);
+  background: rgb(200 166 106 / 4%);
+}
+
+.bench-forge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.bench-forge-copy {
+  margin: 0;
+  color: var(--menu-bone);
+  font-family: var(--menu-display);
+  font-size: 1rem;
+}
+
+.bench-forge-detail {
+  margin: 0;
+  color: var(--menu-muted);
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+
+/* Two classes so this wins over `.menu-option` regardless of stylesheet load order. */
+.bench-root .bench-forge-button {
+  min-height: 2.2rem;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0.45rem 0.75rem;
+  border-color: var(--menu-line);
+  background: rgb(200 166 106 / 6%);
+  font-family: var(--menu-ui);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bench-root .bench-forge-button:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--menu-muted);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.bench-charm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.bench-root .bench-charm {
+  grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+  align-items: start;
+  min-height: 3.1rem;
+}
+
+.bench-charm:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.bench-charm:disabled .bench-charm-name::after {
+  margin-left: 0.45rem;
+  color: var(--menu-muted);
+  content: 'NOT FOUND';
+  font-family: var(--menu-ui);
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+}
+
+.bench-charm[aria-pressed='true'] {
+  border-left-color: var(--menu-brass);
+  background: rgb(200 166 106 / 7%);
+}
+
+.bench-charm-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.bench-charm-name {
+  color: var(--menu-bone);
+  font-family: var(--menu-display);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.bench-charm-description {
+  color: var(--menu-muted);
+  font-size: 0.62rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.bench-charm-cost {
+  padding-top: 0.18rem;
+  color: var(--menu-brass);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bench-leave {
+  min-width: 6rem;
+  margin-left: auto;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--menu-line);
+  background: transparent;
+  color: var(--menu-muted);
+  cursor: pointer;
+  font-family: var(--menu-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+}
+
+.bench-leave:hover,
+.bench-leave:focus-visible {
+  border-color: var(--menu-line-strong);
+  color: var(--menu-bone);
+}
+
+.bench-leave:focus-visible {
+  outline: 2px solid var(--menu-brass);
+  outline-offset: 1px;
+}

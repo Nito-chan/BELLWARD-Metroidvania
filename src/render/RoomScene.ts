@@ -2,17 +2,23 @@ import { Container } from 'pixi.js';
 import { BOSS_REWARDS } from '../config/bossTypes';
 import { COMBAT } from '../config/combat';
 import { BOSS_KINDS, isBossKind, type BossKind } from '../config/enemies';
+import { PICKUP } from '../config/pickups';
 import { CAMERA } from '../config/render';
+import { bodyRect, overlaps } from '../combat/geometry';
 import { CombatSystem } from '../combat/CombatSystem';
 import { ProjectilePool, type ProjectileSpawnOptions } from '../combat/ProjectilePool';
+import { BellwardError } from '../core/Errors';
 import type { Rng } from '../core/Rng';
 import type { SceneDebugState } from '../debug/DebugState';
+import { getPickup } from '../data/pickups';
 import { createEnemy } from '../enemies/createEnemy';
 import type { Enemy, EnemyContext } from '../enemies/Enemy';
 import type { InputSnapshot } from '../input/InputState';
+import type { PlayerLoadout } from '../player/PlayerLoadout';
 import { PlayerController, type PlayerEvent } from '../player/PlayerController';
 import { Banner } from '../ui/Banner';
 import { Hud } from '../ui/Hud';
+import { InteractPrompt } from '../ui/InteractPrompt';
 import type { Room, RoomBench, RoomSpawn } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
 import { BenchInteraction } from './BenchInteraction';
@@ -25,6 +31,7 @@ import { EnemyView } from './EnemyView';
 import { ExitGate, type ExitRequest } from './ExitGate';
 import { HeroView } from './HeroView';
 import { LabelLayer } from './LabelLayer';
+import { PickupLayer } from './PickupLayer';
 import { ProjectileView } from './ProjectileView';
 import { PropLayer } from './PropLayer';
 import { SceneBackdrop } from './SceneBackdrop';
@@ -38,10 +45,25 @@ export type RoomSceneOptions = {
   spawn?: RoomSpawn;
   hp?: number;
   maxHp?: number;
+  focus?: number;
+  loadout?: PlayerLoadout;
+  shards?: number;
   /** Sigils already recovered this run, for the HUD row. */
   sigilCount?: number;
   /** True when the room's boss was already defeated earlier in the run. */
   bossRewardClaimed?: boolean;
+  /** Pickups already granted; their views are not built. */
+  collectedPickups?: readonly string[];
+  /** Content-aware gate: keys stay inert until their sigil is claimed. */
+  canCollectPickup?: (id: string) => boolean;
+  /** A secret wall in this room was already shattered in this run. */
+  secretBroken?: boolean;
+  /** The Tide-Bell is owned, so the sealed door is already open. */
+  sealOpen?: boolean;
+  /** This arena's Ordeal was already cleared. */
+  ordealCleared?: boolean;
+  /** The Tide-door ending already played in this run. */
+  endingComplete?: boolean;
   /** Screen-reader announcement hook; the scene never touches the DOM. */
   announce?: (text: string) => void;
   /** Optional arrival banner shown above the HUD for a rest or respawn. */
@@ -76,20 +98,34 @@ export class RoomScene {
   private readonly combat = new CombatSystem();
   private readonly feedback: CombatFeedback;
   private readonly exitGate = new ExitGate();
-  private readonly bossEncounter: BossEncounter | null = null;
+  private bossEncounterValue: BossEncounter | null = null;
   private readonly bench: BenchInteraction;
+  private readonly pickups: PickupLayer;
+  private readonly tileLayer: TileLayer;
+  private readonly altarPrompt = new InteractPrompt();
   private readonly banner = new Banner();
   private readonly announce: (text: string) => void;
   private readonly arrival: RoomArrival | null;
+  private readonly canCollectPickup: (id: string) => boolean;
+  private readonly sealOpen: boolean;
+  private readonly pendingPickups: string[] = [];
   private sigilCount: number;
+  private arenaClaimed: boolean;
+  private secretBrokenValue = false;
+  private secretBrokenThisVisit: boolean;
+  private ordealClearedValue: boolean;
   private pendingBossDefeatValue: BossKind | null = null;
+  private pendingOrdealDefeatValue: BossKind | null = null;
+  private pendingEndingValue = false;
+  /** Ending triggers are one-shot per run, so closing the card cannot reopen it. */
+  private endingFired: boolean;
   private hitstopTicks = 0;
   private resetRequestedValue = false;
 
   constructor(
     private readonly room: Room,
     private readonly art: ArtProvider,
-    rng: Rng,
+    private readonly rng: Rng,
     private readonly audio: SceneAudio,
     options: RoomSceneOptions = {},
   ) {
@@ -98,15 +134,35 @@ export class RoomScene {
     const maxHp = options.maxHp ?? COMBAT.player.maxHp;
     const hp = options.hp ?? maxHp;
     this.sigilCount = options.sigilCount ?? 0;
+    this.arenaClaimed = options.bossRewardClaimed ?? false;
+    this.ordealClearedValue = options.ordealCleared ?? false;
+    this.sealOpen = options.sealOpen ?? false;
+    this.endingFired = options.endingComplete ?? false;
+    this.secretBrokenThisVisit = options.secretBroken ?? false;
     this.announce = options.announce ?? (() => undefined);
     this.arrival = options.arrival ?? null;
-    this.player = new PlayerController(spawn, { maxHp, hp });
+    this.canCollectPickup =
+      options.canCollectPickup ?? ((id) => !(options.collectedPickups ?? []).includes(id));
+    if (options.secretBroken) room.tilemap.removeAll('breakable');
+    if (this.sealOpen) room.tilemap.removeAll('sealedDoor');
+    this.player = new PlayerController(spawn, {
+      maxHp,
+      hp,
+      focus: options.focus,
+      loadout: options.loadout,
+    });
     this.camera.snapTo(spawn.x, spawn.y + CAMERA.focusOffsetY);
     this.backdrop = new SceneBackdrop(room, art, rng.fork());
     this.view.addChild(this.backdrop.backgroundView);
 
-    this.world.addChild(new TileLayer(room.tilemap, art).view);
+    this.tileLayer = new TileLayer(room.tilemap, art);
+    this.world.addChild(this.tileLayer.view);
     this.world.addChild(new PropLayer(room.definition.props, 'back', art).view);
+    this.pickups = new PickupLayer(
+      room.definition.pickups ?? [],
+      new Set(options.collectedPickups ?? []),
+    );
+    this.world.addChild(this.pickups.view);
     if (room.definition.labels && room.definition.labels.length > 0) {
       this.world.addChild(new LabelLayer(room.definition.labels).view);
     }
@@ -138,18 +194,20 @@ export class RoomScene {
         this.actorLayer.addChild(view.view);
       }
     }
-    this.bossEncounter = spawnBoss({
+    this.bossEncounterValue = spawnBoss({
       room,
       art,
       audio,
       effects: this.effects,
       camera: this.camera,
       rng: rng.fork(),
-      claimed: options.bossRewardClaimed ?? false,
+      claimed: this.arenaClaimed,
       announce: options.announce,
-      onDefeated: (kind) => this.onBossDefeated(kind),
+      onDefeated: (kind, ordeal) => this.onBossDefeated(kind, ordeal),
     });
-    if (this.bossEncounter) this.actorLayer.addChild(this.bossEncounter.actorView.view);
+    if (this.bossEncounterValue) {
+      this.actorLayer.addChild(this.bossEncounterValue.actorView.view);
+    }
 
     this.world.addChild(this.actorLayer);
     this.world.addChild(this.effects.view, this.projectileView.view);
@@ -157,10 +215,13 @@ export class RoomScene {
     this.view.addChild(this.world);
     this.view.addChild(this.backdrop.overlayView);
     this.view.addChild(this.bench.screenView);
+    if (room.definition.ordeal) this.view.addChild(this.altarPrompt.view);
     this.view.addChild(this.hud.view);
     this.view.addChild(this.banner.view);
-    if (this.bossEncounter) this.view.addChild(this.bossEncounter.overlay);
+    if (this.bossEncounterValue) this.view.addChild(this.bossEncounterValue.overlay);
     this.hud.setHealth(this.player.hp, this.player.maxHp);
+    this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
+    this.hud.setShards(options.shards ?? 0);
     this.hud.setSigils(this.sigilCount, BOSS_KINDS.length);
     if (this.arrival) {
       this.banner.show(this.arrival.title, this.arrival.subtitle);
@@ -178,6 +239,11 @@ export class RoomScene {
     return { hp: this.player.hp, maxHp: this.player.maxHp };
   }
 
+  /** Focus carried between rooms; benches refill it. */
+  get focus(): number {
+    return this.player.focusValue;
+  }
+
   /** A door the player walked into, or null. Consumed by RunSession after update. */
   get exitRequested(): ExitRequest | null {
     return this.exitGate.request;
@@ -188,6 +254,46 @@ export class RoomScene {
     const kind = this.pendingBossDefeatValue;
     this.pendingBossDefeatValue = null;
     return kind;
+  }
+
+  /** A first-time Ordeal clear that RunSession should persist. */
+  consumeOrdealDefeat(): BossKind | null {
+    const kind = this.pendingOrdealDefeatValue;
+    this.pendingOrdealDefeatValue = null;
+    return kind;
+  }
+
+  /** Pickup ids granted this tick; RunSession records them in the run save. */
+  consumePickups(): readonly string[] {
+    if (this.pendingPickups.length === 0) return [];
+    return this.pendingPickups.splice(0, this.pendingPickups.length);
+  }
+
+  /** True on the tick the secret wall shattered; RunSession persists the room id. */
+  consumeSecretBroken(): boolean {
+    const broken = this.secretBrokenValue;
+    this.secretBrokenValue = false;
+    return broken;
+  }
+
+  /** True once the Tide-door ending fires. RunSession opens the ending overlay. */
+  consumeEnding(): boolean {
+    const ended = this.pendingEndingValue;
+    this.pendingEndingValue = false;
+    return ended;
+  }
+
+  /** Applies a new durable loadout/shards snapshot while the room stays loaded. */
+  applyProgress(loadout: PlayerLoadout, shards: number): void {
+    this.player.applyLoadout(loadout);
+    this.hud.setShards(shards);
+    this.hud.setHealth(this.player.hp, this.player.maxHp);
+    this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
+  }
+
+  /** A mask shard completed a set: raise the ceiling and fill the new mask. */
+  grantMaxHp(amount: number): void {
+    this.player.grantMaxHp(amount);
   }
 
   /** A bench the player invoked this tick; RunSession saves and rebuilds the room. */
@@ -210,15 +316,15 @@ export class RoomScene {
 
   /** DEV-only E2E hooks. They route through the real damage/ward/defeat paths. */
   debugDamageBoss(amount: number): boolean {
-    return this.bossEncounter?.debugDamage(amount) ?? false;
+    return this.bossEncounterValue?.debugDamage(amount) ?? false;
   }
 
   debugBreakWard(): boolean {
-    return this.bossEncounter?.debugBreakWard() ?? false;
+    return this.bossEncounterValue?.debugBreakWard() ?? false;
   }
 
   debugDefeatBoss(): void {
-    this.bossEncounter?.debugDefeat();
+    this.bossEncounterValue?.debugDefeat();
   }
 
   /** Advances the simulation by one fixed tick and returns what that tick produced. */
@@ -250,7 +356,7 @@ export class RoomScene {
       },
     };
     for (const record of this.enemyRecords) record.enemy.update(context);
-    this.bossEncounter?.update(context);
+    this.bossEncounterValue?.update(context);
 
     const result = this.combat.resolve(
       this.player,
@@ -263,10 +369,15 @@ export class RoomScene {
     this.feedback.update();
 
     this.removeFallenEnemies();
+    this.updatePickups();
+    this.tryBreakSecret();
     this.syncViews(tickCount);
     this.updateHud();
     this.bench.update(this.player.feet, this.player.dead, input.pressed.has('interact'), tickCount);
+    this.updateOrdeal(input);
+    this.updateEnding();
     this.banner.tick();
+    this.pickups.update(tickCount);
 
     const feet = this.player.feet;
     this.camera.update(
@@ -304,9 +415,12 @@ export class RoomScene {
       camera: this.camera,
       player: this.player,
       enemies: this.enemyRecords.map((record) => record.enemy),
-      boss: this.bossEncounter,
+      boss: this.bossEncounterValue,
       bench: this.bench.focused,
       projectiles: this.projectiles.activeCount,
+      pickupsRemaining: this.pickups.remaining,
+      secretBroken: this.secretBrokenThisVisit,
+      sealOpen: this.sealOpen,
       hitstop: this.hitstopTicks,
     });
   }
@@ -314,7 +428,7 @@ export class RoomScene {
   private enemies(): readonly Enemy[] {
     this.enemyBuffer.length = 0;
     for (const record of this.enemyRecords) this.enemyBuffer.push(record.enemy);
-    if (this.bossEncounter) this.enemyBuffer.push(this.bossEncounter.boss);
+    if (this.bossEncounterValue) this.enemyBuffer.push(this.bossEncounterValue.boss);
     return this.enemyBuffer;
   }
 
@@ -329,12 +443,119 @@ export class RoomScene {
   }
 
   /** First clear of a boss grants one mask and records the sigil for the run. */
-  private onBossDefeated(kind: BossKind): void {
+  private onBossDefeated(kind: BossKind, ordeal: boolean): void {
+    if (ordeal) {
+      this.pendingOrdealDefeatValue = kind;
+      this.ordealClearedValue = true;
+      this.hud.setHealth(this.player.hp, this.player.maxHp);
+      return;
+    }
+    this.arenaClaimed = true;
     this.player.grantMaxHp(BOSS_REWARDS.maxHpPerSigil);
     this.sigilCount += 1;
     this.pendingBossDefeatValue = kind;
     this.hud.setSigils(this.sigilCount, BOSS_KINDS.length);
     this.hud.setHealth(this.player.hp, this.player.maxHp);
+  }
+
+  /** Walks over a collectible and asks the run whether it may be granted. */
+  private updatePickups(): void {
+    if (this.player.dead) return;
+    const feet = this.player.feet;
+    for (const placement of this.room.definition.pickups ?? []) {
+      if (!this.pickups.has(placement.id)) continue;
+      if (Math.abs(feet.x - placement.x) > PICKUP.radiusX) continue;
+      if (Math.abs(feet.y - placement.y) > PICKUP.radiusY) continue;
+      if (!this.canCollectPickup(placement.id)) continue;
+      this.pickups.collect(placement.id);
+      this.pendingPickups.push(placement.id);
+      const def = getPickup(placement.id);
+      this.effects.spark(placement.x, placement.y, 1);
+      this.audio.playSfx('bell');
+      this.banner.show(def.name.toUpperCase(), def.description, 120);
+      this.announce(`${def.name}. ${def.description}`);
+    }
+  }
+
+  /** A nail swing against cracked masonry opens a one-way secret passage. */
+  private tryBreakSecret(): void {
+    if (this.secretBrokenValue || !this.player.attackActive) return;
+    const hitbox = this.player.attackHitbox();
+    if (!hitbox || !this.room.tilemap.hasRoleInRect('breakable', hitbox)) return;
+    this.room.tilemap.removeAll('breakable');
+    this.tileLayer.removeRole('breakable');
+    this.secretBrokenValue = true;
+    this.secretBrokenThisVisit = true;
+    this.effects.spark(hitbox.x + hitbox.w / 2, hitbox.y + hitbox.h / 2, this.player.facing);
+    this.audio.playSfx('bossWard');
+    this.camera.shake(4, 12);
+    this.banner.show('A HIDDEN PASSAGE', 'The cracked stone gives way.', 150);
+    this.announce('A hidden passage opens.');
+  }
+
+  /**
+   * A claimed arena's altar relights the boss as a harder Ordeal. The prompt and the
+   * spawn both live here so the run only has to persist the clear, not the encounter.
+   */
+  private updateOrdeal(input: InputSnapshot): void {
+    const ordeal = this.room.definition.ordeal;
+    if (
+      !ordeal ||
+      !this.arenaClaimed ||
+      this.ordealClearedValue ||
+      this.bossEncounterValue ||
+      this.player.dead
+    ) {
+      this.altarPrompt.hide();
+      return;
+    }
+    if (!overlaps(bodyRect(this.player.body), ordeal)) {
+      this.altarPrompt.hide();
+      return;
+    }
+    this.altarPrompt.show('RELIGHT THE ORDEAL', 'INTERACT · FACE THE HARDER MEMORY');
+    if (!input.pressed.has('interact')) return;
+    this.startOrdeal();
+  }
+
+  private startOrdeal(): void {
+    const kind = this.room.definition.boss;
+    if (!kind) return;
+    const encounter = spawnBoss({
+      room: this.room,
+      art: this.art,
+      audio: this.audio,
+      effects: this.effects,
+      camera: this.camera,
+      rng: this.rng.fork(),
+      claimed: true,
+      allowClaimed: true,
+      variant: 'ordeal',
+      announce: this.announce,
+      onDefeated: (defeated, ordeal) => this.onBossDefeated(defeated, ordeal),
+    });
+    if (!encounter) {
+      throw new BellwardError(`room "${this.room.definition.id}" could not relight its Ordeal`);
+    }
+    this.bossEncounterValue = encounter;
+    this.arenaClaimed = true;
+    this.actorLayer.addChild(encounter.actorView.view);
+    this.view.addChild(encounter.overlay);
+    this.altarPrompt.hide();
+    this.audio.playSfx('bossWard');
+    this.announce(`${encounter.boss.title} returns.`);
+  }
+
+  /** The Tide door ending fires once; the run owns the actual ending screen. */
+  private updateEnding(): void {
+    const ending = this.room.definition.ending;
+    if (!ending || !this.sealOpen || this.endingFired || this.pendingEndingValue) return;
+    if (this.player.dead || !overlaps(bodyRect(this.player.body), ending)) return;
+    this.endingFired = true;
+    this.pendingEndingValue = true;
+    this.banner.show(ending.title, ending.subtitle, 240);
+    this.announce(`${ending.title}. ${ending.subtitle}`);
+    this.audio.playSfx('bell');
   }
 
   /**
@@ -346,7 +567,7 @@ export class RoomScene {
     this.exitGate.update(
       this.player.body,
       this.room.definition.exits ?? [],
-      this.bossEncounter?.alive ?? false,
+      this.bossEncounterValue?.alive ?? false,
     );
   }
 
@@ -372,6 +593,7 @@ export class RoomScene {
 
   private updateHud(): void {
     this.hud.setHealth(this.player.hp, this.player.maxHp);
+    this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
     this.hud.setDamage(this.feedback.damageAlpha);
     const death = this.player.dead
       ? Math.min(1, this.player.deathElapsed / COMBAT.player.deathTicks)

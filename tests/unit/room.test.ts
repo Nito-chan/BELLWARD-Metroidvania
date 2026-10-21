@@ -13,7 +13,7 @@ describe('createRoom', () => {
     expect(room.tilemap.width).toBe(60);
     expect(room.tilemap.height).toBe(24);
     expect(room.bounds).toEqual({ x: 0, y: 0, w: 960, h: 384 });
-    expect(room.tilemap.tileCount).toBe(449);
+    expect(room.tilemap.tileCount).toBe(437);
     expect(room.spawn).toEqual({ x: 420, y: 320 });
   });
 
@@ -104,7 +104,7 @@ describe('createRoom', () => {
     expect(() =>
       createRoom({
         ...belfryTerrace,
-        enemies: [{ kind: 'parishioner', x: 20, y: 320 }],
+        enemies: [{ kind: 'parishioner', x: 950, y: 320 }],
       }),
     ).toThrow(/body overlaps wall/);
   });
@@ -175,10 +175,14 @@ describe('M6 rooms and the bell nave graph', () => {
     expect(belfryAntechamber.exits?.map((exit) => exit.targetRoomId).sort()).toEqual([
       'belfry-terrace',
       'bellbearer-arena',
+      'bellows',
       'bellthief-arena',
       'warden-arena',
     ]);
-    expect(belfryTerrace.exits?.[0]?.targetRoomId).toBe('belfry-antechamber');
+    expect(belfryTerrace.exits?.map((exit) => exit.targetRoomId).sort()).toEqual([
+      'belfry-antechamber',
+      'drowned-gallery',
+    ]);
   });
 
   it('keeps every exit trigger inside the source and its destination spawn clear', () => {
@@ -246,7 +250,11 @@ describe('M6 rooms and the bell nave graph', () => {
   });
 
   it('indexes every bench and gives it solid ground and a clear respawn', () => {
-    expect([...BENCHES.keys()]).toEqual(['terrace-weeping-stone', 'nave-bell-keepers-rest']);
+    expect([...BENCHES.keys()]).toEqual([
+      'terrace-weeping-stone',
+      'nave-bell-keepers-rest',
+      'upper-tide-watch',
+    ]);
     for (const bench of BENCHES.values()) {
       const room = createRoom(getRoom(bench.roomId));
       expect(room.tilemap.isSolid(Math.floor(bench.x / 16), Math.floor(bench.y / 16))).toBe(true);

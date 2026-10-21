@@ -5,9 +5,9 @@
 export const SAVE = {
   /**
    * Version of the persisted run document. Bump this whenever the shape changes; the
-   * loader treats every other version as unreadable and starts a clean run.
+   * loader migrates known old versions and treats every other version as unreadable.
    */
-  version: 1,
+  version: 2,
   /** localStorage key. The `.v1` suffix is convention, not the validation version. */
   storageKey: 'bellward.save.v1',
 } as const;

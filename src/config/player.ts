@@ -73,6 +73,41 @@ export const PLAYER = {
       stage2: { start: 5, end: 15 },
     },
   },
+  /**
+   * Wall Claw: contact with a vertical wall while airborne lets the hero cling briefly,
+   * then kick away. The first jump is intentionally forgiving; the lock stops the wall
+   * jump from being cancelled by held movement input on the next tick.
+   */
+  wall: {
+    /** Vertical speed cap while sliding, px/s. */
+    slideSpeed: 120,
+    /** Downward speed imparted when the slide starts, px/s. */
+    slideStartSpeed: 50,
+    /** Ticks after a wall jump before air input can steer the launch, px/s. */
+    lockTicks: 8,
+    /** Horizontal launch speed away from the wall, px/s. */
+    jumpX: 210,
+    /** Vertical launch speed, px/s. */
+    jumpY: 540,
+    /** Ticks after leaving a wall before the controller considers it a new contact. */
+    recontactTicks: 6,
+  },
+  /** Focus is the healing resource: a full bar pays for one heal, with change carried. */
+  focus: {
+    max: 99,
+    /** Focus gained for each landed nail hit. */
+    gainPerHit: 11,
+  },
+  heal: {
+    /** Focus spent by a completed heal. */
+    cost: 33,
+    /** Ticks the hero must hold the heal button, rooted, before the mask returns. */
+    ticks: 54,
+    /** Quick Mend reduces the hold to two-thirds. */
+    quickMendScale: 0.67,
+    /** Invulnerability window after a shielded hit absorbs damage. */
+    shieldInvulnerableTicks: 30,
+  },
   /** Speed (px/s) above which a direction flip plays the turn clip instead of running. */
   skidMinSpeed: 70,
   /** Speed (px/s) below which the hero counts as standing still. */

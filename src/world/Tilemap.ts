@@ -11,11 +11,11 @@ export class Tilemap {
   readonly width: number;
   readonly height: number;
   /** Number of non-empty cells (handy for debug state and tests). */
-  readonly tileCount: number;
-  /** Row-major roles; null means empty space. */
-  private readonly roles: readonly (TileRole | null)[];
+  private tileCountValue: number;
+  /** Row-major roles; null means empty space. Mutable only through removeAll(). */
+  private readonly roles: (TileRole | null)[];
 
-  private constructor(width: number, height: number, roles: readonly (TileRole | null)[]) {
+  private constructor(width: number, height: number, roles: (TileRole | null)[]) {
     this.width = width;
     this.height = height;
     this.roles = roles;
@@ -23,7 +23,11 @@ export class Tilemap {
     for (const role of roles) {
       if (role !== null) count += 1;
     }
-    this.tileCount = count;
+    this.tileCountValue = count;
+  }
+
+  get tileCount(): number {
+    return this.tileCountValue;
   }
 
   /**
@@ -119,6 +123,37 @@ export class Tilemap {
     return role !== null && TILE_ROLES[role].solid && !roleIsOneWay(role);
   }
 
+  /**
+   * Removes every tile of a role, returning how many cells changed. Used for broken
+   * secret walls and for the Tide door once its key is owned; the collision grid and the
+   * render layer read the same mutation, so no phantom collider survives.
+   */
+  removeAll(role: TileRole): number {
+    let removed = 0;
+    for (let index = 0; index < this.roles.length; index += 1) {
+      if (this.roles[index] === role) {
+        this.roles[index] = null;
+        removed += 1;
+      }
+    }
+    this.tileCountValue -= removed;
+    return removed;
+  }
+
+  /** True when any matching role sits inside the rect. Used by nail vs. cracked stone. */
+  hasRoleInRect(role: TileRole, rect: { x: number; y: number; w: number; h: number }): boolean {
+    const size = RENDER.tileSize;
+    const left = Math.max(0, Math.floor(rect.x / size));
+    const top = Math.max(0, Math.floor(rect.y / size));
+    const right = Math.min(this.width - 1, Math.floor((rect.x + rect.w - 0.001) / size));
+    const bottom = Math.min(this.height - 1, Math.floor((rect.y + rect.h - 0.001) / size));
+    for (let ty = top; ty <= bottom; ty += 1) {
+      for (let tx = left; tx <= right; tx += 1) {
+        if (this.roleAt(tx, ty) === role) return true;
+      }
+    }
+    return false;
+  }
   /** Visits every non-empty tile in row-major order (stable rendering order). */
   forEachTile(visit: (tx: number, ty: number, role: TileRole) => void): void {
     for (let ty = 0; ty < this.height; ty += 1) {

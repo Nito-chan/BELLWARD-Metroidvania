@@ -4,6 +4,8 @@ import { HowlerBackend } from '../audio/HowlerBackend';
 import { AUDIO } from '../config/audio';
 import { DEBUG } from '../config/debug';
 import { PALETTE } from '../config/palette';
+import { BOSS_KINDS } from '../config/enemies';
+import { CHARMS, CHARM_ORDER, CHARM_SLOTS, type CharmId } from '../config/progression';
 import { RENDER } from '../config/render';
 import { SIM, VIEW, WORLD } from '../config/world';
 import type { GameDebugState } from '../debug/DebugState';
@@ -11,8 +13,11 @@ import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
 import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
 import { Announcer } from '../ui/Announcer';
+import { BenchOverlay, type BenchChange, type BenchState } from '../ui/bench/BenchOverlay';
+import { EndingOverlay } from '../ui/ending/EndingOverlay';
 import { MenuSystem } from '../ui/menu/MenuSystem';
 import type { MenuScreen } from '../ui/menu/menuTypes';
+import type { BenchRef } from '../data/benches';
 import { ArtProvider } from '../render/ArtProvider';
 import type { RoomSpawn } from '../world/Room';
 import { BellwardError, formatError } from './Errors';
@@ -55,6 +60,9 @@ export class Game {
   private bindings: Bindings;
   private readonly input: InputManager;
   private readonly menu: MenuSystem;
+  private readonly benchOverlay: BenchOverlay;
+  private readonly endingOverlay: EndingOverlay;
+  private benchRef: BenchRef | null = null;
 
   private ready = false;
   private lastWholeSecond = 0;
@@ -79,6 +87,17 @@ export class Game {
       onClose: () => this.resumeFromMenu(),
       getMap: () => this.run.mapSnapshot(),
       mapKeyCodes: () => this.bindings.keyboard.map,
+    });
+    this.benchOverlay = new BenchOverlay({
+      getState: () => this.benchState(),
+      onToggleCharm: (id) => this.toggleCharm(id),
+      onBuyNail: () => this.buyNail(),
+      onClose: () => this.resumeFromOverlay(),
+      announce: (text) => this.announcer.say(text),
+    });
+    this.endingOverlay = new EndingOverlay({
+      onClose: () => this.resumeFromOverlay(),
+      announce: (text) => this.announcer.say(text),
     });
   }
 
@@ -120,6 +139,8 @@ export class Game {
       rng: this.rng,
       stage: this.app.stage,
       announce: (text) => this.announcer.say(text),
+      onBench: (bench) => this.openBench(bench),
+      onEnding: (title, subtitle) => this.openEnding(title, subtitle),
     });
     window.addEventListener('resize', this.onResize);
     this.onResize();
@@ -188,7 +209,7 @@ export class Game {
   }
 
   private onTick(): void {
-    if (this.menu.isOpen) return;
+    if (this.menu.isOpen || this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
     const snapshot = this.input.snapshot();
 
     if (this.menuLatch) {
@@ -221,6 +242,7 @@ export class Game {
 
   /** Freezes the simulation but keeps rendering the scene behind the overlay. */
   private openMenu(screen: MenuScreen): void {
+    if (this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
     this.input.reset();
     this.loop.pause();
     this.menu.open(screen);
@@ -228,6 +250,99 @@ export class Game {
 
   /** Resumes from the overlay without letting a held pause/map input re-open it. */
   private resumeFromMenu(): void {
+    this.menuLatch = true;
+    this.input.reset();
+    this.loop.resume();
+    this.app.canvas.focus();
+  }
+
+  private benchState(): BenchState {
+    const progress = this.run.progress;
+    const nails = progress.nails;
+    const slotsUsed = [...progress.charmsEquipped].reduce(
+      (total, id) => total + CHARMS[id].cost,
+      0,
+    );
+    return {
+      benchName: this.benchRef?.name ?? 'The Bench',
+      shards: progress.shards,
+      nailLevel: nails.level,
+      nailMax: nails.maxLevel,
+      nextCost: nails.nextCost,
+      slotsUsed,
+      slotsTotal: CHARM_SLOTS,
+      charms: CHARM_ORDER.map((id) => ({
+        id,
+        name: CHARMS[id].name,
+        description: CHARMS[id].description,
+        cost: CHARMS[id].cost,
+        owned: progress.charmsOwned.includes(id),
+        equipped: progress.charmsEquipped.includes(id),
+      })),
+    };
+  }
+
+  private toggleCharm(id: CharmId): BenchChange {
+    const progress = this.run.progress;
+    const name = CHARMS[id].name;
+    if (!progress.charmsOwned.includes(id)) {
+      return { ok: false, message: `${name} has not been found yet.` };
+    }
+    const wasEquipped = progress.charmsEquipped.includes(id);
+    if (!progress.toggleCharm(id)) {
+      return { ok: false, message: 'No free charm slots. Set another charm aside first.' };
+    }
+    this.afterBenchChange();
+    return {
+      ok: true,
+      message: wasEquipped ? `${name} set aside.` : `${name} equipped.`,
+    };
+  }
+
+  private buyNail(): BenchChange {
+    const progress = this.run.progress;
+    const cost = progress.nails.nextCost;
+    if (cost === null) return { ok: false, message: 'The nail is already fully tempered.' };
+    if (progress.shards < cost) {
+      return {
+        ok: false,
+        message: `The forge wants ${cost} shards. You carry ${progress.shards}.`,
+      };
+    }
+    if (!progress.buyNailUpgrade()) {
+      return { ok: false, message: 'The forge refuses; nothing was spent.' };
+    }
+    this.afterBenchChange();
+    return { ok: true, message: `The nail is tempered to +${progress.nails.level}.` };
+  }
+
+  /** Equipment changes are durable immediately and visible on the loaded hero. */
+  private afterBenchChange(): void {
+    this.run.scene?.applyProgress(this.run.progress.loadout, this.run.progress.shards);
+    this.run.saveAtBench();
+  }
+
+  private openBench(bench: BenchRef): void {
+    this.benchRef = bench;
+    this.input.reset();
+    this.loop.pause();
+    this.benchOverlay.open();
+  }
+
+  private openEnding(title: string, subtitle: string): void {
+    const progress = this.run.progress;
+    this.input.reset();
+    this.loop.pause();
+    this.endingOverlay.open(title, subtitle, {
+      sigils: progress.sigils.length,
+      bossCount: BOSS_KINDS.length,
+      shards: progress.shards,
+      charms: progress.charmsOwned.length,
+    });
+  }
+
+  private resumeFromOverlay(): void {
+    this.benchRef = null;
     this.menuLatch = true;
     this.input.reset();
     this.loop.resume();
@@ -298,7 +413,8 @@ export class Game {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (this.menu.isOpen || event.defaultPrevented) return;
+    if (this.menu.isOpen || this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
+    if (event.defaultPrevented) return;
     if (event.key === 'F1') {
       event.preventDefault();
       this.overlay.toggle();
@@ -316,7 +432,8 @@ export class Game {
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
-    if (this.menu.isOpen || event.defaultPrevented) return;
+    if (this.menu.isOpen || this.benchOverlay.isOpen || this.endingOverlay.isOpen) return;
+    if (event.defaultPrevented) return;
     if (this.input.handleKey(event.code, false)) event.preventDefault();
   };
 

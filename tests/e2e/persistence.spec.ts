@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { bootGame, debugState, loadRoom, reloadGame } from './support';
+import { bootGame, closeBenchOverlay, debugState, loadRoom, reloadGame } from './support';
 
 test.describe('M7 persistence and the region loop', () => {
   // Reloads re-decode the packed score under SwiftShader, so give these three flows headroom.
@@ -53,6 +53,7 @@ test.describe('M7 persistence and the region loop', () => {
       name: 'The Weeping Stone',
     });
     expect(rested.save).toMatchObject({ present: true, lastWrite: 'bench' });
+    await closeBenchOverlay(page);
 
     await page.keyboard.press('KeyM');
     const map = page.getByRole('dialog', { name: 'Region Map' });
@@ -62,15 +63,15 @@ test.describe('M7 persistence and the region loop', () => {
     expect(mapBox?.y ?? -1).toBeGreaterThanOrEqual(0);
     expect((mapBox?.y ?? 0) + (mapBox?.height ?? 999)).toBeLessThanOrEqual(360);
     expect((mapBox?.x ?? 0) + (mapBox?.width ?? 999)).toBeLessThanOrEqual(640);
-    await expect(page.locator('.menu-panel')).toHaveAttribute('data-screen', 'map');
-    await expect(page.locator('.menu-footer')).toContainText('Esc');
-    await expect(page.locator('.menu-footer')).toContainText('M');
+    await expect(map).toHaveAttribute('data-screen', 'map');
+    await expect(map.locator('.menu-footer')).toContainText('Esc');
+    await expect(map.locator('.menu-footer')).toContainText('M');
     await expect(map.locator('.map-node[data-state="current"]')).toHaveAttribute(
       'data-room-id',
       'belfry-terrace',
     );
-    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(4);
-    await expect(map.locator('.map-summary')).toContainText('1 / 5');
+    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(11);
+    await expect(map.locator('.map-summary')).toContainText('1 / 12');
     await expect(map.locator('.map-summary')).toContainText('0 / 3');
     await expect(map.locator('.map-summary')).toContainText('The Weeping Stone');
     await expect(map.locator('.map-node[data-room-id="belfry-terrace"]')).toHaveAttribute(
@@ -132,6 +133,7 @@ test.describe('M7 persistence and the region loop', () => {
       undefined,
       { timeout: 15_000 },
     );
+    await closeBenchOverlay(page);
 
     // Leave the checkpoint room so the respawn target is distinct from the death room.
     await loadRoom(page, 'belfry-terrace');
@@ -216,7 +218,7 @@ test.describe('M7 persistence and the region loop', () => {
     await page.keyboard.press('KeyM');
     const map = page.getByRole('dialog', { name: 'Region Map' });
     await expect(map).toBeVisible();
-    await expect(map.locator('.map-summary')).toContainText('3 / 5');
+    await expect(map.locator('.map-summary')).toContainText('3 / 12');
     await expect(map.locator('.map-summary')).toContainText('1 / 3');
     await expect(map.locator('.map-node[data-room-id="bellbearer-arena"]')).toHaveAttribute(
       'data-state',

@@ -1,19 +1,23 @@
 /**
- * The persisted run document. It stores only durable run facts: the last safe room/spawn,
- * current masks, claimed sigils, charted rooms and the bench checkpoint. Enemies, projectiles
- * and boss phase timers intentionally reset, exactly as they do on a room transition.
+ * The persisted run document. It stores durable run facts only: the last safe room/spawn,
+ * masks, claimed sigils, charted rooms, the bench checkpoint, collectibles, shards,
+ * charms, nail level, broken secret walls, cleared Ordeals and the ending flag. Enemies,
+ * projectiles and boss phase timers intentionally reset, exactly as on a room transition.
  *
- * Loading is all-or-nothing. A corrupt, partial or future-versioned document starts a fresh
- * run instead of booting into an impossible state; storage failures never break play.
+ * Loading is all-or-nothing. A v1 document is migrated in place (same storage key); a
+ * corrupt, partial or future-versioned document starts a fresh run instead of booting
+ * into an impossible state. Storage failures never break play.
  */
 import { BOSS_REWARDS } from '../config/bossTypes';
 import { COMBAT } from '../config/combat';
 import { BOSS_KINDS, type BossKind } from '../config/enemies';
 import { PLAYER } from '../config/player';
+import { CHARMS, CHARM_SLOTS, CHARM_ORDER, NAIL, type CharmId } from '../config/progression';
 import { SAVE } from '../config/save';
 import { BellwardError } from '../core/Errors';
 import { BENCHES } from '../data/benches';
-import { ROOMS } from '../data/rooms';
+import { healthShardCount, isPickupId, PICKUPS, getPickup } from '../data/pickups';
+import { ALL_ROOMS, ROOMS } from '../data/rooms';
 import { createRoom, isStandingPoint, type RoomSpawn } from '../world/Room';
 
 export type SaveReason = 'boot' | 'room' | 'bench' | 'reward' | 'respawn' | 'debug';
@@ -26,9 +30,22 @@ export type RunSave = {
   readonly sigils: readonly BossKind[];
   readonly visitedRooms: readonly string[];
   readonly checkpointBenchId: string | null;
+  readonly pickups: readonly string[];
+  readonly brokenSecrets: readonly string[];
+  readonly charmsOwned: readonly CharmId[];
+  readonly charmsEquipped: readonly CharmId[];
+  readonly nailLevel: number;
+  readonly shards: number;
+  readonly ordeals: readonly BossKind[];
+  readonly sliceComplete: boolean;
 };
 
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+/** Pickup ids that are actually placed in a room, used to reject impossible saves. */
+const PLACED_PICKUPS: ReadonlySet<string> = new Set(
+  ALL_ROOMS.flatMap((room) => (room.pickups ?? []).map((pickup) => pickup.id)),
+);
 
 /** localStorage when it exists and is reachable, else null (private mode, embedded). */
 export function defaultRunStorage(): SaveStorage | null {
@@ -39,7 +56,7 @@ export function defaultRunStorage(): SaveStorage | null {
   }
 }
 
-/** Base mask ceiling plus one per sigil. The single source of truth for run HP. */
+/** Base mask ceiling plus one per sigil. The single source of truth for boss HP. */
 export function maxHpForSigils(count: number): number {
   if (!Number.isInteger(count) || count < 0 || count > BOSS_KINDS.length) {
     throw new BellwardError(`sigil count must be an integer within 0..${BOSS_KINDS.length}`);
@@ -47,20 +64,49 @@ export function maxHpForSigils(count: number): number {
   return COMBAT.player.maxHp + count * BOSS_REWARDS.maxHpPerSigil;
 }
 
-/** Reads and validates a run. Any problem returns null so Game can start cleanly. */
+/** Base masks + one per sigil + one per full set of four mask shards. */
+export function maxHpForProgress(sigilCount: number, maskShards: number): number {
+  if (!Number.isInteger(maskShards) || maskShards < 0) {
+    throw new BellwardError(`mask shard count must be a non-negative integer`);
+  }
+  return maxHpForSigils(sigilCount) + Math.floor(maskShards / 4);
+}
+
+/** Reads and validates a run, migrating v1 in memory. Any problem returns null. */
 export function loadRunSave(storage = defaultRunStorage()): RunSave | null {
   if (!storage) return null;
   try {
     const raw = storage.getItem(SAVE.storageKey);
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
-    const save = parseRunSave(parsed);
+    const save = parseRunSave(migrateRunSave(parsed));
     if (save) return save;
     console.warn('[BELLWARD] ignoring invalid saved run; starting a fresh climb');
   } catch (error) {
     console.warn('[BELLWARD] ignoring unreadable saved run', error);
   }
   return null;
+}
+
+/**
+ * The v1 document is a strict subset of v2: every old fact keeps its meaning, and every
+ * new durable set starts empty. This is exported so the unit suite can prove the exact
+ * old shape survives a migration instead of merely trusting a version number.
+ */
+export function migrateRunSave(value: unknown): unknown {
+  if (!isRecord(value) || value.version !== 1) return value;
+  return {
+    ...value,
+    version: SAVE.version,
+    pickups: [],
+    brokenSecrets: [],
+    charmsOwned: [],
+    charmsEquipped: [],
+    nailLevel: 0,
+    shards: 0,
+    ordeals: [],
+    sliceComplete: false,
+  };
 }
 
 /** Persists a run document. Returns false when storage is unavailable or rejects the write. */
@@ -77,7 +123,8 @@ export function writeRunSave(save: RunSave, storage = defaultRunStorage()): bool
 
 /**
  * Pure content-aware validation. Exported so the unit suite can exercise every rejection
- * without a browser localStorage. Unknown rooms, benches, sigils and bad standings all fail.
+ * without a browser localStorage. Unknown rooms, benches, sigils, pickups, charms,
+ * impossible HP, overfull charm belts and bad standings all fail.
  */
 export function parseRunSave(value: unknown): RunSave | null {
   if (!isRecord(value) || value.version !== SAVE.version) return null;
@@ -93,11 +140,16 @@ export function parseRunSave(value: unknown): RunSave | null {
 
   const sigils = parseSigils(value.sigils);
   if (!sigils) return null;
+  const pickups = parsePickupIds(value.pickups, sigils);
+  if (!pickups) return null;
+  const brokenSecrets = parseBrokenSecrets(value.brokenSecrets);
+  if (!brokenSecrets) return null;
+  const healthShards = healthShardCount(pickups);
   if (
     typeof value.hp !== 'number' ||
     !Number.isInteger(value.hp) ||
     value.hp < 1 ||
-    value.hp > maxHpForSigils(sigils.length)
+    value.hp > maxHpForProgress(sigils.length, healthShards)
   ) {
     return null;
   }
@@ -113,6 +165,31 @@ export function parseRunSave(value: unknown): RunSave | null {
     checkpointBenchId = value.checkpointBenchId;
   }
 
+  const charmsOwned = parseCharmsOwned(value.charmsOwned, pickups);
+  if (!charmsOwned) return null;
+  const charmsEquipped = parseCharmsEquipped(value.charmsEquipped, charmsOwned);
+  if (!charmsEquipped) return null;
+
+  if (
+    typeof value.nailLevel !== 'number' ||
+    !Number.isInteger(value.nailLevel) ||
+    value.nailLevel < 0 ||
+    value.nailLevel > NAIL.maxLevel
+  ) {
+    return null;
+  }
+  if (
+    typeof value.shards !== 'number' ||
+    !Number.isInteger(value.shards) ||
+    value.shards < 0 ||
+    value.shards > 999_999
+  ) {
+    return null;
+  }
+  const ordeals = parseOrdeals(value.ordeals, sigils);
+  if (!ordeals) return null;
+  if (typeof value.sliceComplete !== 'boolean') return null;
+
   return {
     version: SAVE.version,
     roomId,
@@ -121,6 +198,14 @@ export function parseRunSave(value: unknown): RunSave | null {
     sigils,
     visitedRooms,
     checkpointBenchId,
+    pickups,
+    brokenSecrets,
+    charmsOwned,
+    charmsEquipped,
+    nailLevel: value.nailLevel,
+    shards: value.shards,
+    ordeals,
+    sliceComplete: value.sliceComplete,
   };
 }
 
@@ -153,6 +238,77 @@ function parseVisited(value: unknown): string[] | null {
     visited.push(entry);
   }
   return visited;
+}
+
+function parsePickupIds(value: unknown, sigils: readonly BossKind[]): string[] | null {
+  if (!Array.isArray(value) || value.length > PLACED_PICKUPS.size) return null;
+  const pickups: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !isPickupId(entry) || !PLACED_PICKUPS.has(entry)) {
+      return null;
+    }
+    if (pickups.includes(entry)) return null;
+    const requires = getPickup(entry).requiresSigil;
+    if (requires && !sigils.includes(requires)) return null;
+    pickups.push(entry);
+  }
+  return pickups;
+}
+
+function parseBrokenSecrets(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const secrets: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !ROOMS[entry] || secrets.includes(entry)) return null;
+    secrets.push(entry);
+  }
+  return secrets;
+}
+
+/** Charms are durable facts independent of the pickup list, but both must agree. */
+function parseCharmsOwned(value: unknown, pickups: readonly string[]): CharmId[] | null {
+  if (!Array.isArray(value) || value.length > CHARM_ORDER.length) return null;
+  const owned: CharmId[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !CHARM_ORDER.includes(entry as CharmId)) return null;
+    if (owned.includes(entry as CharmId)) return null;
+    owned.push(entry as CharmId);
+  }
+  for (const pickup of pickups) {
+    const charm = PICKUPS[pickup]?.charm;
+    if (charm && !owned.includes(charm)) return null;
+  }
+  for (const charmId of owned) {
+    const granted = pickups.some((pickup) => PICKUPS[pickup]?.charm === charmId);
+    if (!granted) return null;
+  }
+  return owned;
+}
+
+function parseCharmsEquipped(value: unknown, owned: readonly CharmId[]): CharmId[] | null {
+  if (!Array.isArray(value)) return null;
+  const equipped: CharmId[] = [];
+  let slots = 0;
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !CHARM_ORDER.includes(entry as CharmId)) return null;
+    if (!owned.includes(entry as CharmId) || equipped.includes(entry as CharmId)) return null;
+    equipped.push(entry as CharmId);
+    slots += CHARMS[entry as CharmId].cost;
+  }
+  return slots <= CHARM_SLOTS ? equipped : null;
+}
+
+function parseOrdeals(value: unknown, sigils: readonly BossKind[]): BossKind[] | null {
+  if (!Array.isArray(value) || value.length > BOSS_KINDS.length) return null;
+  const ordeals: BossKind[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !(BOSS_KINDS as readonly string[]).includes(entry)) {
+      return null;
+    }
+    if (ordeals.includes(entry as BossKind) || !sigils.includes(entry as BossKind)) return null;
+    ordeals.push(entry as BossKind);
+  }
+  return ordeals;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

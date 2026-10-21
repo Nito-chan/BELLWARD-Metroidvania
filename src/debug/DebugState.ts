@@ -30,6 +30,8 @@ export type SceneBossDebugState = {
   warded: boolean;
   state: string;
   pattern: string | null;
+  /** True when this is a hard-mode Ordeal rematch. */
+  ordeal?: boolean;
   /** 0..1 wind-up warning fill. */
   telegraph: number;
   hidden: boolean;
@@ -80,6 +82,15 @@ export type SceneDebugState = {
     dead: boolean;
     /** True while a swing's damage window is open. */
     attackActive: boolean;
+    focus: number;
+    maxFocus: number;
+    /** 0..1 heal channel fill. */
+    healProgress: number;
+    /** -1 touching a left wall, 1 a right wall, 0 free. */
+    wallContact: -1 | 0 | 1;
+    wallSliding: boolean;
+    nailLevel: number;
+    charms: string[];
   };
   /** Live enemies, in spawn order. Dead enemies are removed before this snapshot. */
   enemies: Array<{
@@ -106,6 +117,12 @@ export type SceneDebugState = {
   } | null;
   /** True while a living boss keeps the arena's return door locked. */
   exitLocked: boolean;
+  /** Collectibles still visible in this room. */
+  pickupsRemaining: number;
+  /** True once this room's secret wall has shattered. */
+  secretBroken: boolean;
+  /** True when the Tide-Bell opened the sealed door in the current visit. */
+  sealOpen: boolean;
   /** Remaining hitstop ticks (the world is frozen while > 0). */
   hitstop: number;
 };
@@ -126,6 +143,24 @@ export type RunDebugState = {
     benchId: string;
     name: string;
   } | null;
+  /** Spendable bell shards. */
+  shards: number;
+  /** Durable collectible ids already granted. */
+  pickups: string[];
+  /** Rooms whose breakable secret wall has been shattered. */
+  brokenSecrets: string[];
+  /** Number of mask shards found toward the next mask. */
+  healthShards: number;
+  /** Nail upgrade level (0..2). */
+  nailLevel: number;
+  charmsOwned: string[];
+  charmsEquipped: string[];
+  /** True once the Wall Claw is owned. */
+  wallClaw: boolean;
+  /** Boss kinds whose Ordeal has been cleared. */
+  ordeals: string[];
+  /** True once the Tide-door ending fired. */
+  sliceComplete: boolean;
 };
 
 /** Persistence status: useful for E2E proof that a rest actually reached storage. */

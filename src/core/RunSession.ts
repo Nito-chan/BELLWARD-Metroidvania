@@ -6,8 +6,9 @@
 import type { Container } from 'pixi.js';
 import type { AudioManager } from '../audio/AudioManager';
 import { PLAYER } from '../config/player';
+import { ORDEAL } from '../config/progression';
 import type { Rng } from '../core/Rng';
-import { getBench } from '../data/benches';
+import { getBench, type BenchRef } from '../data/benches';
 import { DEFAULT_ROOM_ID, getRoom } from '../data/rooms';
 import type { InputSnapshot } from '../input/InputState';
 import { RunProgress } from '../save/RunProgress';
@@ -26,6 +27,10 @@ export type RunSessionDeps = {
   readonly rng: Rng;
   readonly stage: Container;
   readonly announce: (text: string) => void;
+  /** Called after a rest rebuilt the room, so Game can open the bench equipment screen. */
+  readonly onBench?: (bench: BenchRef) => void;
+  /** Called when the Tide-door ending fires. */
+  readonly onEnding?: (title: string, subtitle: string) => void;
 };
 
 export class RunSession {
@@ -62,19 +67,66 @@ export class RunSession {
     if (!scene) return [];
     const events = scene.update(tickCount, input);
 
-    const defeated = scene.consumeBossDefeat();
-    if (defeated && this.progress.addSigil(defeated)) this.persist('reward');
+    for (const pickupId of scene.consumePickups()) {
+      const beforeMax = this.progress.maxHp;
+      if (!this.progress.collectPickup(pickupId)) continue;
+      const gained = this.progress.maxHp - beforeMax;
+      if (gained > 0) scene.grantMaxHp(gained);
+      scene.applyProgress(this.progress.loadout, this.progress.shards);
+      this.persist('reward');
+    }
 
+    const defeated = scene.consumeBossDefeat();
+    if (defeated && this.progress.addSigil(defeated)) {
+      scene.applyProgress(this.progress.loadout, this.progress.shards);
+      this.persist('reward');
+    }
+
+    const ordeal = scene.consumeOrdealDefeat();
+    if (ordeal && this.progress.addOrdeal(ordeal)) {
+      this.progress.grantShards(ORDEAL.shardReward);
+      scene.applyProgress(this.progress.loadout, this.progress.shards);
+      this.persist('reward');
+    }
+
+    if (scene.consumeSecretBroken() && this.progress.breakSecret(this.roomIdValue)) {
+      this.persist('reward');
+    }
+
+    if (scene.consumeEnding()) {
+      if (this.progress.markSliceComplete()) this.persist('reward');
+      const definition = getRoom(this.roomIdValue);
+      this.deps?.onEnding?.(
+        definition.ending?.title ?? 'THE BELL REMEMBERS',
+        definition.ending?.subtitle ?? 'The Tide-Bell answers.',
+      );
+    }
+
+    const vitals = scene.vitals;
+    const focus = scene.focus;
     const bench = scene.consumeBenchRest();
     const exit = scene.exitRequested;
     if (bench) {
       this.restAtBench(bench);
     } else if (exit) {
-      this.enter(exit.roomId, exit.spawn, scene.vitals);
+      this.enter(exit.roomId, exit.spawn, { ...vitals, focus });
     } else if (scene.resetRequested) {
       this.respawn();
     }
     return events;
+  }
+
+  /** Persists equipment/nail changes made while resting. */
+  saveAtBench(): boolean {
+    const scene = this.sceneValue;
+    if (!scene) return false;
+    this.progress.save({
+      roomId: this.roomIdValue,
+      spawn: this.roomSpawn,
+      hp: scene.vitals.hp,
+      reason: 'bench',
+    });
+    return true;
   }
 
   mapSnapshot(): MapSnapshot {
@@ -90,13 +142,13 @@ export class RunSession {
   /** DEV-only: jump straight into a room (optionally at a validated spawn) for E2E. */
   debugLoadRoom(roomId: string, spawn?: RoomSpawn): void {
     const maxHp = this.progress.maxHp;
-    this.enter(roomId, spawn, { hp: maxHp, maxHp }, 'debug');
+    this.enter(roomId, spawn, { hp: maxHp, maxHp, focus: PLAYER.focus.max }, 'debug');
   }
 
   private enter(
     roomId: string,
     spawn?: RoomSpawn,
-    carry?: { hp: number; maxHp: number },
+    carry?: { hp: number; maxHp: number; focus?: number },
     saveReason: SaveReason | null = 'room',
     arrival?: RoomArrival,
   ): void {
@@ -118,8 +170,17 @@ export class RunSession {
       spawn: chosenSpawn,
       hp,
       maxHp,
+      focus: carry?.focus,
+      loadout: this.progress.loadout,
+      shards: this.progress.shards,
       sigilCount: this.progress.sigilCount,
       bossRewardClaimed: definition.boss ? this.progress.hasSigil(definition.boss) : false,
+      collectedPickups: this.progress.pickups,
+      canCollectPickup: (id) => this.progress.canCollectPickup(id),
+      secretBroken: this.progress.hasBrokenSecret(roomId),
+      sealOpen: this.progress.hasPickup('bellthief-tide-bell'),
+      ordealCleared: definition.boss ? this.progress.hasOrdeal(definition.boss) : false,
+      endingComplete: this.progress.sliceComplete,
       announce: deps.announce,
       arrival,
     });
@@ -154,10 +215,11 @@ export class RunSession {
     this.enter(
       ref.roomId,
       ref.spawn,
-      { hp: this.progress.maxHp, maxHp: this.progress.maxHp },
+      { hp: this.progress.maxHp, maxHp: this.progress.maxHp, focus: PLAYER.focus.max },
       'bench',
       { title: 'RESTED', subtitle: `${ref.name.toUpperCase()} · SAVED` },
     );
+    this.deps?.onBench?.(ref);
   }
 
   /** Replaces the dead room at the last bench (or the terrace) at full health. */
@@ -165,17 +227,29 @@ export class RunSession {
     const maxHp = this.progress.maxHp;
     const checkpoint = this.progress.checkpoint;
     if (checkpoint) {
-      this.enter(checkpoint.roomId, checkpoint.spawn, { hp: maxHp, maxHp }, 'respawn', {
-        title: 'THE BELLS REMEMBER',
-        subtitle: `${getRoom(checkpoint.roomId).name.toUpperCase()} · ${checkpoint.name.toUpperCase()}`,
-      });
+      this.enter(
+        checkpoint.roomId,
+        checkpoint.spawn,
+        { hp: maxHp, maxHp, focus: PLAYER.focus.max },
+        'respawn',
+        {
+          title: 'THE BELLS REMEMBER',
+          subtitle: `${getRoom(checkpoint.roomId).name.toUpperCase()} · ${checkpoint.name.toUpperCase()}`,
+        },
+      );
       return;
     }
 
     const room = getRoom(DEFAULT_ROOM_ID);
-    this.enter(DEFAULT_ROOM_ID, room.spawn, { hp: maxHp, maxHp }, 'respawn', {
-      title: 'THE BELLS REMEMBER',
-      subtitle: room.name.toUpperCase(),
-    });
+    this.enter(
+      DEFAULT_ROOM_ID,
+      room.spawn,
+      { hp: maxHp, maxHp, focus: PLAYER.focus.max },
+      'respawn',
+      {
+        title: 'THE BELLS REMEMBER',
+        subtitle: room.name.toUpperCase(),
+      },
+    );
   }
 }

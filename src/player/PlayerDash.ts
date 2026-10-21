@@ -16,9 +16,15 @@ export type DashHost = {
 export class PlayerDash {
   private ticksLeft = 0;
   private cooldown = 0;
+  private cooldownScale = 1;
 
   get cooldownTicks(): number {
     return this.cooldown;
+  }
+
+  /** Light Step shortens the recovery without changing the burst itself. */
+  setCooldownScale(scale: number): void {
+    this.cooldownScale = Math.max(0.1, Math.min(1, scale));
   }
 
   tick(): void {
@@ -33,7 +39,7 @@ export class PlayerDash {
     if (dir !== 0) host.setFacing(dir);
     host.pose.setState('dash', 'dash');
     this.ticksLeft = PLAYER.dash.ticks;
-    this.cooldown = PLAYER.dash.cooldownTicks;
+    this.cooldown = Math.max(1, Math.round(PLAYER.dash.cooldownTicks * this.cooldownScale));
     this.hold(host);
     host.pose.emit('dash');
     return true;

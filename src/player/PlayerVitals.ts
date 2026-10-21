@@ -27,12 +27,28 @@ export class PlayerVitals {
     return this.maxHpValue;
   }
 
-  /** Boss sigil reward: raise the ceiling and immediately fill the new mask. */
+  /** Boss sigil or mask shard: raise the ceiling and immediately fill the new mask. */
   grantMaxHp(amount: number): void {
     const gain = Math.max(0, Math.floor(amount));
     if (gain === 0) return;
     this.maxHpValue += gain;
     this.hpValue += gain;
+  }
+
+  /** Restores masks without exceeding the ceiling. Returns the amount actually healed. */
+  heal(amount: number): number {
+    if (this.dead) return 0;
+    const applied = Math.min(this.maxHpValue - this.hpValue, Math.max(0, Math.floor(amount)));
+    this.hpValue += applied;
+    return applied;
+  }
+
+  /** Grants invulnerability, used by a Sturdy Shell absorption. */
+  grantInvulnerability(ticks: number): void {
+    this.invulnerableTicksValue = Math.max(
+      this.invulnerableTicksValue,
+      Math.max(0, Math.floor(ticks)),
+    );
   }
 
   /** Remaining invulnerability ticks (0 = hittable). */

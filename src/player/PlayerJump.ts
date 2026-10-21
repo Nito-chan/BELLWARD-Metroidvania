@@ -23,6 +23,14 @@ export class PlayerJump {
     return this.held;
   }
 
+  get hasBuffer(): boolean {
+    return this.bufferTicks > 0;
+  }
+
+  consumeBuffer(): void {
+    this.bufferTicks = 0;
+  }
+
   tick(input: InputSnapshot, grounded: boolean): void {
     if (this.bufferTicks > 0) this.bufferTicks -= 1;
     if (isPressed(input, 'jump')) this.bufferTicks = PLAYER.jump.bufferTicks;

@@ -48,9 +48,10 @@ export class InteractPrompt {
     this.view.visible = false;
   }
 
-  show(benchName: string): void {
-    const next = `REST AT ${benchName.toUpperCase()}`;
+  show(title: string, hint = 'INTERACT TO REST · PROGRESS SAVES'): void {
+    const next = title.toUpperCase();
     if (this.title.text !== next) this.title.text = next;
+    if (this.hint.text !== hint) this.hint.text = hint;
     this.view.visible = true;
   }
 

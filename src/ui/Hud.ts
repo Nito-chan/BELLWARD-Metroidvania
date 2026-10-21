@@ -1,20 +1,34 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
 import { PALETTE } from '../config/palette';
 import { VIEW } from '../config/world';
 
 /**
- * The combat HUD: a row of health pips, a row of boss sigils, a red damage vignette and
- * the death fade. Entirely screen-space and drawn with three Graphics objects, redrawn
- * only when a tracked value changes.
+ * The combat HUD: masks, Focus, boss sigils, shards, a damage vignette and the death
+ * fade. Screen-space, redrawn only when a tracked value changes. The Focus bar doubles
+ * as the heal channel: the glowing segment grows while the player holds the mend.
  */
 export class Hud {
   readonly view = new Container();
   private readonly damage = new Graphics().rect(0, 0, VIEW.width, VIEW.height).fill(PALETTE.blood);
   private readonly pips = new Graphics();
+  private readonly focusBar = new Graphics();
   private readonly sigils = new Graphics();
   private readonly death = new Graphics().rect(0, 0, VIEW.width, VIEW.height).fill(PALETTE.void);
+  private readonly shardText = new Text({
+    text: '',
+    style: {
+      fontFamily: 'monospace',
+      fontSize: 10,
+      fill: PALETTE.brass,
+      letterSpacing: 1,
+    },
+  });
   private lastHp = -1;
   private lastMax = -1;
+  private lastFocus = -1;
+  private lastFocusMax = -1;
+  private lastHeal = -1;
+  private lastShards = -1;
   private lastSigils = -1;
   private lastSigilTotal = -1;
   private lastDamage = -1;
@@ -25,7 +39,16 @@ export class Hud {
     this.damage.visible = false;
     this.death.alpha = 0;
     this.death.visible = false;
-    this.view.addChild(this.damage, this.pips, this.sigils, this.death);
+    this.shardText.anchor.set(1, 0);
+    this.shardText.position.set(VIEW.width - 8, 30);
+    this.view.addChild(
+      this.damage,
+      this.pips,
+      this.focusBar,
+      this.sigils,
+      this.shardText,
+      this.death,
+    );
   }
 
   /** Redraws the pip row when the value actually changed. */
@@ -51,6 +74,49 @@ export class Hud {
         alpha: filled ? 1 : 0.55,
       });
     }
+  }
+
+  /** Focus bar below the masks. `healProgress` 0..1 overlays the channel in ember. */
+  setFocus(value: number, max: number, healProgress = 0): void {
+    const clamped = Math.max(0, Math.min(max, Math.floor(value)));
+    const channel = Math.max(0, Math.min(1, healProgress));
+    if (clamped === this.lastFocus && max === this.lastFocusMax && channel === this.lastHeal) {
+      return;
+    }
+    this.lastFocus = clamped;
+    this.lastFocusMax = max;
+    this.lastHeal = channel;
+
+    const g = this.focusBar;
+    g.clear();
+    const width = 72;
+    g.roundRect(8, 29, width, 6, 2).fill({ color: PALETTE.void, alpha: 0.6 });
+    g.roundRect(8, 29, width, 6, 2).stroke({
+      width: 1,
+      color: PALETTE.brassDark,
+      alpha: 0.65,
+    });
+    if (max > 0) {
+      g.roundRect(9, 30, (width - 2) * (clamped / max), 4, 1).fill({
+        color: PALETTE.echo,
+        alpha: 0.9,
+      });
+    }
+    if (channel > 0) {
+      g.roundRect(9, 30, (width - 2) * channel, 4, 1).fill({
+        color: PALETTE.ember,
+        alpha: 1,
+      });
+    }
+  }
+
+  /** Shard total under the sigil row. */
+  setShards(count: number): void {
+    const clamped = Math.max(0, Math.floor(count));
+    if (clamped === this.lastShards) return;
+    this.lastShards = clamped;
+    this.shardText.text = `◈ ${clamped}`;
+    this.shardText.visible = clamped > 0;
   }
 
   /** Sigil pips sit at the top-right, mirroring the boss rewards recovered this run. */

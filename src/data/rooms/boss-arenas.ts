@@ -22,9 +22,11 @@ export const bellbearerArena: RoomDefinition = {
     { art: 'bell', x: 700, y: 126, layer: 'back' },
     { art: 'column', x: 210, y: 320, layer: 'back' },
     { art: 'column', x: 840, y: 320, layer: 'back' },
+    { art: 'altar', x: 864, y: 320, layer: 'back' },
   ],
   labels: [{ x: 72, y: 228, text: 'ANTECHAMBER', color: 'bone' }],
   spawn: { x: 120, y: 320 },
+  ordeal: { x: 840, y: 272, w: 48, h: 48 },
   exits: [
     {
       x: 8,
@@ -53,9 +55,11 @@ export const wardenArena: RoomDefinition = {
     { art: 'bell', x: 760, y: 136, layer: 'back' },
     { art: 'column', x: 160, y: 320, layer: 'front' },
     { art: 'column', x: 880, y: 320, layer: 'front' },
+    { art: 'altar', x: 840, y: 320, layer: 'back' },
   ],
   labels: [{ x: 72, y: 228, text: 'ANTECHAMBER', color: 'bone' }],
   spawn: { x: 120, y: 320 },
+  ordeal: { x: 816, y: 272, w: 48, h: 48 },
   exits: [
     {
       x: 8,
@@ -85,9 +89,15 @@ export const bellthiefArena: RoomDefinition = {
     { art: 'bell', x: 790, y: 172, layer: 'back' },
     { art: 'column', x: 340, y: 320, layer: 'front' },
     { art: 'column', x: 700, y: 320, layer: 'front' },
+    { art: 'altar', x: 864, y: 320, layer: 'back' },
   ],
   labels: [{ x: 72, y: 228, text: 'ANTECHAMBER', color: 'bone' }],
   spawn: { x: 120, y: 320 },
+  ordeal: { x: 840, y: 272, w: 48, h: 48 },
+  pickups: [
+    { id: 'bellthief-sturdy-shell', x: 660, y: 296 },
+    { id: 'bellthief-tide-bell', x: 760, y: 296 },
+  ],
   exits: [
     {
       x: 8,

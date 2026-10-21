@@ -6,6 +6,7 @@ import {
   type BossPhaseDef,
 } from '../config/bossTypes';
 import type { BossKind } from '../config/enemies';
+import { ORDEAL } from '../config/progression';
 import { forwardBox } from '../combat/geometry';
 import { clamp } from '../core/Math2D';
 import type { Rng } from '../core/Rng';
@@ -30,8 +31,13 @@ export type { BossEvent } from './BossEvents';
  * Patterns are data (`config/bosses.ts`); this class only executes their archetypes,
  * phases, gate rules and event stream. It never owns rendering or audio.
  */
+export type BossVariant = 'normal' | 'ordeal';
+
 export class Boss extends Enemy {
   readonly definition: BossDef;
+  readonly variant: BossVariant;
+  readonly maxHp: number;
+  private readonly tempoScale: number;
   private readonly rng: Rng;
   private phaseIndexValue = 0;
   private wardedValue: boolean;
@@ -41,12 +47,22 @@ export class Boss extends Enemy {
   private deathElapsedValue = 0;
   private readonly eventBuffer: BossEvent[] = [];
 
-  constructor(kind: BossKind, spawn: EnemySpawn, rng: Rng) {
+  constructor(kind: BossKind, spawn: EnemySpawn, rng: Rng, variant: BossVariant = 'normal') {
     super(kind, spawn);
     this.definition = BOSSES[kind];
+    this.variant = variant;
+    this.tempoScale = variant === 'ordeal' ? ORDEAL.tempoScale : 1;
+    this.maxHp = variant === 'ordeal' ? Math.ceil(this.stats.hp * ORDEAL.hpScale) : this.stats.hp;
+    this.hp = this.maxHp;
     this.rng = rng;
     this.wardedValue = this.definition.gate === 'bellShield';
-    this.beginState('intro', this.definition.introTicks, 'idle');
+    this.beginState('intro', this.scaled(this.definition.introTicks), 'idle');
+  }
+
+  get title(): string {
+    return this.variant === 'ordeal'
+      ? `${this.stats.displayName} · Ordeal`
+      : this.stats.displayName;
   }
 
   get phaseIndex(): number {
@@ -238,7 +254,7 @@ export class Boss extends Enemy {
     if (this.stateTicks > 0) return;
 
     this.hiddenValue = false;
-    this.beginState('active', pattern.activeTicks, 'active');
+    this.beginState('active', this.scaled(pattern.activeTicks), 'active');
     this.patterns.beginActive(pattern);
     if (pattern.kind === 'teleport') {
       this.body.x = teleportBehindX(ctx.arena, this.feet.x, ctx.player.feet.x, this.body.w);
@@ -287,7 +303,7 @@ export class Boss extends Enemy {
     this.patterns.begin(pattern);
     this.hiddenValue = false;
     this.body.vx = 0;
-    this.beginState('windup', pattern.telegraphTicks, 'windup');
+    this.beginState('windup', this.scaled(pattern.telegraphTicks), 'windup');
     this.eventBuffer.push({ type: 'tell', patternId: pattern.id, sfx: pattern.tellSfx });
   }
 
@@ -295,16 +311,20 @@ export class Boss extends Enemy {
     this.patterns.clear();
     this.hiddenValue = false;
     this.body.vx = 0;
-    this.beginState('idle', this.rng.int(this.phase.idleTicks[0], this.phase.idleTicks[1]), 'idle');
+    this.beginState(
+      'idle',
+      this.scaled(this.rng.int(this.phase.idleTicks[0], this.phase.idleTicks[1])),
+      'idle',
+    );
   }
 
   private beginRecover(): void {
     this.body.vx = 0;
-    this.beginState('recover', this.pattern?.recoverTicks ?? 20, 'idle');
+    this.beginState('recover', this.scaled(this.pattern?.recoverTicks ?? 20), 'idle');
   }
 
   private checkPhase(): void {
-    const ratio = this.hp / this.stats.hp;
+    const ratio = this.hp / this.maxHp;
     while (this.phaseIndexValue < this.definition.phases.length - 1) {
       const next = this.definition.phases[this.phaseIndexValue + 1];
       if (!next || ratio > next.threshold) return;
@@ -312,7 +332,7 @@ export class Boss extends Enemy {
       this.patterns.clear();
       this.hiddenValue = false;
       this.body.vx = 0;
-      this.beginState('phase', next.transitionTicks, 'hurt');
+      this.beginState('phase', this.scaled(next.transitionTicks), 'hurt');
       this.eventBuffer.push({ type: 'phase', phase: this.phaseIndexValue, name: next.name });
       return;
     }
@@ -343,5 +363,9 @@ export class Boss extends Enemy {
 
   private findPattern(id: string): BossPatternDef | null {
     return BOSS_PATTERNS[id] ?? null;
+  }
+
+  private scaled(ticks: number): number {
+    return Math.max(1, Math.round(ticks * this.tempoScale));
   }
 }

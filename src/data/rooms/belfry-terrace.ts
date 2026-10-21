@@ -75,6 +75,11 @@ const STEP_ROW_19 = place(DAIS_FILL, [
   [43, 'F'],
 ]);
 
+/** Carves a west doorway into a row without changing its width. */
+function westDoor(row: string): string {
+  return `    ${row.slice(4)}`;
+}
+
 export const belfryTerrace: RoomDefinition = {
   id: 'belfry-terrace',
   name: 'The Belfry Terrace',
@@ -96,9 +101,9 @@ export const belfryTerrace: RoomDefinition = {
     ASCENT_ROW_14,
     OPEN_ROW,
     ASCENT_ROW_16,
-    DAIS_FILL,
-    ASCENT_ROW_18,
-    STEP_ROW_19,
+    westDoor(DAIS_FILL),
+    westDoor(ASCENT_ROW_18),
+    westDoor(STEP_ROW_19),
     WALK_ROW,
     FILL_ROW,
     FILL_ROW,
@@ -118,11 +123,14 @@ export const belfryTerrace: RoomDefinition = {
     { art: 'balustrade', x: 490, y: 320, layer: 'back' },
     // The bell's chain runs off the top of the frame: it hangs from the unseen belfry above.
     { art: 'bell', x: 480, y: 120, layer: 'back' },
-    { art: 'column', x: 32, y: 320, layer: 'front' },
+    { art: 'door', x: 32, y: 320, layer: 'back' },
     { art: 'column', x: 896, y: 320, layer: 'front' },
     { art: 'door', x: 928, y: 320, layer: 'back' },
   ],
-  labels: [{ x: 884, y: 228, text: 'THE BELL NAVE', color: 'echo' }],
+  labels: [
+    { x: 884, y: 228, text: 'THE BELL NAVE', color: 'echo' },
+    { x: 64, y: 228, text: 'THE DROWNED GALLERY', color: 'bone', size: 8 },
+  ],
   spawn: { x: 420, y: 320 },
   /**
    * The first rest point stands just left of the broken bell. Its respawn point is
@@ -149,6 +157,14 @@ export const belfryTerrace: RoomDefinition = {
     { kind: 'adept', x: 872, y: 320, facing: -1 },
   ],
   exits: [
+    {
+      x: 8,
+      y: 260,
+      w: 56,
+      h: 60,
+      targetRoomId: 'drowned-gallery',
+      spawn: { x: 80, y: 320 },
+    },
     {
       x: 900,
       y: 260,

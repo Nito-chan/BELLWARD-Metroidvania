@@ -18,12 +18,47 @@ export async function reloadGame(page: Page): Promise<void> {
   );
 }
 
+/** Rest opens the equipment overlay; collapse it before exercising the pause flow. */
+export async function closeBenchOverlay(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => document.querySelector('.bench-root:not([hidden])') !== null,
+    undefined,
+    { timeout: 5_000 },
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    () => document.querySelector('.bench-root')?.hasAttribute('hidden') === true,
+    undefined,
+    { timeout: 5_000 },
+  );
+}
+
 export async function debugState(page: Page): Promise<GameDebugState> {
   return page.evaluate(() => {
     const game = window.__game;
     if (!game) throw new Error('window.__game is not available (DEV build required)');
     return game.debugState();
   });
+}
+
+/**
+ * Jumps beside a collectible and waits for the run to grant it. The hero is protected
+ * first so a patrolling enemy cannot turn a collection test into a death test; reward
+ * persistence still goes through the real pickup path.
+ */
+export async function collectPickup(
+  page: Page,
+  roomId: string,
+  spawn: { readonly x: number; readonly y: number },
+  pickupId: string,
+): Promise<void> {
+  await loadRoom(page, roomId, spawn);
+  await page.evaluate(() => window.__game?.debugProtectPlayer());
+  await page.waitForFunction(
+    (id) => window.__game?.debugState().run.pickups.includes(id) === true,
+    pickupId,
+    { timeout: 10_000 },
+  );
 }
 
 /** Jumps to a room through the DEV handle and waits for the new scene to mount. */

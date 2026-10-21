@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "level:check": "tsx scripts/level-check.ts",
     "assets:check": "tsx scripts/assets-check.ts",
     "assets:check:strict": "tsx scripts/assets-check.ts --strict",
     "fetch-assets": "tsx scripts/fetch-assets.ts",

@@ -9,7 +9,7 @@ import { bootGame, debugState, strikeNearestParishioner, takeHitsUntilDeath } fr
  * desktop; on timeout the audio snapshot is attached to the error so a regression is
  * distinguishable from a slow machine.
  */
-async function waitForLiveMusic(page: Page, timeout = 45_000): Promise<void> {
+async function waitForLiveMusic(page: Page, timeout = 60_000): Promise<void> {
   try {
     await page.waitForFunction(
       () => {
@@ -17,7 +17,9 @@ async function waitForLiveMusic(page: Page, timeout = 45_000): Promise<void> {
         return audio?.context === 'running' && audio.musicPlaying === true;
       },
       undefined,
-      { timeout },
+      // A rAF poll competes with the software audio decode on a headless VM; a slower
+      // poll observes the same contract without stealing the frames the decoder needs.
+      { timeout, polling: 250 },
     );
   } catch (error) {
     const audio = await page.evaluate(() => window.__game?.debugState().audio);
@@ -45,7 +47,7 @@ test.describe('M2 smoke', () => {
     expect(scene).not.toBeNull();
     expect(scene?.roomId).toBe('belfry-terrace');
     expect(scene?.roomName).toBe('The Belfry Terrace');
-    expect(scene?.tiles).toBe(449);
+    expect(scene?.tiles).toBe(437);
     expect(scene?.art.mode).toBe('packed');
     expect(scene?.art.failures).toEqual([]);
     // 12 scene/hero textures plus the parishioner (2), ghoul, adept, death burst and fireball.

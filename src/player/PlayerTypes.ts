@@ -1,5 +1,15 @@
 export type PlayerStateName =
-  'idle' | 'run' | 'skid' | 'jump' | 'fall' | 'attack' | 'dash' | 'hurt' | 'dead';
+  | 'idle'
+  | 'run'
+  | 'skid'
+  | 'jump'
+  | 'fall'
+  | 'wallslide'
+  | 'attack'
+  | 'dash'
+  | 'heal'
+  | 'hurt'
+  | 'dead';
 
 /**
  * Momentary things the simulation did, in the tick they happened. Audio and visual
@@ -15,5 +25,8 @@ export type PlayerEvent =
   | 'attack1'
   | 'attack2'
   | 'dash'
+  | 'wallJump'
+  | 'heal'
+  | 'shield'
   | 'hurt'
   | 'death';

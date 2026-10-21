@@ -15,6 +15,9 @@ export type SceneDebugInput = {
   boss: BossEncounter | null;
   bench: { readonly id: string; readonly name: string } | null;
   projectiles: number;
+  pickupsRemaining: number;
+  secretBroken: boolean;
+  sealOpen: boolean;
   hitstop: number;
 };
 
@@ -49,6 +52,13 @@ export function buildSceneDebugState(input: SceneDebugInput): SceneDebugState {
       invulnerableTicks: player.invulnerableTicks,
       dead: player.dead,
       attackActive: player.attackActive,
+      focus: player.focusValue,
+      maxFocus: player.maxFocus,
+      healProgress: player.healProgress,
+      wallContact: player.wallContact,
+      wallSliding: player.wallSliding,
+      nailLevel: player.nailLevel,
+      charms: [...player.loadout.charms],
     },
     enemies: input.enemies.map((enemy) => {
       const position = enemy.feet;
@@ -68,6 +78,9 @@ export function buildSceneDebugState(input: SceneDebugInput): SceneDebugState {
     bench: input.bench ? { ...input.bench, inRange: true } : null,
     exitLocked: input.boss?.alive ?? false,
     projectiles: input.projectiles,
+    pickupsRemaining: input.pickupsRemaining,
+    secretBroken: input.secretBroken,
+    sealOpen: input.sealOpen,
     hitstop: input.hitstop,
   };
 }
