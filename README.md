@@ -43,7 +43,14 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   An accessible DOM region chart opens from the pause menu or `M`, draws routes from the authored
   room exits and hides uncharted names. Claimed bosses and their extra masks survive reloads. All
   gates green.
-- Next: M8 — not started.
+- **M8 — The Drowned Belfry: complete.** Seven new rooms finish the twelve-room region: the Drowned
+  Gallery, Sunless Aqueduct, Bellows, Wall-Claw Shaft, Upper Gallery, and the Ossuary and Reliquary
+  secrets. The Wall Claw opens a real wall-jump climb; two nail-breakable walls hide charm rooms; 22
+  pickups include four mask shards, five charms and the Tide-Bell. Focus healing, a three-slot charm
+  belt, two nail levels and optional harder Ordeal rematches support the three bosses; the Tide door
+  ends the slice once. The save is now v2 and migrates v1 in place, and `level:check` plus a full-run
+  Playwright audit guard the whole region. All gates green.
+- Next: M9 — polish pass; not started.
 
 ## Quick start
 
@@ -65,6 +72,7 @@ First-time E2E setup: `npx playwright install chromium`.
 | `npm run lint`                 | ESLint, zero warnings allowed                               |
 | `npm run test`                 | Vitest unit suite                                           |
 | `npm run test:e2e`             | Full Playwright suite (starts the dev server itself)        |
+| `npm run level:check`          | Validate rooms, pickups, benches, gates and map positions   |
 | `npm run assets:check`         | Validate `public/assets/MANIFEST.json` against disk         |
 | `npm run assets:check:strict`  | Same, but fails on UNCLEAR-license placeholders (ship gate) |
 | `npm run fetch-assets`         | Download + unzip the registered asset packs                 |
@@ -76,22 +84,22 @@ First-time E2E setup: `npx playwright install chromium`.
 
 ```
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
-src/config      tunable constants (input, player, combat, enemies, physics, render, audio, menu, bench, save)
-src/data        art keys/rects/clips, enemy/effect sheets, room definitions and sound/track catalogs
+src/config      tunable constants (input, player, combat, enemies, progression, pickups, physics, render, audio, menu, bench, save)
+src/data        art keys/rects/clips, enemy/effect sheets, room/pickup/bench definitions and sound/track catalogs
 src/input       keyboard/gamepad manager, per-tick snapshots and the versioned binding document
 src/physics     body model and the tile collision solver
-src/player      player state machine, vitals, i-frames, attack windows and sound events
+src/player      player state machine, Focus/healing, Wall Claw, vitals, i-frames and attack windows
 src/enemies     shared FSM, melee/caster behaviors, boss phases/patterns and spawn factory
 src/combat      damage resolver, projectile pool and shared hitbox geometry
-src/save        versioned run document, all-or-nothing validation and in-memory progression
-src/ui          combat HUD, bench prompt, pause/sound/controls DOM menu and the region chart
+src/save        versioned v2 run document, v1 migration, all-or-nothing validation and progression
+src/ui          combat HUD, bench equipment, ending card, pause flow and the region chart
 src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
-src/world       semantic tile roles, tilemap and room model, including validated enemies and benches
-src/render      art provider, procedural fallbacks, camera, shared character/enemy views, FX, room scene
+src/world       semantic tile roles (including breakable/sealed), tilemap and room model
+src/render      art provider, procedural fallbacks, camera, character/enemy views, FX, pickups, room scene
 src/debug       F1 overlay + debug state contract
-scripts         asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map)
-tests/unit      Vitest (core, world, input, bindings, menus, map, saves, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest)
-tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map)
+scripts         level/content check, asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map)
+tests/unit      Vitest (core, world, input, bindings, menus, map, saves, progression, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest)
+tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

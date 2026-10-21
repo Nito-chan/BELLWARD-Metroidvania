@@ -756,3 +756,124 @@ make a generic event-driven persistence service (rejected: unnecessary indirecti
 ---
 
 (appended M7; append new entries at the bottom — never edit old ones — correct them with a new entry)
+
+---
+
+## D048 — 2026-10-21 — Save v2 keeps the v1 key and migrates legacy runs in place
+
+**Decision:** The durable run document is now version 2, still at `localStorage['bellward.save.v1']`. It
+adds `pickups`, `brokenSecrets`, `charmsOwned`, `charmsEquipped`, `nailLevel`, `shards`, `ordeals` and
+`sliceComplete`; all M7 fields keep their meaning. A version-1 document is upgraded in memory by adding
+empty pickups/secrets/charms/Ordeals, nail 0, shards 0 and `sliceComplete: false`, then validated by the
+same all-or-nothing v2 parser. Unknown pickups, impossible mask ceilings, unowned equipped
+charms, duplicate facts, an Ordeal without its sigil and a malformed or future version start a fresh run
+rather than booting an impossible state. A successful write replaces the document at the same key.
+
+**Why:** M7 saves are the first real player progress; changing the key would strand them with no benefit.
+Keeping one key also avoids dual-read precedence rules forever. The version number, not the key name,
+owns the schema. Migration only fills new durable sets, so every legacy fact survives verbatim.
+
+**Alternatives:** a v2 storage key with dual reads (rejected: two sources of truth and a migration that
+could run twice); discard v1 saves (rejected: unnecessary progress loss); repair corrupt v2 field-by-field
+(rejected: M7 established all-or-nothing loading, and a half-valid run can place the hero outside the
+charted graph).
+
+## D049 — 2026-10-21 — Traversal gates and secrets are tile roles with parent-room persistence
+
+**Decision:** The Wall Claw is a normal ability pickup; after it is found, `PlayerWall` reads real wall
+contact from the tilemap and enables cling/slide and a kick. The Wall-Claw Shaft is authored as ordinary
+geometry, not a scripted lift or invisible trigger. Breakable walls and the Tide door are semantic tile
+roles (`breakable`, `sealedDoor`). A nail swing removes every breakable tile in that room, records the
+parent room id in `brokenSecrets`, and the level checker proves there are exactly two such rooms. The
+sealed door opens when the `bellthief-tide-bell` key is owned. Secret chambers are ordinary rooms entered
+through the opened wall.
+
+**Why:** One tile vocabulary is shared by collision, rendering, pickup support checks and content
+validation, so a gate cannot look open while still blocking. Persisting the parent room rather than a
+wall instance id keeps the save stable when a layout is retuned, and there are only two authored secrets.
+The Wall Claw remains an emergent movement ability rather than a bespoke shaft animation.
+
+**Alternatives:** per-wall save ids (rejected: brittle content coupling for no gameplay benefit); a
+scripted shaft elevator (rejected: would not test the ability); a separate `hasBrokenWall` boolean
+(rejected: cannot distinguish the two secrets or survive a future third wall).
+
+## D050 — 2026-10-21 — Focus, charms and nail upgrades share one loadout snapshot
+
+**Decision:** Nail hits grant 11 Focus (17 with Ember Greed); a held heal spends 33 over 54 ticks (36
+with Quick Mend) and restores one mask. Focus carries between rooms and refills at a bench or respawn; it
+is intentionally not in the durable save. The bench equipment screen is an accessible DOM dialog over the
+paused simulation. It owns a three-slot charm belt (all five charms cost one notch) and the Nail Forge
+(two levels, 30 then 60 shards, +1 damage and +4 reach each). Charms auto-equip into a free slot when
+found; the bench can toggle them. The controller receives one immutable `PlayerLoadout` snapshot, so
+healing duration, reach, damage, dash cooldown and wall-claw availability all change together.
+
+**Why:** Focus gives the aggressive nail loop a defensive payoff without adding another consumable, and
+carrying change between heals makes every third hit feel earned. Auto-equipping avoids a new player
+finding a charm and believing it does nothing; the bench then makes the choice explicit. A single loadout
+snapshot prevents the HUD, controller and save from disagreeing after a purchase.
+
+**Alternatives:** a soul-style heal with no hold (rejected: loses the risk/reward channel that makes
+Sturdy Shell meaningful); per-charm bespoke hooks in the scene (rejected: updates would drift from the
+saved set); saving Focus (rejected: every reload would start mid-resource, and benches already restore
+it).
+
+## D051 — 2026-10-21 — The Ordeal is a deterministic rematch variant, not a second boss
+
+**Decision:** A claimed arena exposes an altar prompt. Interacting relights the same boss as an Ordeal:
+1.35× base health and 0.85× wind-up/recovery tempo, using the established patterns. The first clear pays
+40 shards and is stored in `ordeals`; the altar goes dark for the rest of the run. An Ordeal still requires
+the normal sigil first, and clearing it does not alter the normal first-clear reward or checkpoint rules.
+
+**Why:** Three authored bosses already carry fifteen telegraphed patterns. Reusing their FSM and data
+gives the slice a hard-mode goal without a fourth boss or an unreadable speed-only difficulty slider.
+Deterministic health and tempo scaling is testable and transparent; a flat damage increase would instead
+make one mistake lethal and hide the patterns.
+
+**Alternatives:** an NG+ that scales every room (rejected: larger save scope and no focused goal); a
+difficulty setting (rejected: the slice wants a diegetic optional challenge); brand-new Ordeal bosses
+(deferred: content cost beyond the vertical slice).
+
+## D052 — 2026-10-21 — The Tide door is a one-shot accessible ending, not a cutscene lock
+
+**Decision:** The Bell Thief leaves the Tide-Bell key in the claimed arena. Owning it opens the sealed
+door in the Upper Gallery, where crossing the threshold fires **The Bell Remembers** once. The ending is
+a focus-trapped DOM card with the run's sigil/shard/charm totals; `Escape`, `Enter` or **Return to the
+belfry** closes it and returns to the still-mounted world. The durable `sliceComplete` flag seeds
+`RoomScene.endingFired`, so closing the card or reloading on the threshold cannot reopen it. The card
+does not delete the run or consume the key.
+
+**Why:** The ending is a milestone, not a lockout: a player should be able to keep exploring, finish
+pickups and attempt Ordeals after seeing it. A DOM card inherits the pause flow's focus and screen-reader
+work and keeps the simulation frozen while it is open. The one-shot guard is a durable fact because a
+reload must not replay the ending.
+
+**Alternatives:** a scroll/credits lockout (rejected: ends the slice early); a canvas banner only
+(rejected: inaccessible and easy to miss); consuming the Tide-Bell or deleting the save (rejected: both
+destroy optional content).
+
+## D053 — 2026-10-21 — `level:check` owns the content contract; a full-run E2E owns the economy
+
+**Decision:** `npm run level:check` is a zero-dependency content gate. It requires exactly the twelve
+named rooms, reachability from the terrace, a directed loop, a valid standing spawn for every room and
+door, a map position for every room, exactly the 22 registry pickups placed once with support inside the
+pickup aura, two breakable-secret rooms, one sealed door, one ending, four mask shards, five charms, one
+ability, one key, three boss rooms each with an Ordeal, and every boss room within two rooms of a bench.
+A separate Playwright flow performs one continuous content-complete run: all twelve rooms, all 22
+pickups, both secret walls opened by real nail swings, three normal bosses, three Ordeals, both nail
+levels, the ending, the full map and a reload. It seeds between authored encounters with `debugLoadRoom`
+to avoid repeating locomotion; the dedicated M8 tests retain real shaft wall-jumps and door walks, and
+the run still uses the production pickup, save, bench and ending paths.
+
+**Why:** Data-driven content drifts silently when a room moves or a pickup loses its ledge. A script that
+fails before boot is cheaper than a runtime test discovering an unreachable reward. The full-run test
+proves the economy closes: 195 shards from pickups plus 120 from Ordeals pays the 90-shard nail line and
+leaves 225, while also proving a single run can reach 12/12 charted and the one-shot ending. Manual
+playthroughs documented the feel; the test keeps the facts reproducible.
+
+**Alternatives:** per-content unit tests only (rejected: cannot catch cross-room reachability or bench
+distance); a fully unaided bot route (rejected: brittle platforming noise on SwiftShader); screenshots as
+the only proof (rejected: not a contract).
+
+---
+
+(appended M8; append new entries at the bottom — never edit old ones — correct them with a new entry)

@@ -883,3 +883,143 @@ and respawn path; and introduce the map/region loop around the five M6 rooms.
 ### Next milestone preview (M8)
 
 Not started. Scope will be confirmed before any M8 code is written; this run ends at the M7 gate.
+
+---
+
+## M8 — The complete Drowned Belfry (2026-10-21)
+
+**Commit:** `bb1d1e1` — **Status:** complete, all gates green.
+
+### Shipped
+
+- **The full twelve-room region.** Seven new rooms join the five M6/M7 chambers: **The Drowned
+  Gallery**, **The Sunless Aqueduct**, **The Bellows**, **The Wall-Claw Shaft**, **The Upper Gallery**,
+  and the two secret chambers **The Ossuary** and **The Reliquary**. A shared 60×24 slice builder
+  authors floors, one-way ledges, doorways, breakable walls, sealed doors and decoration with bounds
+  checks. The graph now loops terrace → gallery → aqueduct → bellows → nave and bellows → shaft → upper
+  gallery → terrace, with the gallery and upper gallery opening one-way secret routes. Every room has a
+  map node and a validated standing spawn.
+- **Wall Claw traversal gate (`src/player/PlayerWall.ts`, `aqueduct-wall-claw`).** The ability is a
+  normal pickup; once owned, airborne contact with a wall clings and caps the slide, and jump kicks
+  away with a short input lock. The shaft is ordinary geometry, so the climb cannot be bypassed by a
+  scripted lift. A dedicated E2E test climbs it with a real in-page wall-jump autopilot.
+- **Two breakable secrets and one sealed door.** Breakable masonry and the Tide door are semantic tile
+  roles. A real nail swing shatters every breakable tile in the room and records the parent room in
+  `brokenSecrets`; the secret rooms then persist as clean rebuilds. The sealed door opens only while
+  the `bellthief-tide-bell` key is owned, and `level:check` proves there are exactly two breakable rooms,
+  one sealed door and one ending trigger.
+- **22 data-driven pickups.** Eleven shard pickups (195 total), four mask shards (one complete mask),
+  five charms, the Wall Claw and the Tide-Bell. A registry owns every id, name, description, reward and
+  keyed gate; room data only places coordinates. Pickup banners, audio, spark FX and HUD counters share
+  one collection path, and save validation rejects unknown, duplicate or prematurely keyed pickups.
+- **Focus and healing (`PlayerFocus`, `PlayerHealing`, HUD).** Nail hits gather 11 Focus (17 with Ember
+  Greed); a held 54-tick channel spends 33 and restores one mask. Quick Mend shortens the hold to 36
+  ticks, Sturdy Shell absorbs one interrupting hit with 30 ticks of protection, and the HUD shows the
+  bar plus heal progress. Focus carries between rooms, refills at rests/respawns and is deliberately not
+  saved.
+- **Equipment and upgrades (`BenchOverlay`, `PlayerLoadout`, `progression.ts`).** Resting opens a
+  focus-trapped DOM equipment screen over the frozen simulation. The belt has three slots; all five
+  charms cost one, auto-equip while a slot is free and can be toggled at the bench. The Nail Forge sells
+  two levels for 30 then 60 shards, adding +1 damage and +4 reach each. Purchases apply to the live hero
+  and write immediately.
+- **Three Ordeals.** Each claimed arena has an altar that relights its boss as an optional rematch:
+  1.35× base health, 0.85× wind-up/recovery, 40 shards on the first clear. The clear persists per boss,
+  cannot pay twice and does not disturb the normal sigil, mask ceiling or return door.
+- **The Tide ending and ending card.** The Bell Thief drops the Sturdy Shell and Tide-Bell; the key opens
+  the Upper Gallery's sealed door. Crossing the threshold shows **The Bell Remembers** once, with run
+  totals for sigils, shards and charms. It is a focus-trapped DOM card; closing it returns to the mounted
+  world, and `sliceComplete` plus `RoomScene.endingFired` prevent replay after closing or reloading.
+- **Save v2 with in-place v1 migration.** The same `bellward.save.v1` key now stores pickups, broken
+  secrets, owned/equipped charms, nail level, shards, Ordeals and `sliceComplete`. M7 documents migrate
+  in memory by adding empty/new defaults, then pass the same all-or-nothing validator; unknown content,
+  impossible health/charm states, duplicates and future versions still start a fresh run.
+- **`npm run level:check` (`scripts/level-check.ts`).** A content gate requiring exactly the twelve
+  rooms, reachability from the terrace, a directed loop, valid standing spawns for every room and door,
+  map coverage, 22 placed pickups with support inside the pickup aura, exactly two breakable rooms, one
+  sealed door, one ending, the four/five/one/one reward mix, three boss rooms with Ordeals, and a bench
+  within two rooms of every boss.
+- **Tests and docs.** 11 new unit tests cover Focus/healing, wall contact, progression/economy and the
+  v2 save matrix. Seven new Playwright flows cover the M8 progression path; `docs/CONTROLS.md`,
+  `README.md` and D048–D053 document the live contract.
+
+### Gates (all green at commit)
+
+| Gate                          | Result                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run typecheck`           | clean                                                                                  |
+| `npm run lint`                | clean, zero warnings                                                                   |
+| `npm run level:check`         | OK — 12 rooms, 22 pickups, 3 benches, 3 Ordeals                                        |
+| `npm run test`                | 266/266 passed (23 files, ~8 s) — up from 255 (+11)                                    |
+| `npm run build`               | ✓ 851 modules, 505.55 kB JS / 145.04 kB gzip, 20.44 kB CSS / 4.78 kB gzip              |
+| `npm run test:e2e`            | 29/29 passed (10.6 min), including the six M8 flows and the complete-playthrough audit |
+| `npm run assets:check:strict` | OK, 662 files, 0 warnings                                                              |
+| `npm run format:check`        | clean                                                                                  |
+| Screenshots                   | `M8-upper-gallery.png` (new room) and `M8-bench.png` (equipment after Quick Mend)      |
+
+### Complete run evidence
+
+`tests/e2e/playthrough.spec.ts` runs one fresh browser context and one continuous run:
+
+1. **Route:** terrace → Drowned Gallery → Ossuary (secret) → Sunless Aqueduct → Bellows → Bell Nave →
+   Bellbearer, Warden and Bell Thief arenas → Wall-Claw Shaft → Upper Gallery → Reliquary (secret) →
+   the Tide door. Movement between authored encounters is seeded with the DEV room loader; the M8
+   suites separately keep the real shaft wall-jump and walk-through-door coverage. Rewards, secrets,
+   bench transactions, saves and the ending all use production paths.
+2. **Collectibles and traversal:** 22/22 pickups, including four mask shards, all five charms, the Wall
+   Claw and the Tide-Bell. Both secret walls are opened by real nail swings, and both secret rooms are
+   entered.
+3. **Bosses and economy:** 3/3 normal sigils and 3/3 Ordeals. The run earns 195 shards from pickups plus
+   120 from Ordeals, buys both nail levels for 90 at The Weeping Stone and finishes with 225 shards.
+4. **Loadout:** five charms owned, three equipped by auto-fill (Quick Mend, Light Step, Ember Greed);
+   nail level +2; four mask shards plus three sigils give nine maximum masks.
+5. **Ending and chart:** **The Bell Remembers** shows 3/3 sigils, 225 shards and five charms, closes
+   once, and the map reports 12/12 chambers and 3/3 sigils with no unknown nodes.
+6. **Persistence:** a real page reload restores all 12 visited rooms, 22 pickups, both secrets, three
+   sigils, three Ordeals, the terrace checkpoint, nail +2, 225 shards, nine masks, three equipped
+   charms, `sliceComplete: true`, and no ending retrigger. The run reports no runtime errors.
+
+### Adjustments & findings
+
+- **Closing the ending card immediately reopened it.** The player was still standing in the ending
+  trigger when the DOM overlay closed, so the next tick fired the ending again. `RoomScene` now owns an
+  `endingFired` guard seeded from the durable `sliceComplete` flag; closing or reloading on the
+  threshold is inert. The E2E test closes the card, keeps playing and reloads to prove it.
+- **The full-run audit initially saw 11/12 rooms.** The continuous route had never entered the Bell
+  Nave because the boss tests seed the arenas directly. Adding an explicit nave visit made the chart
+  proof honest; this is exactly the cross-room drift the run test exists to catch.
+- **Save compatibility was worth more than a clean key.** The schema is v2 but the key stayed
+  `bellward.save.v1`, so M7 progress migrates without a second storage slot. The validator treats the
+  migrated document as strictly as a native v2 record.
+- **Route-assisted is not the same as reward-assisted.** The playthrough uses `debugLoadRoom` only to
+  skip locomotion between authored encounters. Pickups, keyed gates, secret-wall attacks, bench
+  purchases, Ordeals, ending and reload all run through the same code a player uses.
+- **Headless audio needed a non-rAF poll.** The smoke test now polls the audio path every 250 ms for up
+  to 60 s instead of waiting on animation frames, which SwiftShader can starve while decoding. Persistence
+  map/count locators are scoped to the map dialog so hidden overlays cannot satisfy them.
+- **Two files remain over the size guideline.** `RoomScene.ts` is 554 non-empty lines and `Game.ts` 419;
+  both grew with pickups, secrets, Ordeals, the ending and overlay ownership. Extraction is carried into
+  the M9 polish pass rather than risking the M8 gate. `RunSession.ts` (233), `runSave.ts` (289),
+  `RunProgress.ts` (273) and `BenchOverlay.ts` (241) stay near the guideline.
+- **No new licensed assets.** The new rooms reuse the approved packs; breakable masonry, the sealed door
+  and pickup markers are procedural/CSS. The inventory remains 662 files with zero strict warnings.
+
+### Explicitly deferred / stubs
+
+- **No title screen or onboarding flow.** The game still boots directly into the terrace; M9 owns the
+  start/title flow and the final visual/audio polish pass, including the size extraction above.
+- **No post-ending content beyond exploration and Ordeals.** There is no NG+, alternate ending, credits
+  sequence or boss rush; the run remains open after the card closes.
+- **No manual save management.** One automatic v2 document, no slots, export/import, cloud sync or
+  delete UI. Focus and mid-boss state are intentionally not saved; a reload during a fight restarts that
+  arena at the saved masks.
+- **Benches still do not fast-travel.** They are heal/rebuild/checkpoint/equipment points; there is no
+  bench-to-bench travel or shop beyond the Nail Forge.
+- **Ordeals are the only hard-mode variant.** No new enemy archetypes, fourth boss, difficulty setting
+  or per-boss modifiers ship in M8.
+- **No touch controls or packaging.** Keyboard/gamepad remain the supported inputs; mobile and desktop
+  packaging stay M10 scope.
+
+### Next milestone preview (M9)
+
+Polish pass: title/start flow, onboarding, the file-size extraction identified above, and a final
+visual/audio/accessibility sweep. Not started.
