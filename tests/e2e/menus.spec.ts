@@ -76,8 +76,10 @@ test.describe('M5 menus', () => {
     expect((await debugState(page)).audio.volumes.master).toBeCloseTo(0.85, 2);
 
     const mute = page.getByRole('switch', { name: 'Silence all audio' });
+    await expect(mute.locator('.setting-toggle-state')).toHaveText('Off');
     await mute.click();
     await expect(mute).toHaveAttribute('aria-checked', 'true');
+    await expect(mute.locator('.setting-toggle-state')).toHaveText('Muted');
     expect((await debugState(page)).audio.muted).toBe(true);
 
     await reloadGame(page);
@@ -88,10 +90,9 @@ test.describe('M5 menus', () => {
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('slider', { name: 'Master' })).toHaveValue('85');
-    await expect(page.getByRole('switch', { name: 'Silence all audio' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+    const restoredMute = page.getByRole('switch', { name: 'Silence all audio' });
+    await expect(restoredMute).toHaveAttribute('aria-checked', 'true');
+    await expect(restoredMute.locator('.setting-toggle-state')).toHaveText('Muted');
     expect(restored.errors).toEqual([]);
   });
 

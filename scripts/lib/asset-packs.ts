@@ -190,4 +190,97 @@ export const ASSET_PACKS: readonly FetchEntry[] = [
       fileMatch: /Loops ogg/i,
     },
   },
+  {
+    id: 'ui-foozle-lucifer',
+    target: 'foozle-lucifer-ui',
+    name: 'Lucifer — RPG UI',
+    kind: 'ui',
+    author: 'Foozle (commissioned from David / chroma_dave)',
+    sourceUrl: 'https://foozlecc.itch.io/lucifer-rpg-ui',
+    license: 'CC0-1.0',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    attribution: 'Lucifer — RPG UI by Foozle — CC0 — https://foozlecc.itch.io/lucifer-rpg-ui',
+    licenseNotice:
+      'License: Creative Commons Zero, CC0. "This content is free to use and modify for all projects, including commercial projects. Attribution not required." Page metadata: "Asset license: Creative Commons Zero v1.0 Universal"; "Content: No generative AI was used".',
+    // The source archive also carries .ase layers and mockups; only the sliced PNGs ship.
+    keepExtensions: ['.png'],
+    source: {
+      strategy: 'itch',
+      pageUrl: 'https://foozlecc.itch.io/lucifer-rpg-ui',
+    },
+  },
+  {
+    id: 'ui-foozle-rpg1',
+    target: 'foozle-rpg-ui-1',
+    name: 'RPG UI Set 1 — Diablo Style',
+    kind: 'ui',
+    author: 'Foozle',
+    sourceUrl: 'https://foozlecc.itch.io/rpg-ui-set-1',
+    license: 'CC0-1.0',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    attribution:
+      'RPG UI Set 1 — Diablo Style by Foozle — CC0 — https://foozlecc.itch.io/rpg-ui-set-1',
+    licenseNotice:
+      'License: Creative Commons Zero, CC0. "This content is free to use and modify for all projects, including commercial projects. Attribution not required." Page metadata: "Asset license: Creative Commons Zero v1.0 Universal"; "Content: No generative AI was used".',
+    keepExtensions: ['.png'],
+    source: {
+      strategy: 'itch',
+      pageUrl: 'https://foozlecc.itch.io/rpg-ui-set-1',
+    },
+  },
+  {
+    id: 'ui-kenney-pixel',
+    target: 'kenney-pixel-ui',
+    name: 'Pixel UI Pack',
+    kind: 'ui',
+    author: 'Kenney (kenney.nl)',
+    sourceUrl: 'https://kenney.nl/assets/pixel-ui-pack',
+    license: 'CC0-1.0',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    attribution: 'Pixel UI Pack by Kenney (kenney.nl) — CC0',
+    licenseNotice:
+      'License: Creative Commons CC0 (public domain). "This content is free to use in personal, educational and commercial projects. Support us by crediting Kenney or www.kenney.nl (this is not mandatory)."',
+    keepExtensions: ['.png'],
+    source: {
+      strategy: 'direct',
+      url: 'https://kenney.nl/media/pages/assets/pixel-ui-pack/821e760f21-1677661508/kenney_pixel-ui-pack.zip',
+    },
+  },
+  {
+    id: 'ui-input-prompts',
+    target: 'kenney-input-prompts-pixel',
+    name: 'Input Prompts Pixel',
+    kind: 'ui-input-prompts',
+    author: 'Kenney (kenney.nl)',
+    sourceUrl: 'https://kenney.nl/assets/input-prompts-pixel',
+    license: 'CC0-1.0',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    attribution: 'Input Prompts Pixel by Kenney (kenney.nl) — CC0',
+    licenseNotice:
+      'License: Creative Commons CC0 (public domain). "This content is free to use in personal, educational and commercial projects. Support us by crediting Kenney or www.kenney.nl (this is not mandatory)."',
+    keepExtensions: ['.png'],
+    source: {
+      strategy: 'direct',
+      url: 'https://kenney.nl/media/pages/assets/input-prompts-pixel/84a40a31f6-1774771309/kenney_input-prompts-pixel.zip',
+    },
+  },
+  {
+    id: 'sfx-interface',
+    target: 'kenney-interface-sounds',
+    name: 'Interface Sounds',
+    kind: 'audio-sfx',
+    author: 'Kenney (kenney.nl)',
+    sourceUrl: 'https://kenney.nl/assets/interface-sounds',
+    license: 'CC0-1.0',
+    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    attribution: 'Interface Sounds by Kenney (kenney.nl) — CC0',
+    licenseNotice:
+      'License: Creative Commons CC0 (public domain). "This content is free to use in personal, educational and commercial projects. Support us by crediting Kenney or www.kenney.nl (this is not mandatory)."',
+    keepExtensions: ['.ogg'],
+    include: /^Audio\//,
+    source: {
+      strategy: 'direct',
+      url: 'https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip',
+    },
+  },
 ];

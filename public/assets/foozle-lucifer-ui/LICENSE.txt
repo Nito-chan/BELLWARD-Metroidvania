@@ -1,0 +1,11 @@
+Lucifer — RPG UI
+Author: Foozle (commissioned from David / chroma_dave)
+Source: https://foozlecc.itch.io/lucifer-rpg-ui
+License: CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+Downloaded: 2026-10-21
+
+Attribution / license notice (from the source page):
+License: Creative Commons Zero, CC0. "This content is free to use and modify for all projects, including commercial projects. Attribution not required." Page metadata: "Asset license: Creative Commons Zero v1.0 Universal"; "Content: No generative AI was used".
+
+Redistribution note: this copy exists solely as part of the BELLWARD game project.
+It is not a standalone redistribution of the asset pack.

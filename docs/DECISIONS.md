@@ -997,3 +997,38 @@ edge logic and source-merging bugs); always mount the overlay and hide it with C
 focus/click surface and memory on desktop); virtual joystick (not needed for a four-direction platformer
 and harder to read). **Debt:** physical touch hardware remains unverified; Playwright's touch context is
 the current proof.
+
+## D060 — 2026-10-21 — UI surfaces use vetted CC0 panels plus original geometric frames
+
+**Decision:** The title, pause, bench, settings, bindings and map surfaces draw their physical materials
+from two CC0 packs: Foozle's **Lucifer — RPG UI** (`SimplePanel01.png` inner recesses,
+`SimplePanel03.png` wood source) and Foozle's **RPG UI Set 1 — Diablo Style** (`Panel_1.png` outer
+plate). Kenney's **Pixel UI Pack**, **Input Prompts Pixel**, **Interface Sounds** and **RPG Audio**
+(all CC0) stay approved for HUD prompts and audio, including D057's menu cues. Display type is
+self-hosted **Jacquard 12**; UI type is self-hosted **Pixelify Sans**; both are OFL-1.1. The six brass/
+iron 9-slice frames (`frame-plaque`, `frame-plaque-lit`, `frame-plaque-inset`, `frame-small`,
+`frame-small-lit`, `frame-small-inset`) are original geometric shapes drawn for BELLWARD, using a brass
+palette sampled from those CC0 packs over `wood-dark.png`, a darkened tileable derivative of
+`SimplePanel03.png`. `public/assets/bellward-ui/SOURCE.txt` and `public/assets/MANIFEST.json` record the
+source, licence and derivation; `npm run assets:check` verifies the tree. Kenney Ancient frames are no
+longer used as button surfaces: their flat tan squares read like website cards. They may remain in the
+pack for other uses, but interactive controls use the new frames.
+
+**Policy:** every new UI asset must be CC0/public domain, an OFL font, or an equally clear
+redistribution licence. AI-assisted, paid, ambiguous-licence and no-redistribution assets are not
+admitted. Source URL, licence and any derivation belong in `MANIFEST.json` and, for derived textures, in
+`SOURCE.txt` before use. This decision supersedes the earlier Kenney Ancient button-surface assumption;
+D057's audio choice is unchanged.
+
+**Why:** the previous gradients, flat tan cards and beige selection fills read as a web landing page, not
+a game. A shared frame contract gives pause rows, bench charms, settings sliders, binding keys and map
+ledgers one physical vocabulary while letting the CC0 stone/wood panels supply texture. The frames are
+original geometry rather than generated art, so the kit is reproducible and has no AI or paid-asset
+dependency. The frame centres stay transparent, so the same nine-slice works over stone plates and dark
+wood; the larger plaque and smaller key frames keep the hierarchy legible at 375 and 1440.
+
+**Alternatives:** keep the Kenney Ancient frames (rejected: flat tan squares made every control look
+like a card); build every surface from CSS gradients (rejected: the website-like problem this pass
+fixes); use a paid or AI-generated UI pack (rejected by the project's asset rule); stretch the raw Lucifer
+panels behind every control (rejected: corners and ornaments swallow small labels; the sliced frames keep
+the material while preserving the established padding and focus contract).

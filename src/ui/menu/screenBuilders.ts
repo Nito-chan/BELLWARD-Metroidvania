@@ -84,7 +84,7 @@ export function buildSettingsScreen(model: MenuModel): HTMLElement {
   mute.setAttribute('aria-label', 'Silence all audio');
   mute.append(
     el('span', 'setting-label', 'Silence all'),
-    el('span', 'setting-toggle-state', muted ? 'Muted' : 'On'),
+    el('span', 'setting-toggle-state', muted ? 'Muted' : 'Off'),
     el('span', 'setting-toggle-track'),
   );
   let nextRow = BUSES.length + 2;

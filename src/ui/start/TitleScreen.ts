@@ -105,9 +105,17 @@ export class TitleScreen {
         el(
           'p',
           'title-save-meta',
-          `${summary.sigils} / ${summary.sigilTarget} bells · ${summary.rooms} / ${summary.roomTarget} rooms charted`,
+          summary.complete
+            ? 'The ledger is sealed. The city is at rest.'
+            : 'The ledger waits at the last bell.',
         ),
       );
+      const progress = el('p', 'title-save-progress');
+      progress.append(
+        el('span', undefined, `Bells ${summary.sigils} / ${summary.sigilTarget}`),
+        el('span', undefined, `Charted ${summary.rooms} / ${summary.roomTarget}`),
+      );
+      save.append(progress);
     } else {
       save.append(
         el('p', 'title-save-kicker', 'A silent bell'),
@@ -257,7 +265,6 @@ export class TitleScreen {
     if (this.options.hasSave && this.options.summary) {
       const summary = this.options.summary;
       const stats = el('dl', 'title-record-stats');
-      stats.setAttribute('aria-hidden', 'true');
       stats.append(
         recordStat('Bells', `${summary.sigils} / ${summary.sigilTarget}`),
         recordStat('Charted', `${summary.rooms} / ${summary.roomTarget}`),

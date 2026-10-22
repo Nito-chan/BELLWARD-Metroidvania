@@ -1,136 +1,133 @@
 /*
- * Bench equipment: a forge station beside a charm rack. The live room stays visible to
- * the right, so this reads as a shrine carved into the belfry rather than an inventory page.
+ * The Bench: a forge station and a charm rack carved into the belfry.
+ * Every surface is a 9-slice recess or plaque; no cards, no drop-shadow web panels.
  */
 
-.bench-root .menu-panel {
-  width: min(58rem, 100vw);
+.bench-root .menu-panel[data-screen='bench'] {
+  width: min(920px, calc(100vw - 16px));
 }
 
 .bench-root .menu-header {
-  padding-bottom: 0.55rem;
+  padding-bottom: 6px;
+}
+
+/* One line at desktop keeps the charm rack inside the plate without scrolling. */
+.bench-root .menu-subtitle {
+  max-width: 62ch;
+}
+
+.bench-root .menu-status {
+  margin: 6px 0 0;
 }
 
 .bench-root .menu-body {
-  gap: 0.5rem;
+  gap: 8px;
   overflow-y: auto;
-  padding-bottom: 0.6rem;
-  scrollbar-color: var(--bw-line-strong) transparent;
-  scrollbar-width: thin;
+  padding-top: 4px;
+  padding-bottom: 6px;
 }
 
-.bench-root .menu-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.bench-root .menu-body::-webkit-scrollbar-thumb {
-  background: var(--bw-line-strong);
-}
-
-/* ---------- Shrine ledger strip ---------- */
+/* ---------- The shrine ledger ---------- */
 
 .bench-slots {
   display: grid;
+  min-height: 34px;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  flex: none;
   align-items: center;
-  gap: 0.75rem;
+  gap: 8px 16px;
   margin: 0;
-  padding: 0.42rem 0.6rem;
-  border: 1px solid var(--bw-line-soft);
-  border-left: 2px solid var(--bw-brass);
-  background:
-    linear-gradient(90deg, rgb(201 168 106 / 8%) 0%, rgb(0 0 0 / 18%) 58%), var(--bw-panel-deep);
+  padding: 6px 2px;
+  border-top: 1px solid var(--bw-line-strong);
+  border-bottom: 1px solid var(--bw-line-soft);
+  color: var(--bw-bone);
   font-family: var(--bw-ui);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
 }
 
 .bench-slots-place {
   overflow: hidden;
-  color: var(--bw-bone);
-  font-family: var(--bw-display);
+  min-width: 0;
   font-size: 0.82rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   text-overflow: ellipsis;
-  text-transform: none;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
 .bench-belt {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 7px;
+  color: var(--bw-muted);
 }
 
 .bench-belt-label {
-  color: var(--bw-muted);
-  font-size: 0.48rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .bench-notches {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0 0.1rem;
+  gap: 3px;
 }
 
 .bench-notch {
-  width: 0.5rem;
-  height: 0.5rem;
-  border: 1px solid var(--bw-line-strong);
-  background: var(--bw-panel-deep);
-  transform: rotate(45deg);
+  display: block;
+  width: 7px;
+  height: 12px;
+  border: 1px solid var(--bw-brass-dark);
+  background: #0b0805;
+  box-shadow: inset 0 1px 0 rgb(0 0 0 / 70%);
 }
 
 .bench-notch.is-filled {
   border-color: var(--bw-brass-hi);
   background: var(--bw-brass);
-  box-shadow: 0 0 0.5rem rgb(201 168 106 / 24%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 22%),
+    0 0 5px rgb(201 163 90 / 18%);
 }
 
 .bench-belt-count {
   color: var(--bw-brass-hi);
-  font-family: var(--bw-mono);
-  font-size: 0.58rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .bench-shards {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  padding-left: 0.65rem;
-  border-left: 1px solid var(--bw-line-soft);
+  align-items: center;
+  gap: 6px;
+  color: var(--bw-brass-hi);
 }
 
 .bench-shards-mark {
-  color: var(--bw-brass);
-  font-size: 0.62rem;
+  width: 6px;
+  height: 6px;
+  background: var(--bw-brass);
+  box-shadow: 0 0 4px rgb(242 210 138 / 30%);
+  transform: rotate(45deg);
 }
 
 .bench-shards-value {
-  color: var(--bw-brass-hi);
-  font-family: var(--bw-mono);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
 }
 
-/* ---------- Workbench layout ---------- */
+/* ---------- Workbench ---------- */
 
 .bench-workbench {
   display: grid;
   min-height: 0;
-  flex: 1 0 auto;
-  grid-template-columns: minmax(15rem, 0.86fr) minmax(0, 1.5fr);
-  align-items: stretch;
-  gap: 0.9rem;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  gap: 18px;
+  align-items: start;
 }
 
 .bench-forge,
@@ -143,22 +140,22 @@
 .bench-section-title {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  margin: 0.12rem 0 0.42rem;
+  gap: 8px;
+  margin: 0 0 8px;
   color: var(--bw-brass);
   font-family: var(--bw-ui);
-  font-size: 0.54rem;
+  font-size: 0.66rem;
   font-weight: 600;
-  letter-spacing: 0.2em;
-  line-height: 1.2;
+  letter-spacing: 0.14em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
 .bench-section-title::before {
-  width: 0.28rem;
-  height: 0.28rem;
+  width: 5px;
+  height: 5px;
   flex: none;
-  background: currentcolor;
+  background: var(--bw-rust);
   content: '';
   transform: rotate(45deg);
 }
@@ -166,98 +163,65 @@
 .bench-section-title::after {
   height: 1px;
   flex: 1;
-  background: var(--bw-line-soft);
+  background: linear-gradient(90deg, var(--bw-brass-dark), transparent);
   content: '';
 }
 
-/* ---------- Nail forge ---------- */
-
+/* The forge is a recessed plaque with a circular maker's seal. */
 .bench-forge-row {
   position: relative;
+  isolation: isolate;
   display: grid;
-  flex: 1 1 auto;
-  grid-template-columns: 4.9rem minmax(0, 1fr);
-  grid-template-rows: auto 1fr auto;
-  align-items: start;
-  gap: 0.55rem 0.8rem;
-  padding: 0.8rem;
-  border: 1px solid var(--bw-line);
-  background:
-    radial-gradient(ellipse at 18% 22%, rgb(201 168 106 / 11%) 0%, transparent 44%),
-    linear-gradient(180deg, rgb(35 23 37 / 86%) 0%, rgb(10 6 13 / 92%) 100%), var(--bw-panel-deep);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 5%),
-    0 0.55rem 1.4rem rgb(0 0 0 / 26%);
-  clip-path: polygon(
-    0 0,
-    calc(100% - 0.8rem) 0,
-    100% 0.8rem,
-    100% 100%,
-    0.55rem 100%,
-    0 calc(100% - 0.55rem)
-  );
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px 14px;
+  padding: 14px;
+  border: 12px solid transparent;
+  border-image-source: var(--bw-btn-inset);
+  border-image-slice: 12;
+  border-image-width: 12px;
+  border-image-repeat: stretch;
+  background: radial-gradient(ellipse at 50% 108%, rgb(166 75 63 / 12%), transparent 62%), #0e0906;
+  image-rendering: pixelated;
 }
 
-.bench-forge-row::before {
-  position: absolute;
-  inset: 0.32rem;
-  border: 1px solid rgb(201 168 106 / 10%);
-  content: '';
-  pointer-events: none;
+.bench-forge-row > * {
+  position: relative;
+  z-index: 1;
 }
 
 .bench-forge-mark {
-  position: relative;
   display: flex;
-  min-height: 7.6rem;
-  grid-row: 1 / 3;
-  align-self: stretch;
+  width: 92px;
+  height: 92px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.12rem;
-  border: 1px solid var(--bw-line);
-  background:
-    repeating-linear-gradient(-45deg, transparent 0 0.42rem, rgb(201 168 106 / 5%) 0.42rem 0.48rem),
-    radial-gradient(circle at 50% 44%, rgb(201 168 106 / 13%) 0%, transparent 66%), rgb(4 2 6 / 42%);
-}
-
-.bench-forge-mark::before,
-.bench-forge-mark::after {
-  position: absolute;
-  width: 0.42rem;
-  height: 0.42rem;
-  border: 1px solid var(--bw-line);
-  content: '';
-  transform: rotate(45deg);
-}
-
-.bench-forge-mark::before {
-  top: 0.42rem;
-  left: 0.42rem;
-}
-
-.bench-forge-mark::after {
-  right: 0.42rem;
-  bottom: 0.42rem;
+  gap: 1px;
+  border: 2px solid var(--bw-brass-dark);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #2c1d11 0%, #120c07 58%, #080503 100%);
+  box-shadow:
+    inset 0 0 0 3px #0a0705,
+    inset 0 0 18px rgb(201 163 90 / 8%),
+    0 3px 0 rgb(0 0 0 / 55%);
 }
 
 .bench-forge-level {
   color: var(--bw-brass-hi);
-  font-family: var(--bw-display);
-  font-size: 2.5rem;
+  font-family: var(--bw-ui);
+  font-size: 2rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 0.9;
-  text-shadow: 0 3px 0 rgb(5 3 8 / 72%);
+  text-shadow: 0 2px 0 #000;
 }
 
 .bench-forge-cap {
   color: var(--bw-muted);
-  font-family: var(--bw-mono);
-  font-size: 0.46rem;
-  letter-spacing: 0.16em;
+  font-family: var(--bw-ui);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -266,89 +230,93 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.42rem;
-  padding-top: 0.1rem;
+  justify-content: center;
+  gap: 5px;
 }
 
 .bench-forge-copy {
   margin: 0;
   color: var(--bw-bone);
-  font-family: var(--bw-display);
-  font-size: 1.16rem;
+  font-family: var(--bw-ui);
+  font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  line-height: 1.05;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  text-transform: uppercase;
 }
 
 .bench-forge-pips {
   display: inline-flex;
-  gap: 0.3rem;
+  align-items: center;
+  gap: 4px;
 }
 
 .bench-pip {
-  width: 1.15rem;
-  height: 0.28rem;
-  border: 1px solid var(--bw-line);
-  background: rgb(0 0 0 / 34%);
+  display: block;
+  width: 8px;
+  height: 7px;
+  border: 1px solid var(--bw-brass-dark);
+  background: #0b0805;
 }
 
 .bench-pip.is-filled {
   border-color: var(--bw-brass-hi);
   background: var(--bw-brass);
-  box-shadow: 0 0 0.5rem rgb(201 168 106 / 22%);
 }
 
 .bench-forge-detail {
   margin: 0;
   color: var(--bw-muted);
   font-family: var(--bw-ui);
-  font-size: 0.6rem;
+  font-size: 0.64rem;
   letter-spacing: 0.02em;
-  line-height: 1.4;
-  text-wrap: pretty;
+  line-height: 1.35;
 }
 
-/* Two classes so this wins over `.menu-option` regardless of stylesheet load order. */
 .bench-root .bench-forge-button {
-  width: 100%;
-  min-height: 2.65rem;
+  display: flex;
+  min-height: 48px;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr);
-  align-self: end;
-  justify-items: center;
-  margin-top: 0.35rem;
-  padding: 0.4rem 0.7rem;
-  border-color: var(--bw-brass-dark);
-  background:
-    linear-gradient(180deg, rgb(54 37 45 / 96%) 0%, rgb(18 11 20 / 98%) 100%), var(--bw-panel);
-  color: var(--bw-brass-hi);
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  color: var(--bw-bone);
   font-family: var(--bw-ui);
-  font-size: 0.6rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
   text-align: center;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
-.bench-root .bench-forge-button:hover {
-  border-color: var(--bw-brass);
+.bench-forge-button:focus {
+  --bw-btn-img: var(--bw-btn-lit);
   color: var(--bw-bone);
+  outline: none;
 }
 
-.bench-root .bench-forge-button:focus {
-  background: linear-gradient(180deg, #f0d79b 0%, #c9a86a 100%), var(--bw-brass);
-  color: #160e17;
+.bench-forge-button:focus-visible {
+  outline: 2px solid var(--bw-bone);
+  outline-offset: 4px;
 }
 
-.bench-root .bench-forge-button:disabled {
-  border-color: var(--bw-line-soft);
-  background: rgb(0 0 0 / 18%);
-  box-shadow: none;
+.bench-forge-button:disabled {
   color: var(--bw-muted);
-  cursor: default;
-  opacity: 0.7;
+}
+
+.bench-inscription {
+  max-width: 34ch;
+  margin: 14px 0 0;
+  padding: 10px 0 0 12px;
+  border-top: 1px solid var(--bw-line-soft);
+  border-left: 1px solid var(--bw-line);
+  color: var(--bw-muted);
+  font-family: var(--bw-ui);
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 /* ---------- Charm rack ---------- */
@@ -356,216 +324,373 @@
 .bench-charm-list {
   display: flex;
   min-height: 0;
-  flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 6px;
 }
 
 .bench-root .bench-charm {
+  --bw-btn-frame: 10px;
+  --bw-btn-slice: 12;
+  --bw-btn-img: var(--bw-btn-inset);
   display: grid;
-  min-height: 3.8rem;
-  flex: 1 1 0;
-  grid-template-columns: 1.05rem minmax(0, 1fr) auto;
+  min-height: 62px;
+  grid-template-columns: 1.15rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.42rem 0.6rem 0.42rem 0.5rem;
-  border-left: 2px solid transparent;
+  gap: 8px;
+  padding: 10px 12px 10px 10px;
+  color: var(--bw-bone);
+  transition: filter 90ms steps(2, end);
 }
 
-.bench-root .bench-charm[aria-pressed='true'] {
-  border-color: var(--bw-line-strong);
-  border-left-color: var(--bw-brass-hi);
-  background:
-    linear-gradient(90deg, rgb(201 168 106 / 13%) 0%, rgb(13 8 16 / 96%) 58%), var(--bw-panel);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 5%),
-    0 0.35rem 1rem rgb(0 0 0 / 24%);
+.bench-charm > .menu-option-mark {
+  font-size: 0.58rem;
+  line-height: 1;
 }
 
-.bench-root .bench-charm[aria-pressed='true'] .menu-option-mark {
-  color: var(--bw-brass-hi);
+.bench-charm[aria-pressed='true'] {
+  --bw-btn-img: var(--bw-btn);
+}
+
+.bench-charm[aria-pressed='true'] > .menu-option-mark {
   opacity: 1;
+  transform: none;
 }
 
-.bench-root .bench-charm:disabled {
-  cursor: default;
-  opacity: 0.45;
+.bench-charm:hover {
+  filter: brightness(1.08);
+}
+
+.bench-charm:focus {
+  --bw-btn-img: var(--bw-btn-lit);
+  filter: drop-shadow(0 0 7px rgb(242 210 138 / 24%));
+  outline: none;
+}
+
+.bench-charm:focus-visible {
+  outline: 2px solid var(--bw-bone);
+  outline-offset: 4px;
 }
 
 .bench-charm-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 0.14rem;
+  gap: 2px;
 }
 
 .bench-charm-name {
   overflow: hidden;
-  color: var(--bw-bone);
-  font-family: var(--bw-display);
-  font-size: 1.04rem;
+  color: inherit;
+  font-family: var(--bw-ui);
+  font-size: 0.86rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   line-height: 1.1;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 0 #000;
   white-space: nowrap;
 }
 
 .bench-charm-description {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--bw-muted);
   font-family: var(--bw-ui);
-  font-size: 0.59rem;
-  letter-spacing: 0.02em;
-  line-height: 1.38;
+  font-size: 0.62rem;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   text-wrap: pretty;
 }
 
 .bench-charm-meta {
   display: flex;
-  min-width: 4.6rem;
+  min-width: 3.4rem;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.22rem;
-  padding-left: 0.55rem;
-  border-left: 1px solid var(--bw-line-soft);
+  gap: 2px;
+  color: var(--bw-muted);
+  font-family: var(--bw-ui);
+  font-size: 0.54rem;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-align: right;
+  text-transform: uppercase;
 }
 
 .bench-charm-cost {
   color: var(--bw-brass);
-  font-family: var(--bw-mono);
-  font-size: 0.5rem;
-  letter-spacing: 0.06em;
-  line-height: 1.1;
-  white-space: nowrap;
 }
 
 .bench-charm-state {
-  color: var(--bw-muted);
-  font-family: var(--bw-ui);
-  font-size: 0.43rem;
-  letter-spacing: 0.13em;
-  line-height: 1.1;
-  text-transform: uppercase;
-}
-
-.bench-root .bench-charm[aria-pressed='true'] .bench-charm-state {
   color: var(--bw-brass-hi);
 }
 
-/* Focus is the cursor, so it always wins over the equipped plate. */
-.bench-root .bench-charm:focus,
-.bench-root .bench-charm[aria-pressed='true']:focus {
-  border-color: var(--bw-brass-hi);
-  border-left-color: var(--bw-brass-hi);
-  background: linear-gradient(180deg, #f0d79b 0%, #c9a86a 100%), var(--bw-brass);
-  color: #160e17;
+.bench-charm[aria-pressed='true'] .bench-charm-state {
+  color: var(--bw-rust);
 }
 
-.bench-root .bench-charm:focus .bench-charm-description,
-.bench-root .bench-charm:focus .bench-charm-cost,
-.bench-root .bench-charm:focus .bench-charm-state {
-  color: rgb(22 14 23 / 68%);
+.bench-charm:focus .bench-charm-name {
+  color: var(--bw-bone);
 }
 
-.bench-root .bench-charm:focus .bench-charm-name,
-.bench-root .bench-charm:focus .menu-option-mark {
-  color: #160e17;
+.bench-charm:focus .bench-charm-description {
+  color: var(--bw-bone-dim);
+}
+
+.bench-charm:focus .bench-charm-meta,
+.bench-charm:focus .bench-charm-cost {
+  color: var(--bw-brass);
+}
+
+.bench-charm:focus .bench-charm-state {
+  color: var(--bw-brass-hi);
+}
+
+.bench-charm:focus > .menu-option-mark {
+  color: var(--bw-rust);
+  opacity: 1;
+  transform: none;
+}
+
+.bench-root .bench-charm:disabled {
+  opacity: 0.78;
+  filter: none;
+}
+
+.bench-root .bench-charm:disabled .bench-charm-name {
+  color: var(--bw-bone-dim);
+}
+
+.bench-root .bench-charm:disabled .bench-charm-description {
+  color: var(--bw-muted);
+}
+
+.bench-root .bench-charm:disabled .bench-charm-state {
+  color: var(--bw-rust);
 }
 
 /* ---------- Footer ---------- */
 
-.bench-leave {
-  min-width: 7.6rem;
+.bench-root .menu-footer {
+  justify-content: flex-start;
+}
+
+.bench-root .bench-leave {
   margin-left: auto;
 }
 
 /* ---------- Responsive ---------- */
 
-@media (max-width: 880px), (max-height: 560px) {
+@media (max-width: 860px), (max-height: 560px) {
   .bench-workbench {
     grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 
   .bench-forge-row {
-    flex: none;
-    grid-template-columns: 4.2rem minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    min-height: 0;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px 12px;
+    padding: 10px;
+    border-width: 10px;
+    border-image-width: 10px;
   }
 
   .bench-forge-mark {
-    min-height: 6rem;
-    grid-row: 1;
-  }
-
-  .bench-charm-list {
-    flex: none;
-  }
-
-  .bench-root .bench-charm {
-    flex: none;
-  }
-}
-
-@media (max-width: 560px) {
-  .bench-slots {
-    gap: 0.5rem;
-    padding-right: 0.45rem;
-    padding-left: 0.45rem;
-  }
-
-  .bench-slots-place {
-    max-width: 8rem;
-    font-size: 0.74rem;
-  }
-
-  .bench-belt-label {
-    display: none;
-  }
-
-  .bench-shards {
-    padding-left: 0.45rem;
-  }
-
-  .bench-charm-meta {
-    min-width: 3.8rem;
-  }
-
-  .bench-root .bench-charm {
-    gap: 0.45rem;
-  }
-}
-
-@media (max-height: 440px) {
-  .bench-root .menu-body {
-    gap: 0.35rem;
-  }
-
-  .bench-forge-row {
-    padding: 0.55rem;
-  }
-
-  .bench-forge-mark {
-    min-height: 4.8rem;
+    width: 76px;
+    height: 76px;
   }
 
   .bench-forge-level {
-    font-size: 2rem;
-  }
-
-  .bench-section-title {
-    margin-bottom: 0.28rem;
+    font-size: 1.65rem;
   }
 
   .bench-root .bench-charm {
-    min-height: 3.15rem;
+    min-height: 62px;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bench-root *,
-  .bench-root *::before,
-  .bench-root *::after {
-    transition: none !important;
+@media (max-width: 600px) {
+  .bench-slots {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px 10px;
+  }
+
+  .bench-belt {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .bench-shards {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .bench-belt-label {
+    font-size: 0.5rem;
+  }
+}
+
+@media (max-height: 440px), (max-width: 600px) {
+  .bench-root .menu-header {
+    padding-bottom: 0;
+  }
+
+  .bench-root .menu-eyebrow,
+  .bench-root .menu-subtitle {
+    display: none;
+  }
+
+  .bench-root .menu-title {
+    margin-top: 0;
+    font-size: 1.55rem;
+  }
+
+  .bench-root .menu-body {
+    gap: 2px;
+    padding: 0 8px 1px;
+  }
+
+  .bench-slots {
+    min-height: 18px;
+    gap: 2px 8px;
+    padding: 0 2px;
+  }
+
+  .bench-slots-place {
+    font-size: 0.56rem;
+  }
+
+  .bench-belt-label {
+    font-size: 0.44rem;
+  }
+
+  .bench-belt-count {
+    font-size: 0.48rem;
+  }
+
+  .bench-notch {
+    width: 4px;
+    height: 8px;
+  }
+
+  .bench-shards-value {
+    font-size: 0.56rem;
+  }
+
+  .bench-section-title {
+    margin-bottom: 3px;
+    font-size: 0.52rem;
+  }
+
+  .bench-workbench {
+    gap: 2px;
+  }
+
+  /* A horizontal forge strip keeps the charm rack on the same screen. */
+  .bench-forge-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 3px 7px;
+    padding: 4px;
+    border-width: 8px;
+    border-image-width: 8px;
+  }
+
+  .bench-forge-mark {
+    width: 44px;
+    height: 44px;
+  }
+
+  .bench-forge-level {
+    font-size: 1.1rem;
+  }
+
+  .bench-forge-cap {
+    font-size: 0.4rem;
+  }
+
+  .bench-forge-copy {
+    font-size: 0.58rem;
+  }
+
+  .bench-forge-detail {
+    font-size: 0.46rem;
+  }
+
+  .bench-root .bench-forge-button {
+    --bw-btn-frame: 6px;
+    min-width: 88px;
+    min-height: 32px;
+    grid-row: 1;
+    grid-column: 3;
+    overflow: hidden;
+    padding: 5px 7px;
+    font-size: 0.5rem;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bench-charm-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .bench-root .bench-charm {
+    --bw-btn-frame: 6px;
+    min-height: 40px;
+    grid-template-columns: 0.9rem minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .bench-charm > .menu-option-mark {
+    font-size: 0.5rem;
+  }
+
+  .bench-charm-name {
+    font-size: 0.68rem;
+  }
+
+  .bench-charm-description {
+    display: none;
+  }
+
+  .bench-charm-meta {
+    min-width: 2.8rem;
+    font-size: 0.46rem;
+  }
+
+  .bench-inscription {
+    display: none;
+  }
+}
+
+/* At phone width even a three-column rack is narrow; keep the names legible
+   and let the belt count carry the missing-charm state. */
+@media (max-width: 440px) {
+  .bench-root .bench-charm {
+    min-height: 44px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 5px 6px;
+  }
+
+  /* The lit frame already marks the equipped charm; the extra glyph would
+     steal the few pixels the longest names need at phone width. */
+  .bench-charm > .menu-option-mark {
+    display: none;
+  }
+
+  .bench-charm-name {
+    font-size: 0.6rem;
+  }
+
+  .bench-charm-meta {
+    display: none;
   }
 }

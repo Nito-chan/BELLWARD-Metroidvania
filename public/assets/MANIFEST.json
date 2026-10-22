@@ -2,6 +2,18 @@
   "manifestVersion": 1,
   "assets": [
     {
+      "name": "BELLWARD derived UI textures",
+      "kind": "ui",
+      "path": "bellward-ui",
+      "author": "Derived by BELLWARD from Foozle (CC0) assets",
+      "sourceUrl": "https://foozlecc.itch.io/lucifer-rpg-ui",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Dark wood tile derived from Lucifer — RPG UI by Foozle — CC0 — https://foozlecc.itch.io/lucifer-rpg-ui"
+    },
+    {
       "name": "Cathedral in the forest (ambient loop)",
       "kind": "audio-music",
       "path": "music-cathedral",
@@ -36,6 +48,18 @@
       "commercialUse": true,
       "dateDownloaded": "2026-10-19",
       "attribution": "Dark Fantasy Boss Battle Tracks by alkakrab — https://alkakrab.itch.io/6-dark-fantasy-boss-battle-tracks"
+    },
+    {
+      "name": "Jacquard 12",
+      "kind": "font",
+      "path": "fonts/jacquard-12",
+      "author": "Sarah Cadigan-Fried / The Soft Type Project Authors",
+      "sourceUrl": "https://fonts.google.com/specimen/Jacquard+12",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://openfontlicense.org/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Jacquard 12 by Sarah Cadigan-Fried — SIL Open Font License 1.1 — https://fonts.google.com/specimen/Jacquard+12"
     },
     {
       "name": "GothicVania — Church Pack",
@@ -74,6 +98,66 @@
       "attribution": "Impact Sounds by Kenney (kenney.nl) — CC0"
     },
     {
+      "name": "Input Prompts Pixel",
+      "kind": "ui-input-prompts",
+      "path": "kenney-input-prompts-pixel",
+      "author": "Kenney (kenney.nl)",
+      "sourceUrl": "https://kenney.nl/assets/input-prompts-pixel",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Input Prompts Pixel by Kenney (kenney.nl) — CC0"
+    },
+    {
+      "name": "Interface Sounds",
+      "kind": "audio-sfx",
+      "path": "kenney-interface-sounds",
+      "author": "Kenney (kenney.nl)",
+      "sourceUrl": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Interface Sounds by Kenney (kenney.nl) — CC0"
+    },
+    {
+      "name": "Lucifer — RPG UI",
+      "kind": "ui",
+      "path": "foozle-lucifer-ui",
+      "author": "Foozle (commissioned from David / chroma_dave)",
+      "sourceUrl": "https://foozlecc.itch.io/lucifer-rpg-ui",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Lucifer — RPG UI by Foozle — CC0 — https://foozlecc.itch.io/lucifer-rpg-ui"
+    },
+    {
+      "name": "Pixel UI Pack",
+      "kind": "ui",
+      "path": "kenney-pixel-ui",
+      "author": "Kenney (kenney.nl)",
+      "sourceUrl": "https://kenney.nl/assets/pixel-ui-pack",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Pixel UI Pack by Kenney (kenney.nl) — CC0"
+    },
+    {
+      "name": "Pixelify Sans",
+      "kind": "font",
+      "path": "fonts/pixelify-sans",
+      "author": "Stefie Justprince / The Pixelify Sans Project Authors",
+      "sourceUrl": "https://fonts.google.com/specimen/Pixelify+Sans",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://openfontlicense.org/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "Pixelify Sans by Stefie Justprince — SIL Open Font License 1.1 — https://fonts.google.com/specimen/Pixelify+Sans"
+    },
+    {
       "name": "RPG Audio",
       "kind": "audio-sfx",
       "path": "kenney-rpg-audio",
@@ -84,6 +168,18 @@
       "commercialUse": true,
       "dateDownloaded": "2026-10-19",
       "attribution": "RPG Audio by Kenney (kenney.nl) — CC0"
+    },
+    {
+      "name": "RPG UI Set 1 — Diablo Style",
+      "kind": "ui",
+      "path": "foozle-rpg-ui-1",
+      "author": "Foozle",
+      "sourceUrl": "https://foozlecc.itch.io/rpg-ui-set-1",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "commercialUse": true,
+      "dateDownloaded": "2026-10-21",
+      "attribution": "RPG UI Set 1 — Diablo Style by Foozle — CC0 — https://foozlecc.itch.io/rpg-ui-set-1"
     },
     {
       "name": "Warped Caves — Pixel Art Pack",

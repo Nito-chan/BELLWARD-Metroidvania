@@ -1,0 +1,11 @@
+Interface Sounds
+Author: Kenney (kenney.nl)
+Source: https://kenney.nl/assets/interface-sounds
+License: CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+Downloaded: 2026-10-21
+
+Attribution / license notice (from the source page):
+License: Creative Commons CC0 (public domain). "This content is free to use in personal, educational and commercial projects. Support us by crediting Kenney or www.kenney.nl (this is not mandatory)."
+
+Redistribution note: this copy exists solely as part of the BELLWARD game project.
+It is not a standalone redistribution of the asset pack.

@@ -1,65 +1,102 @@
 /*
- * Shared interface language for every DOM overlay.
+ * The Bellwright's Kit — the shared language for every DOM overlay.
  *
- * The belfry is plum stone, old brass and bone. Menus are command plates laid over
- * the live world, not pages: squared-off metal, a stamped cursor, and control legends
- * that read at a glance. Keep colour and type decisions here so the title, pause,
- * bench, map and ending cannot drift into separate products.
+ * The belfry is dark stone, old brass and bone. Frames are borrowed from CC0 pixel-art
+ * packs, not drawn with gradients: a carved outer plate, recessed wooden controls, and
+ * physical keycaps. CSS owns layout, state and focus only. Keep tokens and the button
+ * contract here so pause, bench, settings, chart, title and ending cannot drift apart.
  */
+@font-face {
+  font-family: 'Jacquard 12';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/fonts/jacquard-12/Jacquard12-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Pixelify Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/assets/fonts/pixelify-sans/PixelifySans-Variable.woff2') format('woff2');
+}
+
 :root {
-  --bw-void: #07050a;
-  --bw-ink: #0d0911;
-  --bw-panel: #16101b;
-  --bw-panel-raised: #211625;
-  --bw-panel-deep: #0a070d;
-  --bw-bone: #f0e3ca;
-  --bw-bone-dim: #d1c1a7;
-  --bw-muted: #b3a48d;
-  --bw-brass: #c9a86a;
-  --bw-brass-hi: #efd394;
-  --bw-brass-dark: #7e6232;
-  --bw-rose: #cf9195;
-  --bw-rust: #a9584b;
+  --bw-void: #070504;
+  --bw-ink: #0d0a07;
+  --bw-panel: #17110c;
+  --bw-panel-raised: #21170f;
+  --bw-panel-deep: #0a0705;
+  --bw-bone: #f2e5c8;
+  --bw-bone-dim: #d8c7a6;
+  --bw-muted: #b9a98d;
+  --bw-brass: #c9a35a;
+  --bw-brass-hi: #f2d28a;
+  --bw-brass-dark: #7d5f2f;
+  --bw-rose: #d49a9a;
+  --bw-rust: #a64b3f;
+  --bw-verdigris: #6fae96;
   --bw-echo: #7fe0c3;
-  --bw-line: rgb(201 168 106 / 24%);
-  --bw-line-strong: rgb(201 168 106 / 58%);
-  --bw-line-soft: rgb(201 168 106 / 12%);
-  --bw-scrim: rgb(7 4 10 / 86%);
-  --bw-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
-  --bw-ui: 'Bahnschrift', 'Aptos Narrow', 'Segoe UI', system-ui, sans-serif;
-  --bw-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
-  --bw-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --bw-line: rgb(201 163 90 / 26%);
+  --bw-line-strong: rgb(201 163 90 / 58%);
+  --bw-line-soft: rgb(201 163 90 / 12%);
+  --bw-scrim: rgb(7 4 3 / 84%);
+  --bw-display: 'Jacquard 12', 'Palatino Linotype', Palatino, Georgia, serif;
+  --bw-ui: 'Pixelify Sans', 'Segoe UI', system-ui, sans-serif;
+  --bw-mono: 'Pixelify Sans', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --bw-snap: cubic-bezier(0.2, 0.9, 0.1, 1);
+
+  /* Outer carved plate, recessed insets and the one button frame contract. */
+  --bw-plate: url('/assets/foozle-rpg-ui-1/Panel_1.png');
+  --bw-inset: url('/assets/foozle-lucifer-ui/Panels/SimplePanel01.png');
+  --bw-btn: url('/assets/bellward-ui/frame-plaque.png');
+  --bw-btn-lit: url('/assets/bellward-ui/frame-plaque-lit.png');
+  --bw-btn-down: url('/assets/bellward-ui/frame-plaque-inset.png');
+  --bw-btn-inset: url('/assets/bellward-ui/frame-plaque-inset.png');
+  --bw-btn-small: url('/assets/bellward-ui/frame-small.png');
+  --bw-btn-small-lit: url('/assets/bellward-ui/frame-small-lit.png');
+  --bw-btn-small-inset: url('/assets/bellward-ui/frame-small-inset.png');
+  --bw-frame: 64px;
+  --bw-frame-small: 40px;
+  --bw-btn-frame: 12px;
+  --bw-btn-slice: 12;
 }
 
-:where(.title-root, .menu-root) {
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+:where(.title-root, .menu-root, .ending-root) {
+  color: var(--bw-bone);
+  font-family: var(--bw-ui);
+  -webkit-font-smoothing: none;
+  text-rendering: geometricPrecision;
 }
 
-/* Control keycaps are physical objects: a dark cap, a bright lip, a hard shadow. */
-:where(.title-key, .menu-key, .onboarding-key) {
+/* Control keys are physical objects: dark cap, bright lip, hard shadow, pixel label. */
+:where(.title-key, .menu-key, .onboarding-key, .binding-key) {
   display: inline-grid;
-  min-width: 1.7rem;
+  min-width: 1.55rem;
   min-height: 1.35rem;
   place-items: center;
   padding: 0.12rem 0.32rem;
   border: 1px solid var(--bw-brass-dark);
-  border-bottom-color: var(--bw-brass);
+  border-bottom: 2px solid #2b1c0d;
   border-radius: 0;
-  background: linear-gradient(180deg, #2c202c 0%, #120d16 100%);
+  background: #15100b;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 8%),
-    0 2px 0 #050307;
+    inset 0 1px 0 #3a2a18,
+    0 2px 0 #040302;
   color: var(--bw-brass-hi);
-  font-family: var(--bw-mono);
-  font-size: 0.68rem;
-  line-height: 1.1;
+  font-family: var(--bw-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
   text-align: center;
+  text-transform: uppercase;
 }
 
-:where(.title-root, .menu-root) ::selection {
+:where(.title-root, .menu-root, .ending-root) ::selection {
   background: var(--bw-brass);
-  color: #140d16;
+  color: #140d07;
 }
 
 /* The first-run strip is playfield furniture. A command plate owns the screen when open. */
@@ -67,9 +104,130 @@ body:has(.menu-root:not([hidden])) .onboarding-root {
   display: none;
 }
 
+/*
+ * One button contract for pause rows, back/leave buttons, the forge action and bindings.
+ * The frame is a 9-slice pseudo-element so padding and DOM labels stay untouched.
+ */
+:where(
+  .menu-option,
+  .menu-back-button,
+  .menu-small-button,
+  .binding-reset,
+  .bench-forge-button,
+  .binding-button,
+  .title-action
+) {
+  --bw-btn-img: var(--bw-btn);
+  --bw-btn-frame: 12px;
+  --bw-btn-slice: 12;
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  background: transparent;
+  color: var(--bw-bone);
+  cursor: pointer;
+  font-family: var(--bw-ui);
+  text-align: left;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(
+  .menu-option,
+  .menu-back-button,
+  .menu-small-button,
+  .binding-reset,
+  .bench-forge-button,
+  .binding-button,
+  .title-action
+)::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border: var(--bw-btn-frame) solid transparent;
+  border-image-source: var(--bw-btn-img);
+  border-image-slice: var(--bw-btn-slice);
+  border-image-width: var(--bw-btn-frame);
+  border-image-repeat: stretch;
+  content: '';
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+:where(
+    .menu-option,
+    .menu-back-button,
+    .menu-small-button,
+    .binding-reset,
+    .bench-forge-button,
+    .binding-button,
+    .title-action
+  )
+  > * {
+  position: relative;
+  z-index: 1;
+}
+
+:where(
+  .menu-option,
+  .menu-back-button,
+  .menu-small-button,
+  .binding-reset,
+  .bench-forge-button,
+  .binding-button,
+  .title-action
+):disabled {
+  cursor: default;
+  filter: grayscale(0.35) brightness(0.62);
+}
+
+:where(
+    .menu-option,
+    .menu-back-button,
+    .menu-small-button,
+    .binding-reset,
+    .bench-forge-button,
+    .binding-button,
+    .title-action
+  ):active:not(:disabled) {
+  --bw-btn-img: var(--bw-btn-down);
+}
+
+/* Keyboard focus must be unmistakable even when the frame is already lit. */
+:where(.title-root, .menu-root, .ending-root) :where(button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--bw-bone);
+  outline-offset: 4px;
+}
+
+/* Scrollbars are part of the kit, not the operating system's default chrome. */
+:where(.menu-body, .bindings-scroll, .settings-list, .map-graph) {
+  scrollbar-color: var(--bw-brass-dark) transparent;
+  scrollbar-width: thin;
+}
+
+:where(.menu-body, .bindings-scroll, .settings-list, .map-graph)::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+:where(.menu-body, .bindings-scroll, .settings-list, .map-graph)::-webkit-scrollbar-thumb {
+  background: var(--bw-brass-dark);
+}
+
 @media (forced-colors: active) {
-  :where(.title-root, .menu-root) :focus-visible {
+  :where(.title-root, .menu-root, .ending-root) :focus-visible {
     outline: 3px solid Highlight;
     outline-offset: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.title-root, .menu-root, .ending-root) *,
+  :where(.title-root, .menu-root, .ending-root) *::before,
+  :where(.title-root, .menu-root, .ending-root) *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }

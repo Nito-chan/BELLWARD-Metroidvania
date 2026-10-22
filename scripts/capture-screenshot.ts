@@ -16,7 +16,8 @@
  *      (--controls opens the pause overlay, then the bindings screen)
  *      (--settings opens the pause overlay, then the sound screen)
  *      (--small captures any menu screen at the 640x360 E2E viewport)
- *      (--title captures the boot title card; add --small for the tiny viewport)
+ *      (--viewport=375x667 overrides the capture viewport for responsive QA)
+ *      (--title captures the boot title card; add --saved for a real saved-run title)
  *      (--onboarding starts a fresh run and captures the first-run hints)
  *      (--touch emulates a touch device, starts play and captures the on-screen controls)
  *      (--bench rests at the terrace and captures the bench equipment overlay)
@@ -59,6 +60,21 @@ const onboardingShot = args.includes('--onboarding');
 const touchShot = args.includes('--touch');
 /** Menus and the chart are normally captured at 1280x720; --small checks the 640x360 view. */
 const smallShot = args.includes('--small');
+const savedShot = args.includes('--saved');
+const viewportArg = args
+  .find((value) => value.startsWith('--viewport='))
+  ?.slice('--viewport='.length);
+
+function parseViewport(value: string | undefined): { width: number; height: number } | null {
+  if (!value) return null;
+  const match = /^(\d+)x(\d+)$/.exec(value);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+const customViewport = parseViewport(viewportArg);
 const pageShot =
   overlayShot ||
   menuShot ||
@@ -77,11 +93,13 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
   try {
     const page = await browser.newPage({
-      viewport: touchShot
-        ? { width: 844, height: 390 }
-        : pageShot && !smallShot
-          ? { width: 1280, height: 720 }
-          : { width: 640, height: 360 },
+      viewport:
+        customViewport ??
+        (touchShot
+          ? { width: 844, height: 390 }
+          : pageShot && !smallShot
+            ? { width: 1280, height: 720 }
+            : { width: 640, height: 360 }),
       hasTouch: touchShot,
     });
     const response = await page.goto(url).catch(() => null);
@@ -92,8 +110,38 @@ async function main(): Promise<void> {
       timeout: 15_000,
     });
     // Boot owns the title card. Gameplay and menu captures begin through the real
-    // primary action so the shot reflects the shipped start flow.
-    if (!titleShot) {
+    // primary action so the shot reflects the shipped start flow. A saved title
+    // starts once, enters a room so the run is written, then reloads to the card.
+    if (titleShot && savedShot) {
+      await page.locator('[data-testid="title-root"] [data-action="primary"]').click();
+      await page.waitForFunction(
+        () =>
+          window.__game?.debugState().title.open === false &&
+          (window.__game?.debugState().tickCount ?? 0) > 0,
+        undefined,
+        { timeout: 15_000 },
+      );
+      await page.evaluate(() => window.__game?.debugLoadRoom('belfry-terrace', { x: 590, y: 320 }));
+      await page.waitForFunction(
+        () => window.__game?.debugState().scene?.roomId === 'belfry-terrace',
+        undefined,
+        { timeout: 10_000 },
+      );
+      await page
+        .waitForFunction(
+          () => {
+            const save = window.__game?.debugState().save;
+            return save !== null && save !== undefined && save.lastWrite !== undefined;
+          },
+          undefined,
+          { timeout: 10_000 },
+        )
+        .catch(() => console.warn('screenshot: run did not report a save before reload'));
+      await page.reload();
+      await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
+        timeout: 15_000,
+      });
+    } else if (!titleShot) {
       await page.locator('[data-testid="title-root"] [data-action="primary"]').click();
       await page.waitForFunction(
         () =>

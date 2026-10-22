@@ -1,0 +1,18 @@
+BELLWARD derived UI textures
+============================
+
+wood-dark.png
+  A darkened, tileable derivative of Panels/SimplePanel03.png from
+  Lucifer — RPG UI by Foozle (CC0 1.0).
+  https://foozlecc.itch.io/lucifer-rpg-ui
+  No generative AI was used in the source pack.
+
+frame-plaque.png, frame-plaque-lit.png, frame-plaque-inset.png,
+frame-small.png, frame-small-lit.png, frame-small-inset.png
+  Nine-slice brass/iron frames drawn by BELLWARD for this project using the
+  brass palette sampled from the CC0 Lucifer and Foozle RPG UI packs, over the
+  derived wood tile above. They are original geometric UI shapes, not traced
+  or generated artwork.
+
+Licence for the source packs: CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/

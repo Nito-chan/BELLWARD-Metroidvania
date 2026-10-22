@@ -97,11 +97,16 @@ export class BenchOverlay {
     const forgeTitle = el('h3', 'bench-section-title', 'Nail Forge');
     forgeTitle.id = 'bench-forge-title';
     this.forgeBody = el('div', 'bench-forge-row');
-    forge.append(forgeTitle, this.forgeBody);
+    const inscription = el(
+      'p',
+      'bench-inscription',
+      'A nail remembers every blow. The stone keeps the rest.',
+    );
+    forge.append(forgeTitle, this.forgeBody, inscription);
 
     const charms = el('section', 'bench-charms');
     charms.setAttribute('aria-labelledby', 'bench-charms-title');
-    const charmsTitle = el('h3', 'bench-section-title', 'Charm Belt');
+    const charmsTitle = el('h3', 'bench-section-title', 'Charm Rack');
     charmsTitle.id = 'bench-charms-title';
     this.charmList = el('div', 'bench-charm-list');
     charms.append(charmsTitle, this.charmList);
