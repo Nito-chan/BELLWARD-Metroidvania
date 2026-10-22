@@ -1032,3 +1032,47 @@ like a card); build every surface from CSS gradients (rejected: the website-like
 fixes); use a paid or AI-generated UI pack (rejected by the project's asset rule); stretch the raw Lucifer
 panels behind every control (rejected: corners and ornaments swallow small labels; the sliced frames keep
 the material while preserving the established padding and focus contract).
+
+## D061 — 2026-10-22 — The world map is the Tideglass, a room-by-room wax chart
+
+**Decision:** Replace the current twelve-node region graph with **the Tideglass**, a diegetic folding
+wax tablet bound in brass, with a salt-glass lens in the hinge and an authored **map atlas** that places
+every room in a side-view cross-section of the tower. The chart is generated from the rooms' own
+`rows`/`legend` so floors, walls, ledges, exits, breakables, sealed doors and climb shafts are true to
+the game. The left wax page is **the Keeper's Ledger**: selected/current room, passages, the three bell
+doors, sealed requirements, the current lead, pins and completion. The right page is the chart.
+
+Knowledge is progressive. A visited room is **charted** and shows its real geometry and name. A door seen
+from a charted room reveals a **ghost** chamber with no name, no shape and a `?`. Secret rooms stay
+completely hidden until found. Sealed doors are red wax with the named requirement. Swept rooms get a
+verdigris stamp. The lead is a red thread that stops at the first dark door; it never draws through
+uncharted rooms. The base map is complete for navigation; the **Plumb** (sealed requirements/trace), the
+**Listening Reed** (room-level relic and secret hints) and the **Stylus** (pin types) are optional
+post-slice lenses. Fast travel is deliberately not in the base map.
+
+The Tideglass is found on the Weeping Stone in the Belfry Terrace and auto-opens once with a boot ritual;
+later opens use a short version, and reduced motion is instant. It is disabled during active boss fights
+and the ending. It opens on `M`, the touch HUD and a pause-menu row, and is its own focus-trapped overlay,
+not a tab inside the pause panel. The map UI build remains **after** the gameplay/content phases; only the
+map metadata and the `tideglass` key pickup are added with content. The current map stays in place until
+then.
+
+**Why:** the current graph is not a map. It reveals all twelve rooms before they are found, has no room
+shapes, doors, contents or sealed paths, and cannot answer where the player is, what is left, or where
+not to go. True room geometry plus progressive knowledge gives the player a place, not a checklist. A
+medieval wax tablet is a real portable writing surface, so the diegetic item is not a sci-fi screen pasted
+into a fantasy game; black wax, brass, bone and brine also belong to the belfry and are visibly distinct
+from Hollow Knight's parchment map. The Ledger and the lead solve the navigation problem without turning
+the chart into a waypoint GPS.
+
+**Alternatives:** keep the graph and add room details (rejected: the spatial lie remains); copy Hollow
+Knight's parchment/Cornifer model (rejected: visually and mechanically derivative); use a parchment
+world map with a compass and sea monsters (rejected: generic fantasy map, not BELLWARD); use a flat
+tech-tablet screen (rejected: breaks the medieval material language and the user's Among Us reference
+becomes a dashboard); show all rooms as unknown nodes (rejected: spoils the geography and the search);
+hand-draw the room shapes as art (rejected: they would drift from the live tilemaps); add all three map
+lenses and fast travel to the first build (rejected: scope; the base map must stand alone).
+
+**Design docs:** `docs/design/TIDEGLASS_MAP.md`, `docs/design/TIDEGLASS_ASSETS.md`, and the rendered
+`docs/design/tideglass-map.svg` (design mockup only; its frame, wax, icons and seals are placeholders for
+the user's P0 art).
