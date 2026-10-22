@@ -71,20 +71,40 @@ export function defaultBindingsStorage(): BindingsStorage | null {
 /**
  * Reads the saved document. Any corrupt, partial or future-versioned document falls
  * back to the shipped defaults with a warning; the game never boots into half a control
- * scheme.
+ * scheme. A v1 document is migrated in place: the guard action arrives with its default
+ * binds and every other choice survives.
  */
 export function loadBindings(storage = defaultBindingsStorage()): Bindings {
   if (!storage) return defaultBindings();
   try {
     const raw = storage.getItem(INPUT.storageKey);
     if (raw === null) return defaultBindings();
-    const parsed: unknown = JSON.parse(raw);
+    const parsed = migrateBindings(JSON.parse(raw));
     if (isBindings(parsed)) return parsed;
     console.warn('[BELLWARD] ignoring invalid saved bindings; using defaults');
   } catch (error) {
     console.warn('[BELLWARD] ignoring unreadable saved bindings', error);
   }
   return defaultBindings();
+}
+
+/**
+ * The guard action arrived in binding format v2. A v1 document keeps every custom key
+ * and gains the shipped guard defaults, so the hand the player trained does not reset.
+ */
+export function migrateBindings(value: unknown): unknown {
+  if (!isRecord(value) || value.version !== 1) return value;
+  if (!isRecord(value.keyboard)) return value;
+
+  const keyboard: Record<string, unknown> = { ...value.keyboard };
+  if (keyboard.guard === undefined) keyboard.guard = [...KEY_BINDINGS.guard];
+
+  const gamepad: Record<string, unknown> = isRecord(value.gamepad) ? { ...value.gamepad } : {};
+  const buttons: Record<string, unknown> = isRecord(gamepad.buttons) ? { ...gamepad.buttons } : {};
+  if (buttons.guard === undefined) buttons.guard = [...(PAD_BUTTONS.guard ?? [])];
+  gamepad.buttons = buttons;
+
+  return { ...value, version: INPUT.bindingFormatVersion, keyboard, gamepad };
 }
 
 /** Persists the document. A blocked storage must never break the game. */

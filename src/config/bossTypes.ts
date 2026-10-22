@@ -37,6 +37,11 @@ export type BossPatternDef = {
   readonly box?: AttackBoxDef;
   /** Horizontal speed during the active window, px/s. */
   readonly speed?: number;
+  /**
+   * A red pattern: guard cannot stop it and a perfect parry does not answer it. The
+   * telegraph turns blood-red and the player must move.
+   */
+  readonly unblockable?: boolean;
   /** End the active window in a stagger after hitting a wall. */
   readonly wallStunTicks?: number;
   /** Bellbearer only: a wall impact breaks the back-mounted bell shield. */

@@ -114,6 +114,7 @@ export class Onboarding {
         hint('', 'Move'),
         hint('', 'Jump'),
         hint('', 'Strike'),
+        hint('', 'Guard'),
         hint('', 'Rest / use'),
         hint('', 'Pause'),
       );
@@ -128,6 +129,7 @@ export class Onboarding {
       ),
       hint(formatKeyCode(keyboard.jump[0] ?? ''), 'Jump'),
       hint(formatKeyCode(keyboard.attack[0] ?? ''), 'Strike'),
+      hint(formatKeyCode(keyboard.guard[0] ?? ''), 'Guard'),
       hint(formatKeyCode(keyboard.interact[0] ?? ''), 'Rest / use'),
       hint(formatKeyCode(keyboard.pause[0] ?? ''), 'Pause'),
     );

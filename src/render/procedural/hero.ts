@@ -136,6 +136,14 @@ export function buildHeroArt(): { art: CharacterArt; texture: Texture } {
     attack1: { loop: false, frames: [{ frame: 8, ticks: 16 }] },
     attack2: { loop: false, frames: [{ frame: 9, ticks: 20 }] },
     dash: { loop: false, frames: [{ frame: 10, ticks: 8 }] },
+    guard: { loop: true, frames: [{ frame: 8, ticks: 40 }] },
+    parry: {
+      loop: false,
+      frames: [
+        { frame: 8, ticks: 5 },
+        { frame: 9, ticks: 7 },
+      ],
+    },
   };
 
   return {

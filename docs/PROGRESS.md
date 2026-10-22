@@ -1221,3 +1221,60 @@ together in one sweep after both implementations landed.
 
 The vertical slice is feature-complete. The next work is physical-device testing and packaging, followed
 by content beyond the twelve-room region if the slice is greenlit.
+
+## G1 - The Keeper's Guard (2026-10-22)
+
+**Commit:** pending. **Status:** complete, all gates green.
+
+### Shipped
+
+- **Guard and parry:** a held guard with a five-tick perfect parry, a ten-to-three-tick anti-spam
+  ladder, a six-tick release lock, a 45-tick Hook Counter (+2 damage, +10 posture), and a 60-tick
+  shatter that costs one mask through the normal damage path. Guarding moves at 34% speed.
+- **Posture and KNELL:** player and enemy posture, enemy regeneration after 90 quiet ticks, a 70-tick
+  open window, and a 3x-damage KNELL with heavier hitstop and shake. Enemy bars appear after posture
+  damage; boss bars carry a posture line under health.
+- **Red attacks:** ghoul lunge and the `bearer.charge`, `warden.slam`, `thief.teleport` and
+  `thief.dive` boss patterns ignore the guard. Enemy telegraphs turn blood-red and bosses gain a red
+  ring during the wind-up.
+- **One reaction per swing:** enemies carry an attack id, so an eight-tick active hitbox blocks or
+  parries once instead of draining the whole posture bar in a single attack.
+- **Input parity:** keyboard `F`, gamepad LT/RT and a touch **Guard** button. The onboarding strip,
+  controls screen, pause-menu binding editor and docs all name the action; binding documents move to
+  format v2 and migrate v1 in place without losing custom keys.
+- **Presentation:** a brass guard arc that brightens during the perfect window, a thin posture line
+  under Focus, local enemy posture bars, and combat feedback for parry, block, shatter and KNELL using
+  the existing SFX and effects. No new art or audio assets.
+- **Coverage:** new `tests/unit/guard.test.ts` (state machine, shatter, counter, KNELL, one-reaction
+  rule), binding migration tests, and `tests/e2e/combat.spec.ts` proving the real key path in Chromium.
+
+### Gates (final state)
+
+| Gate                | Result                                                             |
+| ------------------- | ------------------------------------------------------------------ |
+| `npm run typecheck` | clean                                                              |
+| `npm run lint`      | clean, zero warnings                                               |
+| `npm run test`      | 285/285 passed (25 files)                                          |
+| Playwright          | 38/38 passed in the full sweep after one stale title assertion fix |
+| `npm run format`    | clean                                                              |
+| `assets:check`      | unchanged; no assets added                                         |
+
+### Adjustments
+
+- **The first browser guard test exposed a real combat bug.** One parishioner swing held the guard
+  active for eight ticks and drained 176 posture in a single attack. Combat now keys guard reactions
+  on an enemy attack id; the regression is covered by a unit test and the E2E block test.
+- **Guard shatter uses `takeDamage`,** not the reaction directly, so i-frames and Sturdy Shell still
+  apply. The guard still breaks even when the mask cost is absorbed.
+- **The default guard pad buttons are LT/RT (6/7), not LB** so the binding editor's free-button
+  coverage stays honest; keyboard `F` leaves `Q` free for existing rebind tests.
+- **The `m9` title assertion had a stale period** and the `m10` touch-title assertion still expected
+  the pre-redesign wording. Both now assert the shipped copy; this is the only unrelated test edit.
+
+### Explicitly deferred / risks
+
+- Hookline, Censer and Toll, the three-phase Last Keeper, the earned ending, save v3, the Tideglass
+  pickup and the Tideglass map UI are not in this step.
+- Physical gamepad and touch hardware remain unverified; Playwright supplies the input proof.
+- The guard arc and posture bars use existing procedural/art frames; a bespoke guard animation and
+  shield silhouette are art-pipeline work for the P0 pass.

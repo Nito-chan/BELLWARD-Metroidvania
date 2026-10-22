@@ -2,7 +2,7 @@
 
 Status: **implemented (M2; utility keys M3; menus and binding editor M5; map, benches and run saves
 M7; Focus healing, Wall Claw, bench equipment, Ordeals and the Tide ending M8; title, onboarding and
-screen-shake access M9)**. These are the live defaults, sourced from `src/config/input.ts` and
+screen-shake access M9; the Keeper's Guard, parry, posture and KNELL M10)**. These are the live defaults, sourced from `src/config/input.ts` and
 round-tripped by the binding editor; this table is the contract that editor edits. Keyboard events are
 matched on `KeyboardEvent.code` (physical key), so layouts like AZERTY still use the same physical
 positions.
@@ -19,7 +19,7 @@ unlocks audio. Merely viewing the title writes nothing: the first boot save is w
 actually begins.
 
 A non-modal **First steps** strip appears after a fresh start, naming the live keyboard bindings for
-movement, jump, strike, rest/use and pause. It auto-hides after 16 seconds, stays while focused, and has
+movement, jump, strike, guard, rest/use and pause. It auto-hides after 16 seconds, stays while focused, and has
 a **Dismiss first steps** button. It never traps focus or pauses the game.
 
 ## Keyboard (defaults)
@@ -32,6 +32,7 @@ a **Dismiss first steps** button. It never traps focus or pauses the game.
 | down     | ArrowDown / S  |           |
 | jump     | Z / Space      |           |
 | attack   | X / J          |           |
+| guard    | F (hold)       |           |
 | dash     | C / K          |           |
 | heal     | L (hold)       |           |
 | cast     | I              |           |
@@ -55,6 +56,25 @@ a durable save fact.
 The **Wall Claw** is found in the Sunless Aqueduct. While airborne, move against a vertical wall to
 cling and slide; press `jump` to kick away. The Wall-Claw Shaft off the Bellows is the ability gate — it
 is ordinary geometry, not a lift, so the jump timing is the same in every run.
+
+## Guard, parry, posture and KNELL
+
+Hold `guard` (F, gamepad LT/RT, or the touch **Guard** button) while grounded to brace. Guarding slows
+movement to 34% and cannot start in the air, during a dash, or while another action owns the hero. The
+first 5 ticks of each fresh guard are a **perfect parry**: the hit costs no posture, adds 18 posture to
+the attacker, and opens a 45-tick **Hook Counter** in which the next swing deals +2 damage and +10
+posture. After those 5 ticks the same guard still blocks, at 22 posture per hit. Releasing locks the
+guard for 6 ticks; tapping it repeatedly inside a 45-tick window shortens the deflect ladder from 10 to
+7, 5 and 3 ticks so mashing is not a free defence. Posture regenerates after 45 quiet ticks.
+
+At zero posture the guard **shatters** through the normal hurt path: one mask, lost control, and no guard
+for 60 ticks. Every enemy swing lands at most one block or parry, even though its hitbox stays active for
+several ticks. **Red** attacks are unblockable and cannot be parried; the enemy telegraph turns blood-red
+and the boss gains a red ring during the wind-up. Move instead.
+
+Enemy posture fills from guarded hits, parries and ordinary swings. When it breaks, the enemy is open
+for 70 ticks and the next hit is a **KNELL**: 3× damage, heavier hit-stop and a stronger shake. Lesser
+foes usually die to it; bosses lose a real chunk. A broken enemy's posture bar turns blood-red.
 
 ## Utility keys (outside the action map)
 
@@ -94,12 +114,13 @@ it applies immediately to the mounted room, and the next room inherits it. The m
 **On** or **Off** and survives reloads.
 
 **Remapping.** Select a binding cell and press Enter/Space/A (pointer click also starts capture),
-then press the new key or gamepad button. Each action exposes two keyboard slots and its primary
-pad-button slot; analog stick axes are fixed. A key or button already owned by another slot or
+then press the new key or gamepad button. Each action exposes two keyboard slots and its pad-button
+slots; analog stick axes are fixed. A key or button already owned by another slot or
 action is rejected with a status naming the conflict, and the old binding is kept. **Reset defaults**
 is deliberately two presses: the first arms it, the second restores every shipped binding; navigating
-away or starting a capture disarms it. Bindings persist as `bellward.bindings.v1`; a corrupt, partial
-or future-versioned record is discarded whole and defaults are used.
+away or starting a capture disarms it. Bindings persist as `bellward.bindings.v1`; a valid v1 record is
+migrated by adding the guard defaults, while a corrupt, partial or future-versioned record is discarded
+whole and defaults are used.
 
 **Reserved inputs.** Escape, Tab, F1, bare modifiers, and pad Select/Start/D-pad (buttons 8, 9,
 12–15) cannot be newly captured, so a player can always navigate back. The shipped defaults still
@@ -151,7 +172,7 @@ remain available. The ending stays complete across reloads and cannot retrigger.
 
 ## Gamepad (standard mapping)
 
-Left stick / D-pad = move; A = jump; X = attack; B = dash; Y = heal (hold); RB = cast;
+Left stick / D-pad = move; A = jump; X = attack; B = dash; Y = heal (hold); LT/RT = guard (hold); RB = cast;
 D-pad up = interact; Start = pause; Back = map. On the title card, stick/D-pad moves focus, A or Start
 activates and B/Select moves back. While the menu is open, stick/D-pad navigates, A confirms, B/Select
 goes back and Start closes. Axes use a 0.4 deadzone and are combined with the D-pad. Implemented against
@@ -161,7 +182,7 @@ the standard mapping and unit-tested with an injected pad; not yet verified on p
 
 On touch devices the game mounts a landscape-first on-screen control set; mouse/keyboard desktops never
 see it. The left thumb gets **left**, **down** and **right**; the right thumb gets **Focus** (hold to
-heal), **Rest** (interact), **Dash**, **Strike** and **Jump**. **Pause** sits at the top-right and opens
+heal), **Rest** (interact), **Dash**, **Guard** (hold), **Strike** and **Jump**. **Pause** sits at the top-right and opens
 the same accessible pause dialog as `Escape`. Movement + attack/jump are multi-touch: each button owns
 its own pointer, and holding **down** while tapping **Jump** drops through a one-way platform.
 

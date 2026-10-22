@@ -15,7 +15,7 @@ test.describe('M9 title, onboarding and accessibility', () => {
     const title = page.getByTestId('title-root');
     await expect(title).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'BELLWARD' })).toBeVisible();
-    await expect(title).toContainText('The water is listening.');
+    await expect(title).toContainText('The water is listening');
     await expect(title).toContainText('A silent bell');
     await expect(page.getByRole('button', { name: 'Enter the belfry' })).toBeFocused();
     await expect(title).not.toContainText('Continue the climb');

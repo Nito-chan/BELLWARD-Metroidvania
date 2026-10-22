@@ -28,6 +28,10 @@ export type SceneBossDebugState = {
   phaseCount: number;
   phaseName: string;
   warded: boolean;
+  /** Posture and its ceiling; at zero the boss is open to a KNELL. */
+  posture: number;
+  maxPosture: number;
+  postureBroken: boolean;
   state: string;
   pattern: string | null;
   /** True when this is a hard-mode Ordeal rematch. */
@@ -89,6 +93,15 @@ export type SceneDebugState = {
     /** -1 touching a left wall, 1 a right wall, 0 free. */
     wallContact: -1 | 0 | 1;
     wallSliding: boolean;
+    /** True while the Keeper's Guard is braced. */
+    guarding: boolean;
+    /** Player posture for the parry/block loop. */
+    posture: number;
+    maxPosture: number;
+    /** True while a perfect parry has opened a Hook Counter. */
+    counterReady: boolean;
+    /** True during the opening beats of a fresh guard. */
+    perfectParry: boolean;
     nailLevel: number;
     charms: string[];
   };
@@ -104,6 +117,9 @@ export type SceneDebugState = {
     state: string;
     animation: string;
     facing: -1 | 1;
+    posture: number;
+    maxPosture: number;
+    postureBroken: boolean;
   }>;
   /** Number of live projectiles. */
   projectiles: number;

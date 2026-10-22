@@ -16,6 +16,10 @@ export type CombatEvent =
       facing: -1 | 1;
       damage: number;
       killed: boolean;
+      /** True when the hit landed on a posture-broken enemy: the KNELL. */
+      knell: boolean;
+      /** True when this hit filled the enemy's posture and broke it. */
+      broke: boolean;
     }
   | {
       type: 'enemyBlocked';
@@ -31,6 +35,24 @@ export type CombatEvent =
       y: number;
       damage: number;
       source: 'contact' | 'melee' | 'projectile';
+    }
+  | {
+      /** A perfect parry: the attacker's posture took the blow. */
+      type: 'playerParry';
+      x: number;
+      y: number;
+    }
+  | {
+      /** A held block: the hero's posture paid for the stop. */
+      type: 'playerBlock';
+      x: number;
+      y: number;
+    }
+  | {
+      /** The guard shattered; the reaction path already applied the mask cost. */
+      type: 'playerGuardBreak';
+      x: number;
+      y: number;
     }
   | { type: 'projectileHit'; x: number; y: number; surface: 'tile' | 'player' };
 
@@ -52,6 +74,8 @@ export type CombatResult = {
 export class CombatSystem {
   /** Swing id that last hit each enemy, so a multi-tick window lands once. */
   private readonly lastSwingByEnemy = new WeakMap<Enemy, number>();
+  /** Attack id that last reached the guard, so one swing blocks/parries once. */
+  private readonly lastMeleeByEnemy = new WeakMap<Enemy, number>();
 
   resolve(
     player: PlayerController,
@@ -83,8 +107,16 @@ export class CombatSystem {
           hitstop = Math.max(hitstop, COMBAT.enemy.blockedHitstopTicks);
           continue;
         }
-        const damage = player.attackDamage;
-        if (enemy.takeDamage(damage, player.feet.x)) player.gainFocusOnHit();
+
+        const knell = enemy.postureBroken;
+        const base = player.attackDamage + player.attackCounterBonus;
+        const damage = knell ? Math.ceil(base * COMBAT.knell.damageMultiplier) : base;
+        const landed = enemy.takeDamage(damage, player.feet.x);
+        let broke = false;
+        if (landed && enemy.alive && !knell) {
+          broke = enemy.takePostureDamage(player.attackPostureDamage, player.feet.x) === 'broken';
+        }
+        if (landed) player.gainFocusOnHit();
         events.push({
           type: 'enemyHit',
           enemy,
@@ -93,8 +125,10 @@ export class CombatSystem {
           facing: player.facing,
           damage,
           killed: !enemy.alive,
+          knell,
+          broke,
         });
-        hitstop = Math.max(hitstop, COMBAT.enemy.hitstopTicks);
+        hitstop = Math.max(hitstop, knell ? COMBAT.knell.hitstopTicks : COMBAT.enemy.hitstopTicks);
       }
     }
 
@@ -105,7 +139,24 @@ export class CombatSystem {
         const hitPoint = { x: player.feet.x, y: player.feet.y - 20 };
         const meleeDamage = enemy.attackDamage;
         if (melee && meleeDamage > 0 && overlaps(melee, playerBox)) {
-          if (player.takeDamage(meleeDamage, enemy.feet.x)) {
+          if (this.lastMeleeByEnemy.get(enemy) === enemy.attackId) continue;
+          this.lastMeleeByEnemy.set(enemy, enemy.attackId);
+          const outcome = player.resolveIncoming(
+            meleeDamage,
+            enemy.feet.x,
+            enemy.attackUnblockable,
+          );
+          if (outcome === 'parry') {
+            enemy.onParried(player.feet.x);
+            events.push({ type: 'playerParry', ...hitPoint });
+            hitstop = Math.max(hitstop, COMBAT.enemy.hitstopTicks);
+          } else if (outcome === 'block') {
+            events.push({ type: 'playerBlock', ...hitPoint });
+            hitstop = Math.max(hitstop, COMBAT.enemy.blockedHitstopTicks);
+          } else if (outcome === 'broken') {
+            events.push({ type: 'playerGuardBreak', ...hitPoint });
+            hitstop = Math.max(hitstop, COMBAT.player.hitstopTicks);
+          } else if (player.takeDamage(meleeDamage, enemy.feet.x)) {
             events.push({
               type: 'playerHit',
               ...hitPoint,
@@ -128,7 +179,17 @@ export class CombatSystem {
 
     for (const hit of projectiles.update(tilemap, playerBox)) {
       if (hit.kind === 'player' && !player.dead) {
-        if (player.takeDamage(hit.damage, hit.x)) {
+        const outcome = player.resolveIncoming(hit.damage, hit.x, false);
+        if (outcome === 'parry') {
+          events.push({ type: 'playerParry', x: hit.x, y: hit.y });
+          hitstop = Math.max(hitstop, COMBAT.enemy.hitstopTicks);
+        } else if (outcome === 'block') {
+          events.push({ type: 'playerBlock', x: hit.x, y: hit.y });
+          hitstop = Math.max(hitstop, COMBAT.enemy.blockedHitstopTicks);
+        } else if (outcome === 'broken') {
+          events.push({ type: 'playerGuardBreak', x: hit.x, y: hit.y });
+          hitstop = Math.max(hitstop, COMBAT.player.hitstopTicks);
+        } else if (player.takeDamage(hit.damage, hit.x)) {
           events.push({
             type: 'playerHit',
             x: hit.x,

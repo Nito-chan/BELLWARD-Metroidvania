@@ -6,6 +6,7 @@ export type PlayerStateName =
   | 'fall'
   | 'wallslide'
   | 'attack'
+  | 'guard'
   | 'dash'
   | 'heal'
   | 'hurt'

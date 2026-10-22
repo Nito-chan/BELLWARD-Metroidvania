@@ -14,6 +14,7 @@ export class EnemyView {
   readonly view = new Container();
   private readonly character: CharacterView;
   private readonly telegraph = new Graphics();
+  private readonly postureBar = new Graphics();
 
   constructor(provider: ArtProvider, kind: EnemyKind) {
     const art = provider.enemies[kind];
@@ -21,7 +22,7 @@ export class EnemyView {
     this.character = new CharacterView(provider, art, {
       shadow: { rx: Math.max(7, body.w * 0.65), ry: 3 },
     });
-    this.view.addChild(this.character.view, this.telegraph);
+    this.view.addChild(this.character.view, this.telegraph, this.postureBar);
   }
 
   /** Syncs the view to one enemy after its simulation tick. */
@@ -41,6 +42,7 @@ export class EnemyView {
     this.view.visible = enemy.alive;
     this.view.zIndex = feet.y;
     this.drawTelegraph(enemy);
+    this.drawPosture(enemy);
   }
 
   destroy(): void {
@@ -62,18 +64,43 @@ export class EnemyView {
     const fullX = feet.x + dir * (box.forward + box.width);
     const top = feet.y - box.top;
     const bottom = top + box.height;
+    const tell = melee.unblockable ? PALETTE.blood : PALETTE.ember;
 
     this.telegraph.clear();
     // Faint full-reach guide plus a bright leading edge that grows with the wind-up.
+    // Red means the guard cannot stop it; move, do not parry.
     this.telegraph
       .moveTo(startX, top + 4)
       .lineTo(fullX, bottom - 4)
-      .stroke({ width: 1, color: PALETTE.ember, alpha: 0.25 });
+      .stroke({ width: 1, color: tell, alpha: 0.25 });
     const reachX = startX + (fullX - startX) * t;
     this.telegraph
       .moveTo(startX, top + 6)
       .lineTo(reachX, bottom - 6)
-      .stroke({ width: 2, color: PALETTE.ember, alpha: 0.55 });
+      .stroke({ width: 2, color: tell, alpha: 0.55 });
     this.telegraph.visible = true;
+  }
+
+  /**
+   * A small posture line above the head, shown only after the first posture hit. When it
+   * fills, the bar turns blood-red for the whole KNELL window.
+   */
+  private drawPosture(enemy: Enemy): void {
+    const bar = this.postureBar;
+    bar.clear();
+    if (!enemy.alive || (enemy.postureRatio >= 1 && !enemy.postureBroken)) {
+      bar.visible = false;
+      return;
+    }
+    const feet = enemy.feet;
+    const width = 28;
+    const x = Math.round(feet.x - width / 2);
+    const y = Math.round(feet.y - enemy.stats.body.h - 7);
+    bar.rect(x, y, width, 2).fill({ color: PALETTE.void, alpha: 0.75 });
+    const ratio = enemy.postureBroken ? 1 : Math.max(0, Math.min(1, enemy.postureRatio));
+    bar
+      .rect(x, y, width * ratio, 2)
+      .fill({ color: enemy.postureBroken ? PALETTE.blood : PALETTE.brass, alpha: 0.95 });
+    bar.visible = true;
   }
 }

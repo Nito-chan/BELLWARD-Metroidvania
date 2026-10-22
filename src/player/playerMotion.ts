@@ -19,8 +19,8 @@ export function applyGravity(body: Body, jumpHeld: boolean): void {
 }
 
 /** Ground/air run acceleration, skid deceleration and the post-dash speed bleed. */
-export function stepRun(body: Body, dir: -1 | 0 | 1, grounded: boolean): void {
-  const max = grounded ? PLAYER.ground.maxRun : PLAYER.air.maxRun;
+export function stepRun(body: Body, dir: -1 | 0 | 1, grounded: boolean, speedScale = 1): void {
+  const max = (grounded ? PLAYER.ground.maxRun : PLAYER.air.maxRun) * speedScale;
   if (dir !== 0) {
     const opposing = body.vx * dir < 0;
     const rate = grounded

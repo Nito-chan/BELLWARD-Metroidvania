@@ -216,5 +216,9 @@ export const HERO_ART: CharacterArt = {
     attack1: knightStrip('hero.attack1', [3, 3, 4, 6], false),
     attack2: knightStrip('hero.attack2', [2, 3, 3, 3, 4, 5], false),
     dash: knightStrip('hero.dash', [3, 5], false),
+    // Guard and parry reuse the attack sheets: the brace is the wind-up frame held, and
+    // the parry is the first cut. The HeroView draws the actual guard arc.
+    guard: knightStrip('hero.attack1', [40], true),
+    parry: knightStrip('hero.attack1', [3, 3, 6], false),
   },
 };

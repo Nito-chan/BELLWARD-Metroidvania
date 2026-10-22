@@ -10,6 +10,9 @@ export type BossHudInfo = {
   readonly phaseCount: number;
   readonly phaseName: string;
   readonly warded: boolean;
+  readonly posture: number;
+  readonly maxPosture: number;
+  readonly postureBroken: boolean;
   readonly alive: boolean;
 };
 
@@ -44,6 +47,7 @@ export class BossHud {
   readonly view = new Container();
   private readonly back = new Graphics();
   private readonly fill = new Graphics();
+  private readonly posture = new Graphics();
   private readonly pips = new Graphics();
   private readonly title = new Text({ text: '', style: TITLE_STYLE });
   private readonly subtitle = new Text({ text: '', style: SUB_STYLE });
@@ -54,9 +58,9 @@ export class BossHud {
     this.title.position.set(TEXT_X, 3);
     this.title.resolution = 2;
     this.subtitle.anchor.set(0.5, 0);
-    this.subtitle.position.set(TEXT_X, 33);
+    this.subtitle.position.set(TEXT_X, 37);
     this.subtitle.resolution = 2;
-    this.view.addChild(this.back, this.fill, this.pips, this.title, this.subtitle);
+    this.view.addChild(this.back, this.fill, this.posture, this.pips, this.title, this.subtitle);
     this.view.visible = false;
   }
 
@@ -83,6 +87,9 @@ export class BossHud {
       last.phaseCount === info.phaseCount &&
       last.phaseName === info.phaseName &&
       last.warded === info.warded &&
+      last.posture === info.posture &&
+      last.maxPosture === info.maxPosture &&
+      last.postureBroken === info.postureBroken &&
       last.alive === info.alive
     );
   }
@@ -110,6 +117,18 @@ export class BossHud {
       this.fill
         .roundRect(BAR_X + 1, BAR_Y + 1, (BAR_W - 2) * ratio, BAR_H - 2, 1)
         .fill({ color, alpha: 0.95 });
+    }
+
+    // Posture sits under the health: brass while it holds, blood when the boss is open.
+    this.posture.clear();
+    const postureRatio =
+      info.maxPosture > 0 ? Math.max(0, Math.min(1, info.posture / info.maxPosture)) : 0;
+    const postureColor = info.postureBroken ? PALETTE.blood : PALETTE.brass;
+    this.posture.rect(BAR_X, BAR_Y + BAR_H + 1, BAR_W, 2).fill({ color: PALETTE.void, alpha: 0.8 });
+    if (postureRatio > 0 || info.postureBroken) {
+      this.posture
+        .rect(BAR_X, BAR_Y + BAR_H + 1, BAR_W * (info.postureBroken ? 1 : postureRatio), 2)
+        .fill({ color: postureColor, alpha: info.postureBroken ? 1 : 0.9 });
     }
 
     this.pips.clear();

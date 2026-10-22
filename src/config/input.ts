@@ -15,6 +15,7 @@ export const ACTIONS = [
   'down',
   'jump',
   'attack',
+  'guard',
   'dash',
   'heal',
   'cast',
@@ -31,7 +32,7 @@ export const INPUT = {
   /** Standard-mapping gamepad polled each tick; the first connected pad wins. */
   gamepadIndex: 0,
   /** Version of the serialized binding document (the M5 binding editor reads this). */
-  bindingFormatVersion: 1,
+  bindingFormatVersion: 2,
   /** localStorage key for the persisted binding document. Reads/writes are try/catch. */
   storageKey: 'bellward.bindings.v1',
 } as const;
@@ -44,6 +45,7 @@ export const KEY_BINDINGS: Readonly<Record<ActionName, readonly string[]>> = {
   down: ['ArrowDown', 'KeyS'],
   jump: ['KeyZ', 'Space'],
   attack: ['KeyX', 'KeyJ'],
+  guard: ['KeyF'],
   dash: ['KeyC', 'KeyK'],
   heal: ['KeyL'],
   cast: ['KeyI'],
@@ -56,6 +58,7 @@ export const KEY_BINDINGS: Readonly<Record<ActionName, readonly string[]>> = {
 export const PAD_BUTTONS: Readonly<Partial<Record<ActionName, readonly number[]>>> = {
   jump: [0], // A / cross
   attack: [2], // X / square
+  guard: [6, 7], // LT / L2, RT / R2
   dash: [1], // B / circle
   heal: [3], // Y / triangle
   cast: [5], // RB / R1

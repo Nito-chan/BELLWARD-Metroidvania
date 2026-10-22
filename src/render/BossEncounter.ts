@@ -91,6 +91,9 @@ export class BossEncounter {
       phaseCount: this.boss.phaseCount,
       phaseName: this.boss.phase.name,
       warded: this.boss.warded,
+      posture: this.boss.posture,
+      maxPosture: this.boss.postureMax,
+      postureBroken: this.boss.postureBroken,
       state: this.boss.state,
       pattern: pattern?.id ?? null,
       telegraph: this.boss.telegraph,
@@ -108,6 +111,9 @@ export class BossEncounter {
     phaseCount: number;
     phaseName: string;
     warded: boolean;
+    posture: number;
+    maxPosture: number;
+    postureBroken: boolean;
     alive: boolean;
   } {
     return {
@@ -118,6 +124,9 @@ export class BossEncounter {
       phaseCount: this.boss.phaseCount,
       phaseName: this.boss.phase.name,
       warded: this.boss.warded,
+      posture: this.boss.posture,
+      maxPosture: this.boss.postureMax,
+      postureBroken: this.boss.postureBroken,
       alive: this.boss.alive,
     };
   }

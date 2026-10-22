@@ -48,7 +48,7 @@
   right: max(0.85rem, env(safe-area-inset-right));
   grid-template-areas:
     'heal interact dash'
-    'attack jump jump';
+    'guard attack jump';
   grid-template-columns: repeat(3, 3.35rem);
   align-items: end;
 }
@@ -166,6 +166,11 @@
 
 .touch-dash {
   grid-area: dash;
+}
+
+.touch-guard {
+  grid-area: guard;
+  border-color: rgb(201 168 106 / 36%);
 }
 
 .touch-glyph {

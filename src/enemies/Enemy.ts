@@ -48,6 +48,9 @@ export type EnemyContext = {
   ) => void;
 };
 
+/** What a posture hit did. `broken` is the moment before a KNELL becomes possible. */
+export type PostureResult = 'none' | 'damaged' | 'broken';
+
 /**
  * Base for every enemy: tile physics, health, hit reaction, the animation contract and
  * small steering helpers. Subclasses own only their decision making (`think`).
@@ -69,11 +72,16 @@ export abstract class Enemy {
   protected restartedValue = true;
   protected readonly patrolMin: number;
   protected readonly patrolMax: number;
+  private postureValue: number;
+  private postureRegenTicks = 0;
+  private postureBrokenTicks = 0;
+  private attackValue = 0;
 
   constructor(kind: ActorKind, spawn: EnemySpawn) {
     this.kind = kind;
     this.stats = ENEMIES[kind];
     this.hp = this.stats.hp;
+    this.postureValue = this.stats.posture;
     this.facing = spawn.facing ?? 1;
     const { w, h } = this.stats.body;
     this.body = createBody(spawn.x - w / 2, spawn.y - h, w, h);
@@ -109,6 +117,30 @@ export abstract class Enemy {
 
   get grounded(): boolean {
     return this.body.grounded;
+  }
+
+  /** Current posture; at zero the actor is open to a KNELL. */
+  get posture(): number {
+    return this.postureValue;
+  }
+
+  get postureMax(): number {
+    return this.stats.posture;
+  }
+
+  /** 0..1 for posture bars. */
+  get postureRatio(): number {
+    return this.postureMax > 0 ? this.postureValue / this.postureMax : 0;
+  }
+
+  /** True while the actor is open and the next hit becomes a KNELL. */
+  get postureBroken(): boolean {
+    return this.postureBrokenTicks > 0;
+  }
+
+  /** A red attack: the guard is useless against it. */
+  get attackUnblockable(): boolean {
+    return this.stats.melee?.unblockable ?? false;
   }
 
   /** Combat may target this enemy. Bosses hide during teleports and phase transitions. */
@@ -150,6 +182,14 @@ export abstract class Enemy {
     return this.stats.melee.damage;
   }
 
+  /**
+   * Increments once per active attack window, so the combat pass can land a guard
+   * reaction (block or parry) exactly once per swing instead of once per active tick.
+   */
+  get attackId(): number {
+    return this.attackValue;
+  }
+
   /** The body box used for contact damage (not the sprite's visual bounds). */
   bounds(): Rect {
     return bodyRect(this.body);
@@ -184,6 +224,36 @@ export abstract class Enemy {
     return true;
   }
 
+  /**
+   * Fills posture. At zero the actor staggers open for `COMBAT.posture.brokenTicks`;
+   * when that opens, the next player hit is a KNELL. Returns what changed.
+   */
+  takePostureDamage(amount: number, sourceX: number): PostureResult {
+    if (!this.alive || this.postureBrokenTicks > 0) return 'none';
+    const applied = Math.max(0, Math.floor(amount));
+    if (applied === 0) return 'none';
+
+    this.postureRegenTicks = COMBAT.posture.enemyRegenDelayTicks;
+    this.postureValue = Math.max(0, this.postureValue - applied);
+    if (this.postureValue > 0) return 'damaged';
+
+    this.postureBrokenTicks = COMBAT.posture.brokenTicks;
+    const away = this.feet.x < sourceX ? -1 : 1;
+    this.body.vx = away * COMBAT.enemy.knockback.x;
+    this.body.vy = COMBAT.enemy.knockback.y;
+    this.stateValue = 'stagger';
+    this.stateTicks = COMBAT.posture.brokenTicks;
+    this.restartClip('hurt');
+    return 'broken';
+  }
+
+  /** A perfect parry: no health lost, posture paid, and a bright flash for the read. */
+  onParried(sourceX: number): void {
+    if (!this.alive) return;
+    this.flashTicks = 4;
+    this.takePostureDamage(COMBAT.guard.parryPostureDamage, sourceX);
+  }
+
   /** Advances one fixed tick. Dead enemies are removed by the scene and never update. */
   update(ctx: EnemyContext): void {
     if (!this.alive) return;
@@ -191,8 +261,21 @@ export abstract class Enemy {
     if (this.cooldownTicks > 0) this.cooldownTicks -= 1;
     if (this.flashTicks > 0) this.flashTicks -= 1;
     if (this.stateTicks > 0) this.stateTicks -= 1;
+    if (this.postureBrokenTicks > 0) {
+      this.postureBrokenTicks -= 1;
+      if (this.postureBrokenTicks === 0) this.postureValue = this.postureMax;
+    }
+    if (this.postureRegenTicks > 0) this.postureRegenTicks -= 1;
+    else if (this.postureBrokenTicks <= 0) {
+      this.postureValue = Math.min(
+        this.postureMax,
+        this.postureValue + COMBAT.posture.enemyRegenPerTick,
+      );
+    }
 
+    const wasActive = this.stateValue === 'active';
     this.think(ctx);
+    if (!wasActive && this.stateValue === 'active') this.attackValue += 1;
 
     this.body.vy = Math.min(COMBAT.enemy.maxFall, this.body.vy + COMBAT.enemy.gravity * SIM.dt);
     const move = moveAndCollide(ctx.tilemap, this.body, SIM.dt);

@@ -10,6 +10,7 @@ import type { Tilemap } from '../world/Tilemap';
 import { PlayerCombat, type CombatHost } from './PlayerCombat';
 import { PlayerDash, type DashHost } from './PlayerDash';
 import { PlayerFocus } from './PlayerFocus';
+import { PlayerGuard, type GuardHost, type IncomingOutcome } from './PlayerGuard';
 import { PlayerHealing, type HealHost } from './PlayerHealing';
 import { PlayerJump, type JumpHost } from './PlayerJump';
 import { hasCharm, STARTER_LOADOUT, type PlayerLoadout } from './PlayerLoadout';
@@ -49,6 +50,7 @@ export class PlayerController {
   private readonly combat = new PlayerCombat();
   private readonly jump = new PlayerJump();
   private readonly dash = new PlayerDash();
+  private readonly guard = new PlayerGuard();
   private readonly reaction = new PlayerReaction();
   private readonly healing = new PlayerHealing();
   private readonly wall = new PlayerWall();
@@ -145,6 +147,35 @@ export class PlayerController {
   /** 0..1 heal channel fill, or 0 when idle. */
   get healProgress(): number {
     return this.healing.progress;
+  }
+
+  /** True while the Keeper's Guard is braced. */
+  get guarding(): boolean {
+    return this.guard.active;
+  }
+
+  /** Player posture for the HUD. */
+  get posture(): number {
+    return this.guard.posture;
+  }
+
+  get maxPosture(): number {
+    return this.guard.maxPosture;
+  }
+
+  /** True while the guard has shattered and control is lost. */
+  get guardBroken(): boolean {
+    return this.guard.broken;
+  }
+
+  /** True while a perfect parry has opened a Hook Counter. */
+  get counterReady(): boolean {
+    return this.guard.counterReady;
+  }
+
+  /** True during the opening beats where a hit becomes a perfect parry. */
+  get perfectParryWindow(): boolean {
+    return this.guard.perfectWindow;
   }
 
   get wallContact(): -1 | 0 | 1 {
@@ -254,6 +285,16 @@ export class PlayerController {
     return this.combat.attackDamage(this.pose.state, this.pose.clipTick);
   }
 
+  /** Extra damage this swing carries from a perfect parry. */
+  get attackCounterBonus(): number {
+    return this.combat.attackCounterBonus;
+  }
+
+  /** Posture damage this swing applies, including any counter bonus. */
+  get attackPostureDamage(): number {
+    return this.combat.attackPostureDamage;
+  }
+
   /**
    * Applies a hit from the world. Returns false when it was ignored (dead or in
    * invulnerability frames). The reaction is a short loss of control, knockback away
@@ -266,6 +307,19 @@ export class PlayerController {
       return false;
     }
     return this.reaction.takeDamage(this.reactionHost, amount, sourceX);
+  }
+
+  /**
+   * Runs an enemy strike through the guard before health is touched. A shattered guard
+   * costs a mask through the normal reaction path; every other outcome is the caller's
+   * to resolve.
+   */
+  resolveIncoming(_damage: number, sourceX: number, unblockable: boolean): IncomingOutcome {
+    const outcome = this.guard.resolveIncoming(this.guardHost, sourceX, unblockable);
+    if (outcome === 'broken') {
+      this.takeDamage(COMBAT.guard.breakDamage, sourceX);
+    }
+    return outcome;
   }
 
   /** DEV-only: extend i-frames for deterministic state-machine probes. */
@@ -281,12 +335,14 @@ export class PlayerController {
 
     if (this.state === 'dead') {
       this.healing.cancel();
+      this.guard.cancel();
       this.reaction.stepDead(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
     }
     if (this.reaction.hurt) {
       this.healing.cancel();
+      this.guard.cancel();
       this.reaction.stepHurt(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
@@ -298,12 +354,23 @@ export class PlayerController {
     // The heal channel roots the hero. A completed channel resolves after the physics
     // step so the body never tunnels through a ledge while the animation finishes.
     if (this.state === 'heal') {
+      this.guard.cancel();
       this.healing.step(input, this.healHost);
       this.stepChannelPhysics(tilemap);
       return;
     }
     if (this.healing.tryStart(input, this.healHost)) {
+      this.guard.cancel();
       this.stepChannelPhysics(tilemap);
+      return;
+    }
+
+    // The brace owns the tick while it holds: the guard's opening beats only mean
+    // anything if the hero cannot also swing through them.
+    if (this.guard.active) {
+      this.guard.step(this.guardHost, input, tilemap);
+      this.finalizeGuardState();
+      this.trackJumpPeak();
       return;
     }
 
@@ -351,6 +418,25 @@ export class PlayerController {
       facing: this.facingValue,
       grounded: this.body.grounded,
       direction: inputDirection,
+      consumeCounter: () => this.guard.consumeCounter(),
+    };
+  }
+
+  private get guardHost(): GuardHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      facing: this.facingValue,
+      grounded: this.body.grounded,
+      busy:
+        this.reaction.hurt ||
+        this.state === 'attack' ||
+        this.state === 'dash' ||
+        this.state === 'heal' ||
+        this.state === 'dead',
+      setFacing: (direction) => {
+        this.facingValue = direction;
+      },
     };
   }
 
@@ -426,7 +512,21 @@ export class PlayerController {
     this.dash.tick();
     this.combat.tick(input);
     this.jump.tick(input, this.body.grounded);
+    this.guard.tick(input, this.guardHost);
     this.pose.tickClip();
+  }
+
+  /**
+   * Resolves the guard's visible state after its physics step. The clip is not restarted
+   * while the brace holds, so a parry pose can finish inside the guard.
+   */
+  private finalizeGuardState(): void {
+    if (!this.body.grounded) {
+      this.guard.cancel();
+      this.pose.setState('fall', 'fall');
+      return;
+    }
+    if (this.pose.state !== 'guard') this.pose.setState('guard', 'guard');
   }
 
   private stepMove(input: InputSnapshot): void {

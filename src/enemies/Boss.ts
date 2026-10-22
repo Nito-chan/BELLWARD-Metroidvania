@@ -134,6 +134,10 @@ export class Boss extends Enemy {
     return pattern.damage;
   }
 
+  override get attackUnblockable(): boolean {
+    return this.pattern?.unblockable ?? false;
+  }
+
   override onDeflect(_sourceX: number): void {
     if (this.wardedValue) this.wardFlashTicks = 8;
   }

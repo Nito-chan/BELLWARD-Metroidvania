@@ -12,6 +12,7 @@ export class Hud {
   private readonly damage = new Graphics().rect(0, 0, VIEW.width, VIEW.height).fill(PALETTE.blood);
   private readonly pips = new Graphics();
   private readonly focusBar = new Graphics();
+  private readonly postureBar = new Graphics();
   private readonly sigils = new Graphics();
   private readonly death = new Graphics().rect(0, 0, VIEW.width, VIEW.height).fill(PALETTE.void);
   private readonly shardText = new Text({
@@ -28,6 +29,9 @@ export class Hud {
   private lastFocus = -1;
   private lastFocusMax = -1;
   private lastHeal = -1;
+  private lastPosture = -1;
+  private lastPostureMax = -1;
+  private lastPostureBroken = false;
   private lastShards = -1;
   private lastSigils = -1;
   private lastSigilTotal = -1;
@@ -45,6 +49,7 @@ export class Hud {
       this.damage,
       this.pips,
       this.focusBar,
+      this.postureBar,
       this.sigils,
       this.shardText,
       this.death,
@@ -107,6 +112,36 @@ export class Hud {
         color: PALETTE.ember,
         alpha: 1,
       });
+    }
+  }
+
+  /**
+   * The Keeper's posture, a thin line under Focus. Brass holds; blood means the guard
+   * has shattered. Redrawn at half-point precision so regen does not repaint every tick.
+   */
+  setPosture(value: number, max: number, broken: boolean): void {
+    const clamped = Math.max(0, Math.min(max, value));
+    const rounded = Math.round(clamped * 2) / 2;
+    if (
+      rounded === this.lastPosture &&
+      max === this.lastPostureMax &&
+      broken === this.lastPostureBroken
+    ) {
+      return;
+    }
+    this.lastPosture = rounded;
+    this.lastPostureMax = max;
+    this.lastPostureBroken = broken;
+
+    const g = this.postureBar;
+    g.clear();
+    const width = 72;
+    g.rect(8, 38, width, 3).fill({ color: PALETTE.void, alpha: 0.6 });
+    const ratio = max > 0 ? rounded / max : 0;
+    if (broken) {
+      g.rect(8, 38, width, 3).fill({ color: PALETTE.blood, alpha: 0.95 });
+    } else if (ratio > 0) {
+      g.rect(8, 38, width * ratio, 3).fill({ color: PALETTE.brass, alpha: 0.85 });
     }
   }
 

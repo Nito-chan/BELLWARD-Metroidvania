@@ -57,6 +57,26 @@ describe('binding document', () => {
     expect(loadBindings(storage)).toEqual(edited);
   });
 
+  it('migrates a v1 document, keeping custom keys and adding the guard defaults', () => {
+    const storage = new MapStorage();
+    const document = JSON.parse(JSON.stringify(defaultBindings())) as {
+      version: number;
+      keyboard: Record<string, string[]>;
+      gamepad: { buttons: Record<string, number[]>; axes: Record<string, unknown> };
+    };
+    document.version = 1;
+    document.keyboard.jump = ['KeyQ', 'Space'];
+    delete document.keyboard.guard;
+    delete document.gamepad.buttons.guard;
+    storage.setItem(INPUT.storageKey, JSON.stringify(document));
+
+    const loaded = loadBindings(storage);
+    expect(loaded.version).toBe(INPUT.bindingFormatVersion);
+    expect(loaded.keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(loaded.keyboard.guard).toEqual(['KeyF']);
+    expect(loaded.gamepad.buttons.guard).toEqual([6, 7]);
+  });
+
   it('falls back to defaults for malformed, partial and future documents', () => {
     const storage = new MapStorage();
     withoutWarnings(() => {
@@ -174,7 +194,7 @@ describe('binding labels', () => {
 
   it('produces a document JSON.parse can consume', () => {
     const data = JSON.parse(JSON.stringify(defaultBindings())) as Bindings;
-    expect(data.version).toBe(1);
+    expect(data.version).toBe(INPUT.bindingFormatVersion);
     expect(data.keyboard.pause).toEqual(['Escape']);
   });
 });

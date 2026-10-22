@@ -35,6 +35,8 @@ export type MeleeDef = {
   readonly box: AttackBoxDef;
   /** Forward speed while the active window is open (0 = rooted). */
   readonly lungeSpeed: number;
+  /** A red attack: guard cannot stop it, so the tell must be answered with a step. */
+  readonly unblockable?: boolean;
 };
 
 export type CastDef = {
@@ -68,6 +70,8 @@ export type EnemyStats = {
   readonly verticalRange: number;
   /** Ticks of hit-stun after a player hit. */
   readonly staggerTicks: number;
+  /** Posture ceiling. Hits and parries fill it; at zero the actor is open to a KNELL. */
+  readonly posture: number;
   readonly contactDamage: number;
   readonly melee?: MeleeDef;
   readonly cast?: CastDef;
@@ -84,6 +88,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     deaggroRange: 190,
     verticalRange: 36,
     staggerTicks: 14,
+    posture: 24,
     contactDamage: 1,
     melee: {
       range: 24,
@@ -106,6 +111,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     deaggroRange: 260,
     verticalRange: 40,
     staggerTicks: 10,
+    posture: 36,
     contactDamage: 1,
     melee: {
       range: 44,
@@ -116,6 +122,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
       cooldownTicks: 50,
       box: { forward: 2, width: 28, height: 38, top: 46 },
       lungeSpeed: 190,
+      unblockable: true,
     },
   },
   adept: {
@@ -129,6 +136,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     deaggroRange: 210,
     verticalRange: 32,
     staggerTicks: 12,
+    posture: 28,
     contactDamage: 1,
     cast: {
       range: 150,
@@ -150,6 +158,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     deaggroRange: 0,
     verticalRange: 0,
     staggerTicks: 0,
+    posture: 90,
     contactDamage: 1,
   },
   wardenMoss: {
@@ -162,6 +171,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     deaggroRange: 0,
     verticalRange: 0,
     staggerTicks: 0,
+    posture: 120,
     contactDamage: 1,
   },
   bellThief: {
@@ -174,6 +184,7 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     deaggroRange: 0,
     verticalRange: 0,
     staggerTicks: 0,
+    posture: 150,
     contactDamage: 1,
   },
 };

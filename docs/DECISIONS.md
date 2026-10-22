@@ -1076,3 +1076,31 @@ lenses and fast travel to the first build (rejected: scope; the base map must st
 **Design docs:** `docs/design/TIDEGLASS_MAP.md`, `docs/design/TIDEGLASS_ASSETS.md`, and the rendered
 `docs/design/tideglass-map.svg` (design mockup only; its frame, wax, icons and seals are placeholders for
 the user's P0 art).
+
+## D062 — 2026-10-22 — The Keeper's Guard: held brace, parry, posture and KNELL
+
+**Decision:** Combat now has a held **Guard** (`F`, gamepad LT/RT, touch **Guard**). The first five ticks
+of a fresh guard are a **perfect parry**: no posture cost, +18 posture to the attacker, and a 45-tick
+**Hook Counter** that adds +2 damage and +10 posture to the next swing. After that opening window the
+guard still blocks, spending 22 posture per hit; posture regenerates after 45 quiet ticks. Repeated taps
+inside a 45-tick window shorten the deflect ladder from 10 to 7, 5 and 3 ticks, and a 6-tick release lock
+prevents mashing. At zero posture the guard shatters, costs one mask through the normal hurt path, and is
+locked for 60 ticks. Enemy posture regenerates after 90 quiet ticks; filling it opens a 70-tick **KNELL**
+window whose next hit deals 3× damage with heavier hitstop and shake. A guard reaction (block or parry)
+lands at most once per enemy swing; red, unblockable attacks ignore the brace and are telegraphed in
+blood-red. This is the first slice of the four-weapon, grapple-first combat plan; it deliberately uses the
+existing attack frames and SFX rather than commissioning art.
+
+**Why:** Guard/parry/posture makes the first enemy encounter teach timing and risk before the arsenal
+widens, and gives bosses a readable answer beyond dodging. The held brace keeps keyboard, gamepad and
+touch parity. KNELL turns enemy posture into an earned opening instead of another health bar. One
+reaction per swing is necessary for fairness: without a swing id, an eight-tick active window would
+drain 176 posture through a held guard and break it in a single attack. The opening parry window is
+short enough to reward intent but forgiving enough at 60 Hz to learn.
+
+**Alternatives:** tap-only parry (rejected: no defensive stance for players who cannot time the opening
+beats); block-only guard (rejected: no counterplay or posture payoff); per-tick guard reactions
+(rejected: one swing could shatter the guard); posture drain on parry (rejected: perfect defence should
+create the opening, not consume it); reuse Hollow Knight's heal-only defence (rejected: too derivative and
+it leaves the announced parry/posture pillar unimplemented); art-dependent guard frames (rejected: the
+existing attack frames communicate the brace and keep the content pipeline unblocked).

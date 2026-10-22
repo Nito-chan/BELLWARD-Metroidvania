@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIONS } from '../../src/config/input';
+import { ACTIONS, INPUT } from '../../src/config/input';
 import { setKeyboardBinding, defaultBindings } from '../../src/input/bindings';
 import { InputManager, type PadReading } from '../../src/input/InputManager';
 
@@ -171,7 +171,7 @@ describe('InputManager', () => {
 
   it('serializes the bindings for the settings UI', () => {
     const data: unknown = JSON.parse(new InputManager().serialize());
-    expect(data).toMatchObject({ version: 1 });
+    expect(data).toMatchObject({ version: INPUT.bindingFormatVersion });
     const keyboard = (data as { keyboard: Record<string, unknown> }).keyboard;
     for (const action of ACTIONS) {
       expect(Array.isArray(keyboard[action])).toBe(true);

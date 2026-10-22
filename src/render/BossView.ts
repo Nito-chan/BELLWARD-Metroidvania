@@ -95,6 +95,20 @@ export class BossView {
     const dir = boss.facing;
     const alpha = 0.15 + t * 0.55;
 
+    // Red ring: this pattern ignores the guard. Read it as "move", not "parry".
+    if (pattern.unblockable) {
+      g.circle(feet.x, feet.y - 30, 34 + t * 12).stroke({
+        width: 2,
+        color: PALETTE.blood,
+        alpha,
+      });
+      g.circle(feet.x, feet.y - 30, 26 + t * 8).stroke({
+        width: 1,
+        color: PALETTE.blood,
+        alpha: alpha * 0.6,
+      });
+    }
+
     if (pattern.kind === 'charge' || pattern.kind === 'dash') {
       // Show the punishing lane, not only the 34 px hitbox at the boss's feet.
       const lane = 260;

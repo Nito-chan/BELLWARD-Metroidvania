@@ -13,6 +13,8 @@ export type CombatHost = {
   facing: -1 | 1;
   grounded: boolean;
   direction(input: InputSnapshot): -1 | 0 | 1;
+  /** Spends a perfect-parry window; true when this swing becomes a Hook Counter. */
+  consumeCounter(): boolean;
 };
 
 /**
@@ -25,9 +27,23 @@ export class PlayerCombat {
   private bufferTicks = 0;
   private damageBonus = 0;
   private reachScale = 1;
+  private counterBonusValue = 0;
 
   get attackId(): number {
     return this.swingValue;
+  }
+
+  /** Extra damage this swing carries from a perfect parry (0 = none). */
+  get attackCounterBonus(): number {
+    return this.counterBonusValue;
+  }
+
+  /** Posture damage this swing applies, including any counter bonus. */
+  get attackPostureDamage(): number {
+    return (
+      Math.round(COMBAT.player.attackPosture * this.reachScale) +
+      (this.counterBonusValue > 0 ? COMBAT.guard.counterPostureBonus : 0)
+    );
   }
 
   /** Nail level and Long Reach feed the same swing without changing its timing. */
@@ -105,6 +121,7 @@ export class PlayerCombat {
   private start(host: CombatHost, stage: 1 | 2): void {
     this.stage = stage;
     this.swingValue += 1;
+    this.counterBonusValue = host.consumeCounter() ? COMBAT.guard.counterDamageBonus : 0;
     host.pose.setState('attack', stage === 1 ? 'attack1' : 'attack2');
     // Facing is locked for the swing; the art is directional.
     host.body.vx *= PLAYER.attack.speedScale;

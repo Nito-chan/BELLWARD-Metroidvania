@@ -64,8 +64,15 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   uses exact fractional scaling, desktop keeps whole pixels) and the shell adds a boot splash plus
   mobile metadata. No new assets. All gates green: 275 unit tests, 37 Playwright tests, strict asset
   validation at 662 files / 0 warnings.
-- **The Drowned Belfry vertical slice is feature-complete.** Physical touch/gamepad testing and
-  Capacitor/Tauri packaging are the next work, not part of this browser slice.
+- **G1 — The Keeper's Guard: complete.** The combat foundation now has a held guard, a five-tick
+  perfect parry, a Hook Counter, player and enemy posture, a 70-tick KNELL window, red unblockable
+  attacks, and one guard reaction per enemy swing. Keyboard `F`, gamepad LT/RT and a touch **Guard**
+  button share the same action map; bindings migrate from v1 without resetting custom keys. The HUD
+  shows player posture under Focus, enemy bars appear only after posture damage, and boss bars add a
+  posture line. No new art or audio was needed. All gates green: 285 unit tests and 38 Playwright
+  tests, with guard verified in Chrome at 375, 768 and 1440 plus the touch context.
+- **The Drowned Belfry vertical slice is feature-complete; G1 begins the post-slice combat expansion.**
+  Physical touch/gamepad testing and Capacitor/Tauri packaging remain the next shipping work.
 
 ## Quick start
 

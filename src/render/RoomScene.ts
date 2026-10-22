@@ -223,6 +223,7 @@ export class RoomScene {
     if (this.bossDirector.encounter) this.view.addChild(this.bossDirector.encounter.overlay);
     this.hud.setHealth(this.player.hp, this.player.maxHp);
     this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
+    this.hud.setPosture(this.player.posture, this.player.maxPosture, this.player.guardBroken);
     this.hud.setShards(options.shards ?? 0);
     this.hud.setSigils(this.objectives.sigilCount, BOSS_KINDS.length);
     if (this.arrival) {
@@ -475,6 +476,7 @@ export class RoomScene {
     });
     this.heroView.tick();
     this.heroView.view.zIndex = feet.y + 0.1;
+    this.heroView.setGuard(this.player.guarding, this.player.perfectParryWindow);
     const blinking = this.player.invulnerableTicks > 0 && !this.player.dead;
     this.heroView.view.alpha = blinking && Math.floor(tickCount / 4) % 2 === 0 ? 0.5 : 1;
 
@@ -486,6 +488,7 @@ export class RoomScene {
   private updateHud(): void {
     this.hud.setHealth(this.player.hp, this.player.maxHp);
     this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
+    this.hud.setPosture(this.player.posture, this.player.maxPosture, this.player.guardBroken);
     this.hud.setDamage(this.feedback.damageAlpha);
     const death = this.player.dead
       ? Math.min(1, this.player.deathElapsed / COMBAT.player.deathTicks)

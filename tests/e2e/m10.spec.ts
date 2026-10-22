@@ -100,7 +100,7 @@ test.describe('M10 touch controls', () => {
   test('teaches the touch scheme on the title card', async ({ page }) => {
     await openTitle(page);
     const title = page.getByTestId('title-root');
-    await expect(title).toContainText('Touch controls');
+    await expect(title).toContainText('Touch · Wide screen · Audio');
     await expect(title).toContainText('Landscape');
     await expect(page.getByRole('button', { name: 'Enter the belfry' })).toBeFocused();
 

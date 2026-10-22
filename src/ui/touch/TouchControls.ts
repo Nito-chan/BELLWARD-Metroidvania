@@ -9,7 +9,7 @@ import type { ActionName } from '../../config/input';
 
 export type TouchAction = Extract<
   ActionName,
-  'left' | 'right' | 'down' | 'jump' | 'attack' | 'dash' | 'heal' | 'interact'
+  'left' | 'right' | 'down' | 'jump' | 'attack' | 'guard' | 'dash' | 'heal' | 'interact'
 >;
 
 export type TouchControlsOptions = {
@@ -47,6 +47,7 @@ const ACTION_BUTTONS: readonly ButtonSpec[] = [
   { action: 'heal', label: 'Focus', text: 'Focus' },
   { action: 'interact', label: 'Rest', text: 'Rest' },
   { action: 'dash', label: 'Dash', text: 'Dash' },
+  { action: 'guard', label: 'Guard', text: 'Guard' },
   { action: 'attack', label: 'Strike', text: 'Strike' },
   { action: 'jump', label: 'Jump', text: 'Jump' },
 ];
