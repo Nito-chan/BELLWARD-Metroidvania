@@ -1224,7 +1224,7 @@ by content beyond the twelve-room region if the slice is greenlit.
 
 ## G1 - The Keeper's Guard (2026-10-22)
 
-**Commit:** pending. **Status:** complete, all gates green.
+**Commit:** `c696f39`. **Status:** complete, all gates green.
 
 ### Shipped
 
