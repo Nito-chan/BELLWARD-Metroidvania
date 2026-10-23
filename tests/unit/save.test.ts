@@ -41,7 +41,8 @@ function validSave(overrides: Partial<RunSave> = {}): RunSave {
     nailLevel: 0,
     shards: 0,
     ordeals: [],
-    sliceComplete: false,
+    tideDoorOpened: false,
+    endingSeen: false,
     ...overrides,
   };
 }
@@ -94,7 +95,8 @@ describe('run save validation', () => {
       nailLevel: 0,
       shards: 0,
       ordeals: [],
-      sliceComplete: false,
+      tideDoorOpened: false,
+      endingSeen: false,
     });
     expect(parseRunSave(migrated)).not.toBeNull();
 

@@ -34,7 +34,8 @@ export class RunProgress {
   private checkpointValue: BenchRef | null = null;
   private nailLevelValue = 0;
   private shardsValue = 0;
-  private sliceCompleteValue = false;
+  private tideDoorOpenedValue = false;
+  private endingSeenValue = false;
   private resumeValue: RunSave | null;
   private loadedValue: boolean;
   private presentValue = false;
@@ -57,7 +58,8 @@ export class RunProgress {
     this.checkpointValue = save.checkpointBenchId ? getBench(save.checkpointBenchId) : null;
     this.nailLevelValue = save.nailLevel;
     this.shardsValue = save.shards;
-    this.sliceCompleteValue = save.sliceComplete;
+    this.tideDoorOpenedValue = save.tideDoorOpened;
+    this.endingSeenValue = save.endingSeen;
   }
 
   /** True when boot restored a valid document (possibly migrated from v1). */
@@ -86,7 +88,8 @@ export class RunProgress {
     this.checkpointValue = null;
     this.nailLevelValue = 0;
     this.shardsValue = 0;
-    this.sliceCompleteValue = false;
+    this.tideDoorOpenedValue = false;
+    this.endingSeenValue = false;
     this.resumeValue = null;
     this.loadedValue = false;
     this.presentValue = false;
@@ -151,8 +154,26 @@ export class RunProgress {
     return BOSS_KINDS.filter((kind) => this.ordealsValue.has(kind));
   }
 
-  get sliceComplete(): boolean {
-    return this.sliceCompleteValue;
+  get tideDoorOpened(): boolean {
+    return this.tideDoorOpenedValue;
+  }
+
+  get endingSeen(): boolean {
+    return this.endingSeenValue;
+  }
+
+  /** Records that the player crossed the Tide door and saw the midpoint card. */
+  markTideDoorOpened(): boolean {
+    if (this.tideDoorOpenedValue) return false;
+    this.tideDoorOpenedValue = true;
+    return true;
+  }
+
+  /** Records that the earned final ending was seen. One-shot per run. */
+  markEndingSeen(): boolean {
+    if (this.endingSeenValue) return false;
+    this.endingSeenValue = true;
+    return true;
   }
 
   get loadout(): PlayerLoadout {
@@ -260,12 +281,6 @@ export class RunProgress {
     return true;
   }
 
-  markSliceComplete(): boolean {
-    if (this.sliceCompleteValue) return false;
-    this.sliceCompleteValue = true;
-    return true;
-  }
-
   /** Adds an Ordeal reward in shards. */
   grantShards(amount: number): void {
     this.shardsValue += Math.max(0, Math.floor(amount));
@@ -290,7 +305,8 @@ export class RunProgress {
       nailLevel: this.nailLevelValue,
       shards: this.shardsValue,
       ordeals: this.ordeals,
-      sliceComplete: this.sliceCompleteValue,
+      tideDoorOpened: this.tideDoorOpenedValue,
+      endingSeen: this.endingSeenValue,
     };
     const written = writeRunSave(document, this.storage);
     if (written) {
@@ -323,7 +339,8 @@ export class RunProgress {
       censer: this.hasPickup('reliquary-censer'),
       toll: this.hasPickup('upper-toll'),
       ordeals: [...this.ordeals],
-      sliceComplete: this.sliceCompleteValue,
+      tideDoorOpened: this.tideDoorOpenedValue,
+      endingSeen: this.endingSeenValue,
     };
   }
 

@@ -249,6 +249,11 @@ export class PlayerController {
     return this.weaponOwnedValue.has('toll');
   }
 
+  /** True once the player owns the complete arsenal: Hookline, Censer and Toll. */
+  get hasFullArsenal(): boolean {
+    return this.loadoutValue.hookline && this.hasCenser && this.hasToll;
+  }
+
   /** True while the hero cannot start a new swing or change weapons this tick. */
   get weaponBusy(): boolean {
     return (

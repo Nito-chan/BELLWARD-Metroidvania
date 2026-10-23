@@ -436,8 +436,8 @@ export const upperGallery: RoomDefinition = {
     y: 272,
     w: 48,
     h: 48,
-    title: 'THE BELL REMEMBERS',
-    subtitle: 'The Tide-Bell answers. Far below, the drowned bells begin to ring.',
+    title: 'THE TIDE-BELL ANSWERS',
+    subtitle: 'The last door opens. Far below, a bell is still ringing.',
     requiresPickup: 'bellthief-tide-bell',
   },
   exits: [

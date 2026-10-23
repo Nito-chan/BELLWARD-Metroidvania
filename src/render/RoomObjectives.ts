@@ -36,7 +36,8 @@ export type RoomObjectivesOptions = {
   readonly bossRewardClaimed?: boolean;
   readonly ordealCleared?: boolean;
   readonly sigilCount?: number;
-  readonly endingComplete?: boolean;
+  /** The earned final ending already played in this run. */
+  readonly endingSeen?: boolean;
 };
 
 export class RoomObjectives {
@@ -57,7 +58,7 @@ export class RoomObjectives {
     this.arenaClaimedValue = options.bossRewardClaimed ?? false;
     this.ordealClearedValue = options.ordealCleared ?? false;
     this.sigilCountValue = options.sigilCount ?? 0;
-    this.endingFired = options.endingComplete ?? false;
+    this.endingFired = options.endingSeen ?? false;
   }
 
   get arenaClaimed(): boolean {
@@ -164,7 +165,9 @@ export class RoomObjectives {
     this.options.hud.setHealth(this.options.player.hp, this.options.player.maxHp);
   }
 
-  /** The Tide door ending fires once; the run owns the actual ending screen. */
+  /** The Tide door midpoint fires once: crossing with the Tide-Bell opens the door and
+   * shows the card. The Ward of Four keeps the exit beyond sealed until the full arsenal
+   * is owned. */
   updateEnding(): void {
     const ending = this.options.room.definition.ending;
     if (

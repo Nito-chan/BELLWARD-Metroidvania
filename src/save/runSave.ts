@@ -20,7 +20,7 @@ import { healthShardCount, isPickupId, PICKUPS, getPickup } from '../data/pickup
 import { ALL_ROOMS, ROOMS } from '../data/rooms';
 import { createRoom, isStandingPoint, type RoomSpawn } from '../world/Room';
 
-export type SaveReason = 'boot' | 'room' | 'bench' | 'reward' | 'respawn' | 'debug';
+export type SaveReason = 'boot' | 'room' | 'bench' | 'reward' | 'respawn' | 'debug' | 'ending';
 
 export type RunSave = {
   readonly version: number;
@@ -37,7 +37,10 @@ export type RunSave = {
   readonly nailLevel: number;
   readonly shards: number;
   readonly ordeals: readonly BossKind[];
-  readonly sliceComplete: boolean;
+  /** The Tide door was crossed (midpoint card shown). Migrated from v2 sliceComplete. */
+  readonly tideDoorOpened: boolean;
+  /** The earned final ending was seen. */
+  readonly endingSeen: boolean;
 };
 
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -93,20 +96,40 @@ export function loadRunSave(storage = defaultRunStorage()): RunSave | null {
  * new durable set starts empty. This is exported so the unit suite can prove the exact
  * old shape survives a migration instead of merely trusting a version number.
  */
+/**
+ * The v1 document is a strict subset of v2; every old fact keeps its meaning. v2 adds
+ * nothing new beyond the v1 shape. v3 renames the one-shot slice flag into tideDoorOpened
+ * and adds endingSeen for the earned final ending. Every old fact survives migration.
+ */
 export function migrateRunSave(value: unknown): unknown {
-  if (!isRecord(value) || value.version !== 1) return value;
-  return {
-    ...value,
-    version: SAVE.version,
-    pickups: [],
-    brokenSecrets: [],
-    charmsOwned: [],
-    charmsEquipped: [],
-    nailLevel: 0,
-    shards: 0,
-    ordeals: [],
-    sliceComplete: false,
-  };
+  if (!isRecord(value)) return value;
+  const version = value.version;
+  if (version === 1) {
+    const v2 = {
+      ...value,
+      version: 2,
+      pickups: [],
+      brokenSecrets: [],
+      charmsOwned: [],
+      charmsEquipped: [],
+      nailLevel: 0,
+      shards: 0,
+      ordeals: [],
+      sliceComplete: false,
+    };
+    return migrateRunSave(v2);
+  }
+  if (version === 2) {
+    return {
+      ...value,
+      version: SAVE.version,
+      /** The old one-shot slice flag becomes the Tide-door opening. */
+      tideDoorOpened: !!value.sliceComplete,
+      /** The earned final ending is unseen until the Last Keeper is solved. */
+      endingSeen: false,
+    };
+  }
+  return value;
 }
 
 /** Persists a run document. Returns false when storage is unavailable or rejects the write. */
@@ -188,7 +211,8 @@ export function parseRunSave(value: unknown): RunSave | null {
   }
   const ordeals = parseOrdeals(value.ordeals, sigils);
   if (!ordeals) return null;
-  if (typeof value.sliceComplete !== 'boolean') return null;
+  if (typeof value.tideDoorOpened !== 'boolean') return null;
+  if (typeof value.endingSeen !== 'boolean') return null;
 
   return {
     version: SAVE.version,
@@ -205,7 +229,8 @@ export function parseRunSave(value: unknown): RunSave | null {
     nailLevel: value.nailLevel,
     shards: value.shards,
     ordeals,
-    sliceComplete: value.sliceComplete,
+    tideDoorOpened: value.tideDoorOpened,
+    endingSeen: value.endingSeen,
   };
 }
 

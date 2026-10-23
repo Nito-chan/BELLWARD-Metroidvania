@@ -58,8 +58,8 @@ export type RoomSceneOptions = {
   sealOpen?: boolean;
   /** This arena's Ordeal was already cleared. */
   ordealCleared?: boolean;
-  /** The Tide-door ending already played in this run. */
-  endingComplete?: boolean;
+  /** The earned final ending already played in this run. */
+  endingSeen?: boolean;
   /** Screen-reader announcement hook; the scene never touches the DOM. */
   announce?: (text: string) => void;
   /** Optional arrival banner shown above the HUD for a rest or respawn. */
@@ -186,7 +186,7 @@ export class RoomScene {
       bossRewardClaimed: options.bossRewardClaimed,
       ordealCleared: options.ordealCleared,
       sigilCount: options.sigilCount,
-      endingComplete: options.endingComplete,
+      endingSeen: options.endingSeen,
     });
 
     for (const enemySpawn of room.definition.enemies) {

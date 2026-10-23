@@ -316,7 +316,7 @@ export class Game {
       sigilTarget: BOSS_KINDS.length,
       rooms: this.run.progress.visitedRooms.length,
       roomTarget: ALL_ROOMS.length,
-      complete: this.run.progress.sliceComplete,
+      complete: this.run.progress.endingSeen,
     };
   }
 

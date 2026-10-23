@@ -192,8 +192,10 @@ export type RunDebugState = {
   toll: boolean;
   /** Boss kinds whose Ordeal has been cleared. */
   ordeals: string[];
-  /** True once the Tide-door ending fired. */
-  sliceComplete: boolean;
+  /** True once the player crossed the Tide door and saw the midpoint card. */
+  tideDoorOpened: boolean;
+  /** True once the earned final ending was seen. */
+  endingSeen: boolean;
 };
 
 /** Persistence status: useful for E2E proof that a rest actually reached storage. */

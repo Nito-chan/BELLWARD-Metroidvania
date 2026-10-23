@@ -317,12 +317,12 @@ test.describe('M8 progression, secrets and the ending', () => {
     await collectPickup(page, 'bellthief-arena', { x: 760, y: 320 }, 'bellthief-tide-bell');
 
     await loadRoom(page, 'upper-gallery', { x: 600, y: 320 });
-    const ending = page.getByRole('dialog', { name: /the bell remembers/i });
+    const ending = page.getByRole('dialog', { name: /the tide-bell answers/i });
     await expect(ending).toBeVisible();
     await expect(ending.locator('.ending-stats')).toContainText('1 / 3');
     await expect(ending.locator('.ending-stats')).toContainText('CHARMS');
     const completed = await debugState(page);
-    expect(completed.run.sliceComplete).toBe(true);
+    expect(completed.run.tideDoorOpened).toBe(true);
     expect(completed.scene?.sealOpen).toBe(true);
     expect(completed.save.lastWrite).toBe('reward');
 
@@ -336,7 +336,7 @@ test.describe('M8 progression, secrets and the ending', () => {
 
     await reloadGame(page);
     const resumed = await debugState(page);
-    expect(resumed.run.sliceComplete).toBe(true);
+    expect(resumed.run.tideDoorOpened).toBe(true);
     expect(resumed.scene?.sealOpen).toBe(true);
     await page.waitForTimeout(400);
     await expect(page.locator('.ending-root')).toBeHidden();

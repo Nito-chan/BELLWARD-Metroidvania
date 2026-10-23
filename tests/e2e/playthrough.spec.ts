@@ -205,7 +205,7 @@ test.describe('M8 complete playthrough', () => {
     expect(completed.run.hookline).toBe(true);
     expect(completed.run.longline).toBe(true);
     expect(completed.run.checkpoint?.benchId).toBe('terrace-weeping-stone');
-    expect(completed.run.sliceComplete).toBe(true);
+    expect(completed.run.tideDoorOpened).toBe(true);
     expect(completed.save.lastWrite).toBe('reward');
     expect(completed.errors).toEqual([]);
 
@@ -232,7 +232,7 @@ test.describe('M8 complete playthrough', () => {
     expect(resumed.run.shards).toBe(225);
     expect(resumed.run.hookline).toBe(true);
     expect(resumed.run.longline).toBe(true);
-    expect(resumed.run.sliceComplete).toBe(true);
+    expect(resumed.run.tideDoorOpened).toBe(true);
     expect(resumed.save).toMatchObject({ present: true, loaded: true });
     await page.waitForTimeout(400);
     await expect(page.locator('.ending-root')).toBeHidden();
