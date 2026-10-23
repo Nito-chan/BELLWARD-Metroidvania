@@ -7,6 +7,8 @@ export type PlayerLoadout = {
   readonly wallClaw: boolean;
   readonly hookline: boolean;
   readonly longline: boolean;
+  readonly censer: boolean;
+  readonly toll: boolean;
 };
 
 export const STARTER_LOADOUT: PlayerLoadout = {
@@ -15,6 +17,8 @@ export const STARTER_LOADOUT: PlayerLoadout = {
   wallClaw: false,
   hookline: false,
   longline: false,
+  censer: false,
+  toll: false,
 };
 
 export function hasCharm(loadout: PlayerLoadout, id: CharmId): boolean {

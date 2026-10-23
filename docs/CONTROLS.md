@@ -37,6 +37,7 @@ a **Dismiss first steps** button. It never traps focus or pauses the game.
 | dash            | C / K          |           |
 | heal            | L (hold)       |           |
 | cast (Hookline) | I              |           |
+| weapon          | Q              |           |
 | interact        | E              | ArrowUp   |
 | map             | M              |           |
 | pause           | Escape         |           |
@@ -195,7 +196,7 @@ remain available. The ending stays complete across reloads and cannot retrigger.
 ## Gamepad (standard mapping)
 
 Left stick / D-pad = move; A = jump; X = attack; B = dash; Y = heal (hold); LT/RT = guard (hold); RB = Hookline
-(cast); D-pad up = interact; Start = pause; Back = map. On the title card, stick/D-pad moves focus, A or
+(cast); LB = cycle weapon; D-pad up = interact; Start = pause; Back = map. On the title card, stick/D-pad moves focus, A or
 Start activates and B/Select moves back. While the menu is open, stick/D-pad navigates, A confirms, B/Select
 goes back and Start closes. Axes use a 0.4 deadzone and are combined with the D-pad. Implemented against
 the standard mapping and unit-tested with an injected pad; not yet verified on physical hardware.
@@ -204,7 +205,8 @@ the standard mapping and unit-tested with an injected pad; not yet verified on p
 
 On touch devices the game mounts a landscape-first on-screen control set; mouse/keyboard desktops never
 see it. The left thumb gets **left**, **down** and **right**; the right thumb gets **Focus** (hold to
-heal), **Rest** (interact), **Dash**, **Guard** (hold), **Hook** (once owned), **Strike** and **Jump**.
+heal), **Rest** (interact), **Dash**, **Guard** (hold), **Hook** (once owned), **Swap** (cycle weapon,
+once Censer or Toll is owned), **Strike** and **Jump**.
 **Pause** sits at the top-right and opens the same accessible pause dialog as `Escape`. Movement +
 attack/jump are multi-touch: each button owns its own pointer, and holding **down** while tapping
 **Jump** drops through a one-way platform. **Hook** is hidden until the Hookline is found; when it

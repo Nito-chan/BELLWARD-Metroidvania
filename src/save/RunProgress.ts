@@ -162,6 +162,8 @@ export class RunProgress {
       wallClaw: this.hasPickup('aqueduct-wall-claw'),
       hookline: this.hasPickup('aqueduct-hookline'),
       longline: this.hasPickup('shaft-longline'),
+      censer: this.hasPickup('reliquary-censer'),
+      toll: this.hasPickup('upper-toll'),
     };
   }
 
@@ -318,6 +320,8 @@ export class RunProgress {
       wallClaw: this.hasPickup('aqueduct-wall-claw'),
       hookline: this.hasPickup('aqueduct-hookline'),
       longline: this.hasPickup('shaft-longline'),
+      censer: this.hasPickup('reliquary-censer'),
+      toll: this.hasPickup('upper-toll'),
       ordeals: [...this.ordeals],
       sliceComplete: this.sliceCompleteValue,
     };

@@ -69,6 +69,7 @@ export const ACTION_ORDER: readonly ActionName[] = [
   'heal',
   'cast',
   'interact',
+  'weapon',
   'map',
   'pause',
 ];
@@ -85,6 +86,7 @@ export const ACTION_LABELS: Readonly<Record<ActionName, string>> = {
   heal: 'Heal',
   cast: 'Hookline',
   interact: 'Interact',
+  weapon: 'Swap weapon',
   map: 'Map',
   pause: 'Pause',
 };

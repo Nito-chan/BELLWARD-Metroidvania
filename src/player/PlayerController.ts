@@ -3,8 +3,10 @@ import { HOOK } from '../config/hookline';
 import { PLAYER } from '../config/player';
 import { NAIL, type CharmId } from '../config/progression';
 import { SIM } from '../config/world';
+import { nextWeapon, STARTER_WEAPON, type WeaponId } from '../config/weapons';
 import type { Rect, Vec2 } from '../core/Types';
 import type { InputSnapshot } from '../input/InputState';
+import { isPressed } from '../input/InputState';
 import { createBody, type Body } from '../physics/Body';
 import { moveAndCollide, type MoveResult } from '../physics/TileCollision';
 import type { RoomAnchor } from '../world/Room';
@@ -63,6 +65,10 @@ export class PlayerController {
   private jumpPeakYValue: number | null = null;
   private lastJumpPeakYValue: number | null = null;
   private footstepCounter = 0;
+  /** The attack weapon the next swing will use; Hookline stays on `cast`. */
+  private currentWeaponValue: WeaponId = STARTER_WEAPON;
+  /** Attack weapons the run owns; the Nail is always owned. */
+  private weaponOwnedValue = new Set<WeaponId>([STARTER_WEAPON]);
 
   constructor(spawn: Vec2, options: PlayerOptions = {}) {
     this.body = createBody(
@@ -225,6 +231,42 @@ export class PlayerController {
     return this.loadoutValue;
   }
 
+  /** The attack weapon the next swing will use. Hookline is not part of this cycle. */
+  get currentWeapon(): WeaponId {
+    return this.currentWeaponValue;
+  }
+
+  /** Attack weapons the run owns; the Nail is always owned. */
+  get weaponOwned(): readonly WeaponId[] {
+    return [...this.weaponOwnedValue];
+  }
+
+  get hasCenser(): boolean {
+    return this.weaponOwnedValue.has('censer');
+  }
+
+  get hasToll(): boolean {
+    return this.weaponOwnedValue.has('toll');
+  }
+
+  /** True while the hero cannot start a new swing or change weapons this tick. */
+  get weaponBusy(): boolean {
+    return (
+      this.reaction.hurt ||
+      this.state === 'attack' ||
+      this.state === 'dash' ||
+      this.state === 'heal' ||
+      this.state === 'dead' ||
+      this.hook.active ||
+      this.guard.active
+    );
+  }
+
+  /** Focus a landed hit grants this tick (0 for Censer and Toll). */
+  get focusGain(): number {
+    return this.combat.focusGain();
+  }
+
   get nailLevel(): number {
     return this.loadoutValue.nailLevel;
   }
@@ -237,6 +279,8 @@ export class PlayerController {
       wallClaw: loadout.wallClaw,
       hookline: loadout.hookline,
       longline: loadout.longline,
+      censer: loadout.censer,
+      toll: loadout.toll,
     };
     const nailBonus = this.loadoutValue.nailLevel * NAIL.damagePerLevel;
     const nailReach = this.loadoutValue.nailLevel * NAIL.reachPerLevel;
@@ -255,6 +299,16 @@ export class PlayerController {
     this.wall.setEnabled(this.loadoutValue.wallClaw);
     this.hook.setEnabled(this.loadoutValue.hookline || this.loadoutValue.longline);
     this.hook.setRange(this.loadoutValue.longline ? HOOK.range.long : HOOK.range.base);
+
+    // Rebuild the owned weapon set from the loadout; the Nail is always owned.
+    const owned = new Set<WeaponId>([STARTER_WEAPON]);
+    if (this.loadoutValue.censer) owned.add('censer');
+    if (this.loadoutValue.toll) owned.add('toll');
+    this.weaponOwnedValue = owned;
+    if (!owned.has(this.currentWeaponValue)) {
+      this.currentWeaponValue = nextWeapon(this.currentWeaponValue, owned);
+    }
+    this.combat.setWeapon(this.currentWeaponValue);
   }
 
   /** Boss or mask-shard reward: permanently (for this run) raises the mask ceiling. */
@@ -267,10 +321,10 @@ export class PlayerController {
     return this.vitals.heal(amount);
   }
 
-  /** Focus gathered by a landed nail hit, with Ember Greed applied. */
+  /** Focus gathered by a landed hit, with Ember Greed applied. */
   gainFocusOnHit(): void {
     const scale = hasCharm(this.loadoutValue, 'emberGreed') ? 1.5 : 1;
-    this.focus.gain(Math.round(PLAYER.focus.gainPerHit * scale));
+    this.focus.gain(Math.round(this.combat.focusGain() * scale));
   }
 
   hasCharm(id: CharmId): boolean {
@@ -431,6 +485,16 @@ export class PlayerController {
       }
       // The grip gave out this tick. Fall through into ordinary physics so gravity and
       // collision resolve the first frame of the drop.
+    }
+
+    // Cycle the attack weapon: Nail → Censer → Toll → Nail. Switching never cancels a
+    // swing, so it is ignored while any action owns the hero.
+    if (isPressed(input, 'weapon') && !this.weaponBusy) {
+      const next = nextWeapon(this.currentWeaponValue, this.weaponOwnedValue);
+      if (next !== this.currentWeaponValue) {
+        this.currentWeaponValue = next;
+        this.combat.setWeapon(next);
+      }
     }
 
     const wasGrounded = this.body.grounded;

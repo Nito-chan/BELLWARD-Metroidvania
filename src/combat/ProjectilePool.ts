@@ -3,6 +3,7 @@ import { RENDER } from '../config/render';
 import { SIM } from '../config/world';
 import type { Rect } from '../core/Types';
 import type { Tilemap } from '../world/Tilemap';
+import type { Enemy } from '../enemies/Enemy';
 import { circleOverlapsRect } from './geometry';
 
 /** Projectile visuals. The pool stores this as data; the view maps it to a tint. */
@@ -13,6 +14,10 @@ export type ProjectileSpawnOptions = {
   readonly style?: ProjectileStyle;
   /** Downward acceleration, px/s². Defaults to 0 (straight-line orb). */
   readonly gravity?: number;
+  /** 'enemy' shots can hurt the player; 'player' shots (Toll waves) hurt enemies instead. */
+  readonly owner?: 'enemy' | 'player';
+  /** Posture damage the shot applies to an enemy (player-owned waves only). */
+  readonly posture?: number;
 };
 
 /** One fixed pool slot. Inactive slots keep their last numbers; `active` is the truth. */
@@ -27,7 +32,13 @@ export type Projectile = {
   gravity: number;
   style: ProjectileStyle;
   damage: number;
+  /** Posture damage the shot applies to an enemy (player-owned waves only). */
+  posture: number;
   ticksLeft: number;
+  /** 'enemy' shots can hurt the player; 'player' shots (Toll waves) hurt enemies instead. */
+  owner: 'enemy' | 'player';
+  /** Enemies this shot has already passed through, so a piercing wave hits each once. */
+  readonly hitEnemies: Set<Enemy>;
 };
 
 /** A projectile that ended this tick, with enough data to spawn feedback. */
@@ -37,6 +48,8 @@ export type ProjectileHit = {
   damage: number;
   style: ProjectileStyle;
   kind: 'player' | 'tile';
+  /** Who fired it: enemy shots hurt the player, player shots never do. */
+  owner: 'enemy' | 'player';
 };
 
 /**
@@ -58,7 +71,10 @@ export class ProjectilePool {
       gravity: 0,
       style: 'fire' as const,
       damage: 0,
+      posture: 0,
       ticksLeft: 0,
+      owner: 'enemy' as const,
+      hitEnemies: new Set<Enemy>(),
     }));
   }
 
@@ -92,7 +108,10 @@ export class ProjectilePool {
     slot.gravity = options.gravity ?? 0;
     slot.style = options.style ?? 'fire';
     slot.damage = damage;
+    slot.posture = options.posture ?? 0;
     slot.ticksLeft = lifeTicks;
+    slot.owner = options.owner ?? 'enemy';
+    slot.hitEnemies.clear();
   }
 
   /** Moves every live projectile and returns the ones that ended this tick. */
@@ -113,6 +132,7 @@ export class ProjectilePool {
           damage: slot.damage,
           style: slot.style,
           kind: 'player',
+          owner: slot.owner,
         });
         slot.active = false;
         continue;
@@ -127,6 +147,7 @@ export class ProjectilePool {
           damage: slot.damage,
           style: slot.style,
           kind: 'tile',
+          owner: slot.owner,
         });
         slot.active = false;
         continue;

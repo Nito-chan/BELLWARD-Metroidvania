@@ -11,6 +11,7 @@ import type { Enemy, EnemyContext } from '../enemies/Enemy';
 import type { InputSnapshot } from '../input/InputState';
 import type { PlayerLoadout } from '../player/PlayerLoadout';
 import { PlayerController, type PlayerEvent } from '../player/PlayerController';
+import { TOLL } from '../config/weapons';
 import { Banner } from '../ui/Banner';
 import { Hud } from '../ui/Hud';
 import type { Room, RoomBench, RoomSpawn } from '../world/Room';
@@ -349,6 +350,26 @@ export class RoomScene {
     }
 
     this.player.update(input, this.room.tilemap, this.room.definition.anchors ?? []);
+
+    // A Toll ring launches at the start of its active window: a piercing note that
+    // applies resonance. It is a player-owned projectile, so it never hurts the hero.
+    if (
+      this.player.currentWeapon === 'toll' &&
+      this.player.attackActive &&
+      this.player.clipTick === TOLL.active.start
+    ) {
+      const feet = this.player.feet;
+      this.projectiles.spawn(
+        feet.x + this.player.facing * 10,
+        feet.y - 16,
+        this.player.facing,
+        0,
+        TOLL.wave.speed,
+        TOLL.damage,
+        TOLL.wave.lifeTicks,
+        { style: 'bell', owner: 'player', posture: TOLL.posture },
+      );
+    }
 
     const context: EnemyContext = {
       tilemap: this.room.tilemap,

@@ -75,6 +75,7 @@ export abstract class Enemy {
   private postureValue: number;
   private postureRegenTicks = 0;
   private postureBrokenTicks = 0;
+  private resonanceTicks = 0;
   private attackValue = 0;
 
   constructor(kind: ActorKind, spawn: EnemySpawn) {
@@ -131,6 +132,21 @@ export abstract class Enemy {
   /** 0..1 for posture bars. */
   get postureRatio(): number {
     return this.postureMax > 0 ? this.postureValue / this.postureMax : 0;
+  }
+
+  /** How many ticks remain on the Toll's resonance mark (0 when unmarked). */
+  get resonance(): number {
+    return this.resonanceTicks;
+  }
+
+  /** Marks the enemy so the next Nail or Censer hit deals bonus damage and posture. */
+  markResonance(ticks: number): void {
+    this.resonanceTicks = Math.max(this.resonanceTicks, ticks);
+  }
+
+  /** Consumes the resonance mark (the next Nail/Censer hit spends it). */
+  consumeResonance(): void {
+    this.resonanceTicks = 0;
   }
 
   /** True while the actor is open and the next hit becomes a KNELL. */
@@ -247,6 +263,26 @@ export abstract class Enemy {
     return 'broken';
   }
 
+  /**
+   * Fills posture without the knockback or stagger of a real hit: used by lingering
+   * effects such as the Censer's brine cloud. Returns what changed.
+   */
+  applyPosture(amount: number): PostureResult {
+    if (!this.alive || this.postureBrokenTicks > 0) return 'none';
+    const applied = Math.max(0, Math.floor(amount));
+    if (applied === 0) return 'none';
+
+    this.postureRegenTicks = COMBAT.posture.enemyRegenDelayTicks;
+    this.postureValue = Math.max(0, this.postureValue - applied);
+    if (this.postureValue > 0) return 'damaged';
+
+    this.postureBrokenTicks = COMBAT.posture.brokenTicks;
+    this.stateValue = 'stagger';
+    this.stateTicks = COMBAT.posture.brokenTicks;
+    this.restartClip('hurt');
+    return 'broken';
+  }
+
   /** A perfect parry: no health lost, posture paid, and a bright flash for the read. */
   onParried(sourceX: number): void {
     if (!this.alive) return;
@@ -261,16 +297,18 @@ export abstract class Enemy {
     if (this.cooldownTicks > 0) this.cooldownTicks -= 1;
     if (this.flashTicks > 0) this.flashTicks -= 1;
     if (this.stateTicks > 0) this.stateTicks -= 1;
+    if (this.resonanceTicks > 0) this.resonanceTicks -= 1;
     if (this.postureBrokenTicks > 0) {
       this.postureBrokenTicks -= 1;
       if (this.postureBrokenTicks === 0) this.postureValue = this.postureMax;
     }
     if (this.postureRegenTicks > 0) this.postureRegenTicks -= 1;
     else if (this.postureBrokenTicks <= 0) {
-      this.postureValue = Math.min(
-        this.postureMax,
-        this.postureValue + COMBAT.posture.enemyRegenPerTick,
-      );
+      const regen =
+        this.resonanceTicks > 0
+          ? COMBAT.posture.enemyRegenPerTick * 0.5
+          : COMBAT.posture.enemyRegenPerTick;
+      this.postureValue = Math.min(this.postureMax, this.postureValue + regen);
     }
 
     const wasActive = this.stateValue === 'active';

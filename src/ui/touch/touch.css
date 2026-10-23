@@ -60,6 +60,13 @@
   grid-template-columns: repeat(3, 3.35rem) 2.6rem;
 }
 
+.touch-root.has-weapon .touch-actions {
+  grid-template-areas:
+    'heal interact dash weapon'
+    'guard attack jump hook';
+  grid-template-columns: repeat(3, 3.35rem) 3.35rem;
+}
+
 .touch-button {
   position: relative;
   display: flex;
@@ -166,6 +173,19 @@
   color: var(--touch-brass-bright);
   font-size: 0.55rem;
   letter-spacing: 0.14em;
+}
+
+.touch-actions .touch-weapon {
+  grid-area: weapon;
+  height: 2.9rem;
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+/* When both Hook and Swap share the pad, the Hook lever no longer spans both rows. */
+.touch-root.has-weapon.has-hook .touch-actions .touch-cast {
+  align-self: center;
+  height: 2.9rem;
 }
 
 .touch-actions .touch-jump {
@@ -277,6 +297,10 @@
     grid-template-columns: repeat(3, 3.1rem) 2.45rem;
   }
 
+  .touch-root.has-weapon .touch-actions {
+    grid-template-columns: repeat(3, 3.1rem) 3.1rem;
+  }
+
   .touch-actions .touch-button {
     height: 2.65rem;
   }
@@ -316,6 +340,10 @@
 
   .touch-root.has-hook .touch-actions {
     grid-template-columns: repeat(3, 2.8rem) 2.3rem;
+  }
+
+  .touch-root.has-weapon .touch-actions {
+    grid-template-columns: repeat(3, 2.8rem) 2.8rem;
   }
 
   .touch-actions .touch-button {

@@ -190,7 +190,7 @@ function checkContent(): void {
     Object.values(PICKUPS).filter((pickup) => pickup.kind === kind).length;
   check(byKind('healthShard') === 4, `expected 4 mask shards, found ${byKind('healthShard')}`);
   check(byKind('charm') === 5, `expected 5 charms, found ${byKind('charm')}`);
-  check(byKind('ability') === 3, `expected 3 traversal abilities, found ${byKind('ability')}`);
+  check(byKind('ability') === 6, `expected 6 traversal abilities, found ${byKind('ability')}`);
   check(byKind('key') === 1, `expected 1 key, found ${byKind('key')}`);
 
   check(

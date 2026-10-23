@@ -109,14 +109,14 @@ test.describe('M5 menus', () => {
     });
     await jumpKey.click();
     await expect(dialog.getByRole('status')).toContainText('Press a key for Jump');
-    await page.keyboard.press('KeyQ');
+    await page.keyboard.press('KeyP');
 
     const rebound = page.getByRole('button', {
-      name: /Rebind Jump, Key 1, currently Q/,
+      name: /Rebind Jump, Key 1, currently P/,
     });
     await expect(rebound).toBeVisible();
     let state = await debugState(page);
-    expect(state.menu.bindings.keyboard.jump?.[0]).toBe('KeyQ');
+    expect(state.menu.bindings.keyboard.jump?.[0]).toBe('KeyP');
     expect(state.menu.capture).toBeNull();
 
     // Right arrow is Move right's primary key; the editor must refuse it and stay in capture.
@@ -125,7 +125,7 @@ test.describe('M5 menus', () => {
     await expect(dialog.getByRole('status')).toContainText('Move right');
     state = await debugState(page);
     expect(state.menu.capture?.action).toBe('jump');
-    expect(state.menu.bindings.keyboard.jump?.[0]).toBe('KeyQ');
+    expect(state.menu.bindings.keyboard.jump?.[0]).toBe('KeyP');
 
     // Reserved keys are refused with a status, and capture stays open.
     await page.keyboard.press('Tab');
@@ -140,7 +140,7 @@ test.describe('M5 menus', () => {
     await expect(dialog).toBeHidden();
 
     const beforeJump = await debugState(page);
-    await page.keyboard.press('KeyQ');
+    await page.keyboard.press('KeyP');
     await page.waitForFunction(
       (previous) => {
         const player = window.__game?.debugState().scene?.player;
@@ -157,10 +157,10 @@ test.describe('M5 menus', () => {
 
     await reloadGame(page);
     const restored = await debugState(page);
-    expect(restored.menu.bindings.keyboard.jump?.[0]).toBe('KeyQ');
+    expect(restored.menu.bindings.keyboard.jump?.[0]).toBe('KeyP');
 
     const beforeReloadJump = restored;
-    await page.keyboard.press('KeyQ');
+    await page.keyboard.press('KeyP');
     await page.waitForFunction(
       (previous) => {
         const player = window.__game?.debugState().scene?.player;

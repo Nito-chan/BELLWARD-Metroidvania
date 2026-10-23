@@ -42,7 +42,7 @@ describe('InputManager', () => {
 
   it('ignores unbound keys so they keep their browser default', () => {
     const input = new InputManager();
-    expect(input.handleKey('KeyQ', true)).toBe(false);
+    expect(input.handleKey('KeyP', true)).toBe(false);
     expect(input.snapshot().held.size).toBe(0);
   });
 
@@ -180,15 +180,15 @@ describe('InputManager', () => {
   });
 
   it('uses supplied bindings and swaps them live', () => {
-    const rebound = setKeyboardBinding(defaultBindings(), 'jump', 0, 'KeyQ').bindings;
+    const rebound = setKeyboardBinding(defaultBindings(), 'jump', 0, 'KeyP').bindings;
     const input = new InputManager({ bindings: rebound });
 
     expect(input.handleKey('KeyU', true)).toBe(false);
-    expect(input.handleKey('KeyQ', true)).toBe(true);
+    expect(input.handleKey('KeyP', true)).toBe(true);
     expect(input.snapshot().pressed.has('jump')).toBe(true);
-    expect(JSON.parse(input.serialize()).keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(JSON.parse(input.serialize()).keyboard.jump).toEqual(['KeyP', 'Space']);
 
-    input.handleKey('KeyQ', false);
+    input.handleKey('KeyP', false);
     input.setBindings(defaultBindings());
     expect(input.snapshot().held.has('jump')).toBe(false);
     expect(input.handleKey('Space', true)).toBe(true);

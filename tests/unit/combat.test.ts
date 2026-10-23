@@ -4,6 +4,7 @@ import { ProjectilePool } from '../../src/combat/ProjectilePool';
 import { COMBAT } from '../../src/config/combat';
 import { ENEMIES } from '../../src/config/enemies';
 import type { ActionName } from '../../src/config/input';
+import { TOLL, RESONANCE } from '../../src/config/weapons';
 import { MeleeEnemy } from '../../src/enemies/MeleeEnemy';
 import type { InputSnapshot } from '../../src/input/InputState';
 import { PlayerController } from '../../src/player/PlayerController';
@@ -262,7 +263,9 @@ describe('ProjectilePool', () => {
     const pool = new ProjectilePool(2);
     pool.spawn(50, 130, 1, 0, 60, 1, 120);
     const hits = pool.update(GROUND, { x: 0, y: 0, w: 1, h: 1 });
-    expect(hits).toEqual([{ x: 51, y: 130, damage: 1, kind: 'tile', style: 'fire' }]);
+    expect(hits).toEqual([
+      { x: 51, y: 130, damage: 1, kind: 'tile', style: 'fire', owner: 'enemy' },
+    ]);
     expect(pool.activeCount).toBe(0);
   });
 
@@ -273,5 +276,98 @@ describe('ProjectilePool', () => {
     pool.spawn(10, 70, 1, 0, 60, 1, 30);
     expect(pool.activeCount).toBe(2);
     expect(pool.all[1]?.y).toBe(70);
+  });
+});
+
+describe('Censer and Toll', () => {
+  it('a Toll wave marks an enemy with resonance and deals wave damage', () => {
+    const player = new PlayerController({ x: 100, y: 128 });
+    player.applyLoadout({
+      charms: [],
+      nailLevel: 0,
+      wallClaw: false,
+      hookline: false,
+      longline: false,
+      censer: false,
+      toll: true,
+    });
+    const enemy = new MeleeEnemy('parishioner', {
+      kind: 'parishioner',
+      x: 120,
+      y: 128,
+      patrol: { min: 110, max: 130 },
+    });
+    const combat = new CombatSystem();
+    const pool = new ProjectilePool();
+    pool.spawn(
+      enemy.feet.x,
+      enemy.feet.y - 16,
+      1,
+      0,
+      TOLL.wave.speed,
+      TOLL.damage,
+      TOLL.wave.lifeTicks,
+      { style: 'bell', owner: 'player', posture: TOLL.posture },
+    );
+
+    combat.resolve(player, [enemy], pool, GROUND);
+
+    expect(enemy.resonance).toBeGreaterThan(0);
+    expect(enemy.hp).toBe(ENEMIES.parishioner.hp - TOLL.damage);
+  });
+
+  it('the next Nail hit on a resonant enemy deals bonus damage and consumes the mark', () => {
+    const player = new PlayerController({ x: 100, y: 128 });
+    expireSpawnInvuln(player);
+    const enemy = new MeleeEnemy('ghoul', {
+      kind: 'ghoul',
+      x: 120,
+      y: 128,
+      patrol: { min: 110, max: 130 },
+    });
+    enemy.markResonance(RESONANCE.ticks);
+    expect(enemy.resonance).toBeGreaterThan(0);
+
+    const combat = new CombatSystem();
+    const pool = new ProjectilePool();
+    player.update(input([], ['attack']), GROUND);
+    for (let i = 0; i < 30 && !player.attackActive; i += 1) player.update(input(), GROUND);
+
+    const result = combat.resolve(player, [enemy], pool, GROUND);
+    const hit = result.events.find((event) => event.type === 'enemyHit');
+    expect(hit?.type === 'enemyHit' ? hit.damage : 0).toBe(
+      COMBAT.player.damage.stage1 + RESONANCE.damageBonus,
+    );
+    expect(enemy.resonance).toBe(0);
+    expect(enemy.hp).toBe(ENEMIES.ghoul.hp - (COMBAT.player.damage.stage1 + RESONANCE.damageBonus));
+  });
+
+  it('a Censer brine cloud pulses posture to enemies standing in it', () => {
+    const player = new PlayerController({ x: 100, y: 128 });
+    player.applyLoadout({
+      charms: [],
+      nailLevel: 0,
+      wallClaw: false,
+      hookline: false,
+      longline: false,
+      censer: true,
+      toll: false,
+    });
+    const enemy = new MeleeEnemy('parishioner', {
+      kind: 'parishioner',
+      x: 120,
+      y: 128,
+      patrol: { min: 110, max: 130 },
+    });
+    const startPosture = enemy.posture;
+    const combat = new CombatSystem();
+    const pool = new ProjectilePool();
+    combat.spawnCenserCloud(enemy.feet.x, enemy.feet.y);
+
+    // The cloud pulses posture every 15 ticks.
+    for (let i = 0; i < 15; i += 1) combat.resolve(player, [enemy], pool, GROUND);
+
+    expect(enemy.posture).toBeLessThan(startPosture);
+    expect(enemy.posture).toBeGreaterThan(0);
   });
 });

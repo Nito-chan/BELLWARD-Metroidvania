@@ -83,12 +83,12 @@ describe('MenuModel rebinding', () => {
     model.beginCapture('jump', 'key', 0);
     expect(model.statusTone).toBe('capture');
 
-    model.useKey('KeyQ');
+    model.useKey('KeyP');
     expect(model.capture).toBeNull();
-    expect(model.bindings.keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(model.bindings.keyboard.jump).toEqual(['KeyP', 'Space']);
     expect(applied).toHaveLength(1);
-    expect(applied[0]?.keyboard.jump[0]).toBe('KeyQ');
-    expect(model.status).toContain('Q');
+    expect(applied[0]?.keyboard.jump[0]).toBe('KeyP');
+    expect(model.status).toContain('P');
   });
 
   it('keeps capture open on a cross-action conflict and applies nothing', () => {
@@ -127,22 +127,22 @@ describe('MenuModel rebinding', () => {
     model.usePadButton(9); // Start belongs to the menu
     expect(model.status).toContain('belongs to the menu');
 
-    model.usePadButton(4); // left bumper is free
+    model.usePadButton(10); // left stick click is free
     expect(model.capture).toBeNull();
-    expect(model.bindings.gamepad.buttons.jump).toEqual([4]);
-    expect(model.status).toContain('LB');
+    expect(model.bindings.gamepad.buttons.jump).toEqual([10]);
+    expect(model.status).toContain('LS');
   });
 
   it('arms reset before restoring defaults', () => {
     const { model, applied } = makeModel();
     model.navigate('controls');
     model.beginCapture('jump', 'key', 0);
-    model.useKey('KeyQ');
-    expect(model.bindings.keyboard.jump[0]).toBe('KeyQ');
+    model.useKey('KeyP');
+    expect(model.bindings.keyboard.jump[0]).toBe('KeyP');
 
     expect(model.requestReset()).toBe('armed');
     expect(model.resetArmed).toBe(true);
-    expect(model.bindings.keyboard.jump[0]).toBe('KeyQ');
+    expect(model.bindings.keyboard.jump[0]).toBe('KeyP');
 
     expect(model.requestReset()).toBe('applied');
     expect(model.bindings.keyboard.jump[0]).toBe('KeyZ');

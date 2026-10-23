@@ -4,6 +4,7 @@ import type { PlayerController } from '../player/PlayerController';
 import type { Tilemap } from '../world/Tilemap';
 import { bodyRect, overlaps } from './geometry';
 import type { ProjectilePool } from './ProjectilePool';
+import { RESONANCE } from '../config/weapons';
 
 /** Something combat did this tick, in the order it happened. Scenes turn these into FX. */
 export type CombatEvent =
@@ -62,11 +63,30 @@ export type CombatResult = {
   hitstop: number;
 };
 
+type CenserCloud = {
+  x: number;
+  y: number;
+  /** Ticks remaining before the cloud fades. */
+  ticksLeft: number;
+  /** Ticks until the next posture pulse. */
+  nextTick: number;
+};
+
+/** Brine cloud radius and posture pulse, in pixels/ticks. */
+const CENSER_CLOUD = {
+  ticks: 90,
+  radius: 24,
+  pulseEvery: 15,
+  posture: 2,
+} as const;
+
 /**
  * Resolves all damage for one fixed tick:
  *   1. the player's open swing, once per enemy per swing id;
  *   2. enemy melee hitboxes and body contact;
- *   3. projectile movement and impacts.
+ *   3. Toll waves (pierce enemies, hit each once, apply resonance);
+ *   4. Censer brine clouds (tick posture to enemies inside);
+ *   5. enemy projectile movement and impacts vs the player.
  *
  * Keeping this in one deterministic, view-free pass means the order of damage is
  * explicit: a killing blow lands before the same enemy's attack can hurt the player.
@@ -76,6 +96,8 @@ export class CombatSystem {
   private readonly lastSwingByEnemy = new WeakMap<Enemy, number>();
   /** Attack id that last reached the guard, so one swing blocks/parries once. */
   private readonly lastMeleeByEnemy = new WeakMap<Enemy, number>();
+  /** Lingering Censer clouds; one slot per cloud, reused when inactive. */
+  private readonly clouds: CenserCloud[] = [];
 
   resolve(
     player: PlayerController,
@@ -86,7 +108,9 @@ export class CombatSystem {
     const events: CombatEvent[] = [];
     let hitstop = 0;
     const playerBox = bodyRect(player.body);
+    const weapon = player.currentWeapon;
 
+    // 1. The player's open melee swing (Nail / Censer). Toll has no melee hitbox.
     const swingBox = player.attackHitbox();
     if (swingBox) {
       const swing = player.attackId;
@@ -109,7 +133,13 @@ export class CombatSystem {
         }
 
         const knell = enemy.postureBroken;
-        const base = player.attackDamage + player.attackCounterBonus;
+        let base = player.attackDamage + player.attackCounterBonus;
+        // Resonance: the next Nail or Censer hit on a marked enemy deals bonus damage
+        // and posture, then the mark is consumed. Toll never consumes its own mark.
+        if (weapon !== 'toll' && enemy.resonance > 0) {
+          base += RESONANCE.damageBonus;
+          enemy.consumeResonance();
+        }
         const damage = knell ? Math.ceil(base * COMBAT.knell.damageMultiplier) : base;
         const landed = enemy.takeDamage(damage, player.feet.x);
         let broke = false;
@@ -117,6 +147,8 @@ export class CombatSystem {
           broke = enemy.takePostureDamage(player.attackPostureDamage, player.feet.x) === 'broken';
         }
         if (landed) player.gainFocusOnHit();
+        // A Censer hit leaves a brine cloud that ticks posture while it lasts.
+        if (weapon === 'censer' && landed) this.spawnCenserCloud(feet.x, feet.y);
         events.push({
           type: 'enemyHit',
           enemy,
@@ -177,8 +209,10 @@ export class CombatSystem {
       }
     }
 
+    // 3. Projectiles move and hit tiles or the player box. Only enemy-owned shots hurt
+    // the player; player-owned Toll waves pass the player harmlessly.
     for (const hit of projectiles.update(tilemap, playerBox)) {
-      if (hit.kind === 'player' && !player.dead) {
+      if (hit.kind === 'player' && hit.owner === 'enemy' && !player.dead) {
         const outcome = player.resolveIncoming(hit.damage, hit.x, false);
         if (outcome === 'parry') {
           events.push({ type: 'playerParry', x: hit.x, y: hit.y });
@@ -200,9 +234,96 @@ export class CombatSystem {
           hitstop = Math.max(hitstop, COMBAT.player.hitstopTicks);
         }
       }
-      events.push({ type: 'projectileHit', x: hit.x, y: hit.y, surface: hit.kind });
+      if (hit.kind === 'tile' || (hit.kind === 'player' && hit.owner === 'enemy')) {
+        events.push({ type: 'projectileHit', x: hit.x, y: hit.y, surface: hit.kind });
+      }
     }
 
+    // 4. Player-owned Toll waves pierce enemies, hitting each once per wave and applying
+    // the resonance mark. They stop at solid tiles (handled by the pool update above).
+    this.resolvePlayerWaves(player, enemies, projectiles, events);
+
+    // 5. Censer brine clouds pulse posture to enemies standing in them.
+    this.pulseCenserClouds(enemies);
+
     return { events, hitstop };
+  }
+
+  /** Spawn a lingering brine cloud at a Censer hit point. Called by the room scene. */
+  spawnCenserCloud(x: number, y: number): void {
+    let slot = this.clouds.find((cloud) => cloud.ticksLeft <= 0);
+    if (!slot) {
+      slot = { x: 0, y: 0, ticksLeft: 0, nextTick: 0 };
+      this.clouds.push(slot);
+    }
+    slot.x = x;
+    slot.y = y;
+    slot.ticksLeft = CENSER_CLOUD.ticks;
+    slot.nextTick = CENSER_CLOUD.pulseEvery;
+  }
+
+  private resolvePlayerWaves(
+    player: PlayerController,
+    enemies: readonly Enemy[],
+    projectiles: ProjectilePool,
+    events: CombatEvent[],
+  ): void {
+    for (const slot of projectiles.all) {
+      if (!slot.active || slot.owner !== 'player') continue;
+      const waveBox = {
+        x: slot.x - 11,
+        y: slot.y - 15,
+        w: 22,
+        h: 30,
+      };
+      for (const enemy of enemies) {
+        if (!enemy.targetable || slot.hitEnemies.has(enemy)) continue;
+        if (!overlaps(waveBox, enemy.bounds())) continue;
+        slot.hitEnemies.add(enemy);
+
+        const knell = enemy.postureBroken;
+        const damage = knell ? Math.ceil(slot.damage * COMBAT.knell.damageMultiplier) : slot.damage;
+        const landed = enemy.takeDamage(damage, slot.x);
+        let broke = false;
+        if (landed && enemy.alive && !knell) {
+          broke = enemy.takePostureDamage(slot.posture, slot.x) === 'broken';
+        }
+        if (landed) enemy.markResonance(RESONANCE.ticks);
+        events.push({
+          type: 'enemyHit',
+          enemy,
+          x: slot.x,
+          y: slot.y,
+          facing: player.facing,
+          damage,
+          killed: !enemy.alive,
+          knell,
+          broke,
+        });
+      }
+    }
+  }
+
+  private pulseCenserClouds(enemies: readonly Enemy[]): void {
+    for (const cloud of this.clouds) {
+      if (cloud.ticksLeft <= 0) continue;
+      cloud.ticksLeft -= 1;
+      if (cloud.ticksLeft <= 0) continue;
+      cloud.nextTick -= 1;
+      if (cloud.nextTick > 0) continue;
+      cloud.nextTick = CENSER_CLOUD.pulseEvery;
+      const radius = CENSER_CLOUD.radius;
+      for (const enemy of enemies) {
+        if (!enemy.targetable || !enemy.alive) continue;
+        const dx = enemy.feet.x - cloud.x;
+        const dy = enemy.feet.y - cloud.y;
+        if (dx * dx + dy * dy > radius * radius) continue;
+        enemy.applyPosture(CENSER_CLOUD.posture);
+      }
+    }
+  }
+
+  reset(): void {
+    for (const cloud of this.clouds) cloud.ticksLeft = 0;
   }
 }

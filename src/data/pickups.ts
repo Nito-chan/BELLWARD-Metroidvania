@@ -171,6 +171,24 @@ export const PICKUPS: Readonly<Record<string, PickupDef>> = {
     name: 'Mask Shard',
     description: 'A fragment of a porcelain mask. Four make a whole.',
   },
+  'reliquary-censer': {
+    id: 'reliquary-censer',
+    kind: 'ability',
+    name: 'Censer',
+    description: 'A brass vessel on a chain. A heavy, committed swing.',
+  },
+  'upper-toll': {
+    id: 'upper-toll',
+    kind: 'ability',
+    name: 'Toll',
+    description: 'A hand-bell that answers the belfry. Its ring carries far.',
+  },
+  'terrace-tideglass': {
+    id: 'terrace-tideglass',
+    kind: 'ability',
+    name: 'Tideglass',
+    description: 'A black wax tablet. The belfry’s rooms wait to be remembered.',
+  },
   'bellthief-sturdy-shell': {
     id: 'bellthief-sturdy-shell',
     kind: 'charm',

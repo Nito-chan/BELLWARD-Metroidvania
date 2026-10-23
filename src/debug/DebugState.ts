@@ -186,6 +186,10 @@ export type RunDebugState = {
   hookline: boolean;
   /** True once the Longline range upgrade is owned. */
   longline: boolean;
+  /** True once the Censer is owned. */
+  censer: boolean;
+  /** True once the Toll is owned. */
+  toll: boolean;
   /** Boss kinds whose Ordeal has been cleared. */
   ordeals: string[];
   /** True once the Tide-door ending fired. */

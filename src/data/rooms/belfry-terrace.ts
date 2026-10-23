@@ -132,6 +132,7 @@ export const belfryTerrace: RoomDefinition = {
     { x: 64, y: 228, text: 'THE DROWNED GALLERY', color: 'bone', size: 8 },
   ],
   spawn: { x: 420, y: 320 },
+  pickups: [{ id: 'terrace-tideglass', x: 648, y: 292 }],
   /**
    * The first rest point stands just left of the broken bell. Its respawn point is
    * deliberately offset from the seat so the hero never wakes inside the stone.

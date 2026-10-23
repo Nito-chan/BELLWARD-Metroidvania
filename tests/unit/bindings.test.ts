@@ -134,9 +134,9 @@ describe('binding document', () => {
 describe('binding edits', () => {
   it('replaces one keyboard slot and leaves the rest untouched', () => {
     const before = defaultBindings();
-    const result = setKeyboardBinding(before, 'jump', 0, 'KeyQ');
+    const result = setKeyboardBinding(before, 'jump', 0, 'KeyP');
     expect(result.conflict).toBeNull();
-    expect(result.bindings.keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(result.bindings.keyboard.jump).toEqual(['KeyP', 'Space']);
     expect(result.bindings.keyboard.attack).toEqual(before.keyboard.attack);
     expect(before.keyboard.jump[0]).toBe('KeyZ');
   });

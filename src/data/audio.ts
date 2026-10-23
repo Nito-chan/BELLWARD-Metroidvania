@@ -159,6 +159,8 @@ export const PLAYER_SFX: Record<PlayerEvent, SfxKey> = {
   skid: 'skid',
   attack1: 'attack1',
   attack2: 'attack2',
+  censer1: 'cast',
+  toll1: 'bell',
   dash: 'dash',
   wallJump: 'jump',
   heal: 'bell',

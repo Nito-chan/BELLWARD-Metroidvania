@@ -20,6 +20,7 @@ export const ACTIONS = [
   'heal',
   'cast',
   'interact',
+  'weapon',
   'map',
   'pause',
 ] as const;
@@ -49,6 +50,7 @@ export const KEY_BINDINGS: Readonly<Record<ActionName, readonly string[]>> = {
   dash: ['KeyC', 'KeyK'],
   heal: ['KeyL'],
   cast: ['KeyI'],
+  weapon: ['KeyQ'],
   interact: ['KeyE', 'ArrowUp'],
   map: ['KeyM'],
   pause: ['Escape'],
@@ -62,6 +64,7 @@ export const PAD_BUTTONS: Readonly<Partial<Record<ActionName, readonly number[]>
   dash: [1], // B / circle
   heal: [3], // Y / triangle
   cast: [5], // RB / R1
+  weapon: [4], // LB / L1
   interact: [12], // D-pad up
   map: [8], // Back / select
   pause: [9], // Start

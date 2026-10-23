@@ -9,7 +9,17 @@ import type { ActionName } from '../../config/input';
 
 export type TouchAction = Extract<
   ActionName,
-  'left' | 'right' | 'down' | 'jump' | 'attack' | 'guard' | 'dash' | 'heal' | 'interact' | 'cast'
+  | 'left'
+  | 'right'
+  | 'down'
+  | 'jump'
+  | 'attack'
+  | 'guard'
+  | 'dash'
+  | 'heal'
+  | 'interact'
+  | 'cast'
+  | 'weapon'
 >;
 
 export type TouchControlsOptions = {
@@ -57,6 +67,7 @@ export class TouchControls {
   readonly root: HTMLElement;
   private readonly active = new Map<number, ActiveTouch>();
   private readonly buttons = new Map<TouchAction, HTMLButtonElement>();
+  private readonly swapButton: HTMLButtonElement;
   private mounted = false;
   private visibleValue = false;
 
@@ -68,12 +79,15 @@ export class TouchControls {
     this.root.setAttribute('aria-label', 'Touch controls');
     this.root.hidden = true;
 
+    this.swapButton = this.buildSwapButton();
     this.root.append(
+      this.swapButton,
       this.buildCluster('touch-move', 'Movement', MOVE_BUTTONS),
       this.buildCluster('touch-actions', 'Actions', ACTION_BUTTONS),
       this.buildPause(),
     );
     this.setActionVisible('cast', false);
+    this.setActionVisible('weapon', false);
     this.root.addEventListener('contextmenu', (event) => {
       if (this.visibleValue) event.preventDefault();
     });
@@ -129,6 +143,7 @@ export class TouchControls {
     }
     button.hidden = !visible;
     if (action === 'cast') this.root.classList.toggle('has-hook', visible);
+    if (action === 'weapon') this.root.classList.toggle('has-weapon', visible);
   }
 
   debugState(): TouchDebugState {
@@ -180,6 +195,22 @@ export class TouchControls {
     button.addEventListener('pointercancel', (event) => this.release(event.pointerId));
     button.addEventListener('lostpointercapture', (event) => this.release(event.pointerId));
     this.buttons.set(spec.action, button);
+    return button;
+  }
+
+  private buildSwapButton(): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'touch-button touch-swap';
+    button.dataset.action = 'weapon';
+    button.setAttribute('aria-label', 'Swap');
+    button.tabIndex = -1;
+    button.textContent = 'Swap';
+    button.addEventListener('pointerdown', (event) => this.press(event, button, 'weapon'));
+    button.addEventListener('pointerup', (event) => this.release(event.pointerId));
+    button.addEventListener('pointercancel', (event) => this.release(event.pointerId));
+    button.addEventListener('lostpointercapture', (event) => this.release(event.pointerId));
+    this.buttons.set('weapon', button);
     return button;
   }
 

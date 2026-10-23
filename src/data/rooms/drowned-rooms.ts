@@ -413,6 +413,7 @@ export const upperGallery: RoomDefinition = {
   pickups: [
     { id: 'upper-shard-low', x: 300, y: MID_LEDGE_Y - 26 },
     { id: 'upper-shard-high', x: 820, y: UPPER_LEDGE_Y - 28 },
+    { id: 'upper-toll', x: 780, y: UPPER_LEDGE_Y - 28 },
   ],
   anchors: [
     { id: 'upper-mid-west', x: 240, y: 220 },
@@ -502,6 +503,7 @@ export const reliquary: RoomDefinition = {
   ],
   pickups: [
     { id: 'reliquary-long-reach', x: 496, y: UPPER_LEDGE_Y - 28 },
+    { id: 'reliquary-censer', x: 440, y: UPPER_LEDGE_Y - 28 },
     { id: 'reliquary-health-shard', x: 340, y: MID_LEDGE_Y - 26 },
     { id: 'reliquary-shard', x: 760, y: FLOOR_Y - 26 },
   ],

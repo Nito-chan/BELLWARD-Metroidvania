@@ -294,6 +294,7 @@ export class Game {
       for (const event of events) this.audio.onPlayerEvent(event);
       const loadout = this.run.progress.loadout;
       this.touch.setActionVisible('cast', loadout.hookline || loadout.longline);
+      this.touch.setActionVisible('weapon', loadout.censer || loadout.toll);
     }
     this.audio.tick(this.loop.stats.tickCount);
   }
