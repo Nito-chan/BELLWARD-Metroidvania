@@ -13,6 +13,9 @@ export default tseslint.config(
       'test-results/**',
       '.cache/**',
       'public/**',
+      // Agent worktrees keep their own tsconfig; linting them from the main checkout
+      // makes typescript-eslint see two project roots and fail every file.
+      '.kilo/**',
     ],
   },
   js.configs.recommended,

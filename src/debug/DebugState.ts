@@ -102,6 +102,15 @@ export type SceneDebugState = {
     counterReady: boolean;
     /** True during the opening beats of a fresh guard. */
     perfectParry: boolean;
+    /** Hookline state, target ids and reach for E2E and the F1 overlay. */
+    hook: {
+      state: 'idle' | 'zip' | 'hang';
+      enabled: boolean;
+      anchorId: string | null;
+      candidateId: string | null;
+      range: number;
+      cooldown: number;
+    };
     nailLevel: number;
     charms: string[];
   };
@@ -173,6 +182,10 @@ export type RunDebugState = {
   charmsEquipped: string[];
   /** True once the Wall Claw is owned. */
   wallClaw: boolean;
+  /** True once the Hookline is owned. */
+  hookline: boolean;
+  /** True once the Longline range upgrade is owned. */
+  longline: boolean;
   /** Boss kinds whose Ordeal has been cleared. */
   ordeals: string[];
   /** True once the Tide-door ending fired. */

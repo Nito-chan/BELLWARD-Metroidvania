@@ -53,6 +53,13 @@
   align-items: end;
 }
 
+.touch-root.has-hook .touch-actions {
+  grid-template-areas:
+    'heal interact dash hook'
+    'guard attack jump hook';
+  grid-template-columns: repeat(3, 3.35rem) 2.6rem;
+}
+
 .touch-button {
   position: relative;
   display: flex;
@@ -117,6 +124,10 @@
   transform: scale(0.94);
 }
 
+.touch-button[hidden] {
+  display: none;
+}
+
 .touch-move .touch-button {
   width: 3.5rem;
   height: 3.5rem;
@@ -143,6 +154,18 @@
   background:
     linear-gradient(180deg, rgb(79 47 49 / 92%) 0%, rgb(21 10 16 / 94%) 100%), rgb(10 5 12 / 90%);
   color: var(--touch-brass-bright);
+}
+
+.touch-actions .touch-cast {
+  grid-area: hook;
+  align-self: stretch;
+  height: auto;
+  border-color: var(--touch-brass);
+  background:
+    linear-gradient(180deg, rgb(55 42 28 / 94%) 0%, rgb(15 10 8 / 96%) 100%), rgb(10 5 8 / 92%);
+  color: var(--touch-brass-bright);
+  font-size: 0.55rem;
+  letter-spacing: 0.14em;
 }
 
 .touch-actions .touch-jump {
@@ -250,6 +273,10 @@
     grid-template-columns: repeat(3, 3.1rem);
   }
 
+  .touch-root.has-hook .touch-actions {
+    grid-template-columns: repeat(3, 3.1rem) 2.45rem;
+  }
+
   .touch-actions .touch-button {
     height: 2.65rem;
   }
@@ -270,6 +297,44 @@
   .touch-pause {
     top: calc(env(safe-area-inset-top) + 3.15rem);
   }
+}
+
+/* Narrow portrait screens: keep the four-column action pad from crowding the stick. */
+@media (max-width: 480px) {
+  .touch-move {
+    grid-template-columns: repeat(3, 3rem);
+  }
+
+  .touch-move .touch-button {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .touch-actions {
+    grid-template-columns: repeat(3, 2.8rem);
+  }
+
+  .touch-root.has-hook .touch-actions {
+    grid-template-columns: repeat(3, 2.8rem) 2.3rem;
+  }
+
+  .touch-actions .touch-button {
+    height: 2.75rem;
+  }
+
+  .touch-actions .touch-attack,
+  .touch-actions .touch-jump {
+    height: 3.5rem;
+  }
+}
+
+/*
+ * The Hook lever spans both action rows. Compact media queries set an explicit height on
+ * every action button, so re-assert the stretch after them; otherwise the lever collapses
+ * into row one and drops below the 44 px touch target.
+ */
+.touch-actions .touch-cast {
+  height: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

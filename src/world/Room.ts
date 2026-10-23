@@ -7,6 +7,7 @@ import { BellwardError } from '../core/Errors';
 import type { Rect, Vec2 } from '../core/Types';
 import type { MusicKey } from '../data/audio';
 import { getPickup, isPickupId } from '../data/pickups';
+import { canHangAt } from './hookGeometry';
 import { Tilemap } from './Tilemap';
 import type { TileRole } from './tiles';
 
@@ -67,6 +68,17 @@ export type EnemySpawn = {
 export type RoomPickupPlacement = {
   id: string;
   /** Feet-level pickup center, in world pixels. It bobs visually but never moves. */
+  x: number;
+  y: number;
+};
+
+/**
+ * A brass grapple ring for the Hookline. `x`/`y` is the ring centre; the hero's feet
+ * settle `HOOK.hangOffsetY` below it. Ids are stable so a future chart can remember
+ * discovered rings without depending on array order.
+ */
+export type RoomAnchor = {
+  id: string;
   x: number;
   y: number;
 };
@@ -139,6 +151,8 @@ export type RoomDefinition = {
   benches?: readonly RoomBench[];
   /** Collectibles in this room. Ids are stable save facts. */
   pickups?: readonly RoomPickupPlacement[];
+  /** Brass Hookline rings authored in world space. */
+  anchors?: readonly RoomAnchor[];
   /** Optional Ordeal altar, available only in a claimed arena. */
   ordeal?: RoomOrdeal;
   /** The Tide-door ending, present only in the upper gallery. */
@@ -177,6 +191,7 @@ export function createRoom(definition: RoomDefinition): Room {
   validateLabels(definition, tilemap);
   validateBenches(definition, tilemap);
   validatePickups(definition, tilemap);
+  validateAnchors(definition, tilemap);
   validateOrdeal(definition, tilemap);
   validateEnding(definition, tilemap);
 
@@ -402,6 +417,43 @@ function validatePickups(definition: RoomDefinition, tilemap: Tilemap): void {
       pickup.y > tilemap.pixelHeight
     ) {
       throw new BellwardError(`${where}: position (${pickup.x},${pickup.y}) leaves the room`);
+    }
+  }
+}
+
+/**
+ * Rings must be unique, in bounds, in open space, and must leave a whole hero-sized
+ * body clear at the hang point. Authored data can never create a rope that pulls the
+ * Keeper into stone.
+ */
+function validateAnchors(definition: RoomDefinition, tilemap: Tilemap): void {
+  const ids = new Set<string>();
+  const tile = RENDER.tileSize;
+  for (const [index, anchor] of (definition.anchors ?? []).entries()) {
+    const where = `room "${definition.id}" anchor ${index}`;
+    if (!anchor.id.trim()) throw new BellwardError(`${where}: id is empty`);
+    if (ids.has(anchor.id)) throw new BellwardError(`${where}: duplicate anchor id "${anchor.id}"`);
+    ids.add(anchor.id);
+    if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
+      throw new BellwardError(`${where}: position must be finite`);
+    }
+    if (
+      anchor.x < 0 ||
+      anchor.x >= tilemap.pixelWidth ||
+      anchor.y < 0 ||
+      anchor.y >= tilemap.pixelHeight
+    ) {
+      throw new BellwardError(`${where}: ring (${anchor.x},${anchor.y}) leaves the room`);
+    }
+    if (tilemap.isSolid(Math.floor(anchor.x / tile), Math.floor(anchor.y / tile))) {
+      throw new BellwardError(
+        `${where}: ring (${anchor.x},${anchor.y}) sits inside solid geometry`,
+      );
+    }
+    if (!canHangAt(tilemap, anchor)) {
+      throw new BellwardError(
+        `${where}: hang point below (${anchor.x},${anchor.y}) overlaps geometry`,
+      );
     }
   }
 }

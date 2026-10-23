@@ -216,6 +216,9 @@ export const HERO_ART: CharacterArt = {
     attack1: knightStrip('hero.attack1', [3, 3, 4, 6], false),
     attack2: knightStrip('hero.attack2', [2, 3, 3, 3, 4, 5], false),
     dash: knightStrip('hero.dash', [3, 5], false),
+    // The Hookline throw is the first attack frame held: the hand is up and the line
+    // reads from the pivot. A real grapple animation can replace this one clip later.
+    hook: knightStrip('hero.attack1', [30], true),
     // Guard and parry reuse the attack sheets: the brace is the wind-up frame held, and
     // the parry is the first cut. The HeroView draws the actual guard arc.
     guard: knightStrip('hero.attack1', [40], true),

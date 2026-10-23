@@ -61,6 +61,14 @@ export const drownedGallery: RoomDefinition = {
     { id: 'gallery-quick-mend', x: 480, y: UPPER_LEDGE_Y - 28 },
     { id: 'gallery-health-shard', x: 840, y: UPPER_LEDGE_Y - 28 },
   ],
+  anchors: [
+    { id: 'gallery-high-west', x: 440, y: 172 },
+    { id: 'gallery-high-east', x: 800, y: 172 },
+    { id: 'gallery-mid-west', x: 280, y: 220 },
+    { id: 'gallery-mid-east', x: 688, y: 220 },
+    { id: 'gallery-span', x: 560, y: 168 },
+    { id: 'gallery-secret', x: 896, y: 236 },
+  ],
   exits: [
     {
       x: 8,
@@ -127,6 +135,10 @@ export const ossuary: RoomDefinition = {
     { id: 'ossuary-shard', x: 760, y: FLOOR_Y - 26 },
     { id: 'ossuary-health-shard', x: 340, y: MID_LEDGE_Y - 26 },
   ],
+  anchors: [
+    { id: 'ossuary-high', x: 464, y: 172 },
+    { id: 'ossuary-mid', x: 340, y: 220 },
+  ],
   exits: [
     {
       x: 8,
@@ -184,9 +196,18 @@ export const sunlessAqueduct: RoomDefinition = {
   pickups: [
     { id: 'aqueduct-wall-claw', x: 480, y: UPPER_LEDGE_Y - 30 },
     { id: 'aqueduct-shard-low', x: 300, y: MID_LEDGE_Y - 26 },
-    { id: 'aqueduct-shard-high', x: 800, y: UPPER_LEDGE_Y - 28 },
+    { id: 'aqueduct-hookline', x: 800, y: UPPER_LEDGE_Y - 28 },
+    { id: 'aqueduct-shard-high', x: 880, y: FLOOR_Y - 26 },
     { id: 'aqueduct-ember-greed', x: 680, y: MID_LEDGE_Y - 26 },
     { id: 'aqueduct-health-shard', x: 440, y: UPPER_LEDGE_Y - 28 },
+  ],
+  anchors: [
+    { id: 'aqueduct-west', x: 120, y: 240 },
+    { id: 'aqueduct-mid-west', x: 280, y: 220 },
+    { id: 'aqueduct-upper-west', x: 430, y: 172 },
+    { id: 'aqueduct-span', x: 560, y: 168 },
+    { id: 'aqueduct-mid-east', x: 688, y: 220 },
+    { id: 'aqueduct-hookline', x: 824, y: 160 },
   ],
   exits: [
     {
@@ -253,6 +274,11 @@ export const bellows: RoomDefinition = {
     { id: 'bellows-shard-low', x: 660, y: MID_LEDGE_Y - 26 },
     { id: 'bellows-shard-high', x: 840, y: UPPER_LEDGE_Y - 28 },
   ],
+  anchors: [
+    { id: 'bellows-span', x: 480, y: 196 },
+    { id: 'bellows-mid', x: 672, y: 220 },
+    { id: 'bellows-high-east', x: 880, y: 172 },
+  ],
   exits: [
     {
       x: 8,
@@ -314,7 +340,10 @@ export const wallClawShaft: RoomDefinition = {
   ],
   spawn: { x: 80, y: FLOOR_Y },
   enemies: [],
-  pickups: [{ id: 'shaft-shard', x: 456, y: FLOOR_Y - 30 }],
+  pickups: [
+    { id: 'shaft-shard', x: 456, y: FLOOR_Y - 30 },
+    { id: 'shaft-longline', x: 820, y: 56 },
+  ],
   exits: [
     {
       x: 8,
@@ -384,6 +413,13 @@ export const upperGallery: RoomDefinition = {
   pickups: [
     { id: 'upper-shard-low', x: 300, y: MID_LEDGE_Y - 26 },
     { id: 'upper-shard-high', x: 820, y: UPPER_LEDGE_Y - 28 },
+  ],
+  anchors: [
+    { id: 'upper-mid-west', x: 240, y: 220 },
+    { id: 'upper-high-west', x: 416, y: 172 },
+    { id: 'upper-mid-east', x: 640, y: 220 },
+    { id: 'upper-high-east', x: 760, y: 172 },
+    { id: 'upper-terrace-door', x: 896, y: 172 },
   ],
   benches: [
     {
@@ -468,6 +504,10 @@ export const reliquary: RoomDefinition = {
     { id: 'reliquary-long-reach', x: 496, y: UPPER_LEDGE_Y - 28 },
     { id: 'reliquary-health-shard', x: 340, y: MID_LEDGE_Y - 26 },
     { id: 'reliquary-shard', x: 760, y: FLOOR_Y - 26 },
+  ],
+  anchors: [
+    { id: 'reliquary-high', x: 448, y: 172 },
+    { id: 'reliquary-mid', x: 340, y: 220 },
   ],
   exits: [
     {

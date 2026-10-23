@@ -8,7 +8,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   // Headless SwiftShader plus real audio decode is slow; assertions stay simulation-based,
   // but each test gets a wall-clock budget that does not race that decode.
-  timeout: 60_000,
+  timeout: 120_000,
   use: {
     baseURL: 'http://localhost:5173',
     // Native resolution: no software compositing upscale under SwiftShader.

@@ -38,6 +38,10 @@ export const bellbearerArena: RoomDefinition = {
     },
   ],
   enemies: [{ kind: 'bellbearer', x: 560, y: 320, facing: -1 }],
+  anchors: [
+    { id: 'bellbearer-high-west', x: 152, y: 172 },
+    { id: 'bellbearer-high-east', x: 776, y: 172 },
+  ],
   boss: 'bellbearer',
   music: 'bossAbyss',
 };
@@ -71,6 +75,10 @@ export const wardenArena: RoomDefinition = {
     },
   ],
   enemies: [{ kind: 'wardenMoss', x: 560, y: 320, facing: -1 }],
+  anchors: [
+    { id: 'warden-high-west', x: 152, y: 172 },
+    { id: 'warden-high-east', x: 776, y: 172 },
+  ],
   boss: 'wardenMoss',
   music: 'bossCitadel',
 };
@@ -109,6 +117,10 @@ export const bellthiefArena: RoomDefinition = {
     },
   ],
   enemies: [{ kind: 'bellThief', x: 560, y: 320, facing: -1 }],
+  anchors: [
+    { id: 'bellthief-high-west', x: 152, y: 172 },
+    { id: 'bellthief-high-east', x: 776, y: 172 },
+  ],
   boss: 'bellThief',
   music: 'bossCitadel',
 };

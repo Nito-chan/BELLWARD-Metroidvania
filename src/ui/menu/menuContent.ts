@@ -83,7 +83,7 @@ export const ACTION_LABELS: Readonly<Record<ActionName, string>> = {
   guard: 'Guard',
   dash: 'Dash',
   heal: 'Heal',
-  cast: 'Cast',
+  cast: 'Hookline',
   interact: 'Interact',
   map: 'Map',
   pause: 'Pause',

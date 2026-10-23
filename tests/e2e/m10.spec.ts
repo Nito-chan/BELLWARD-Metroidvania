@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { bootGame, debugState, dismissOnboarding, openTitle } from './support';
+import { bootGame, collectPickup, debugState, dismissOnboarding, openTitle } from './support';
 
 /** Dispatch a held touch pointer without relying on Playwright's tap-only touch API. */
 async function pressPointer(target: Locator, pointerId: number): Promise<void> {
@@ -84,6 +84,30 @@ test.describe('M10 touch controls', () => {
       groundY,
       { timeout: 5_000 },
     );
+
+    // The Hook lever is absent until the ability is earned, then it joins the action pad.
+    const hook = page.getByRole('button', { name: 'Hook' });
+    await expect(hook).toBeHidden();
+    await collectPickup(page, 'sunless-aqueduct', { x: 800, y: 208 }, 'aqueduct-hookline');
+    await expect(hook).toBeVisible();
+    await expect(page.getByTestId('touch-controls')).toHaveClass(/has-hook/);
+    const hookBox = await hook.boundingBox();
+    expect(hookBox?.width ?? 0).toBeGreaterThanOrEqual(36);
+    expect(hookBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    await pressPointer(hook, 21);
+    await page.waitForFunction(
+      () => window.__game?.debugState().touch.held.includes('cast') === true,
+      undefined,
+      { timeout: 5_000 },
+    );
+    await releasePointer(hook, 21);
+    await page.waitForFunction(
+      () => window.__game?.debugState().touch.held.length === 0,
+      undefined,
+      { timeout: 5_000 },
+    );
+    expect((await debugState(page)).scene?.player.hook.enabled).toBe(true);
 
     await tap(page, page.getByRole('button', { name: 'Pause' }));
     await expect(page.getByRole('dialog', { name: 'Paused' })).toBeVisible();

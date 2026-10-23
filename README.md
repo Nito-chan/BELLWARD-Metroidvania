@@ -71,8 +71,16 @@ Built to a master production doc; every deviation from it is logged in `docs/DEC
   shows player posture under Focus, enemy bars appear only after posture damage, and boss bars add a
   posture line. No new art or audio was needed. All gates green: 285 unit tests and 38 Playwright
   tests, with guard verified in Chrome at 375, 768 and 1440 plus the touch context.
-- **The Drowned Belfry vertical slice is feature-complete; G1 begins the post-slice combat expansion.**
-  Physical touch/gamepad testing and Capacitor/Tauri packaging remain the next shipping work.
+- **G2 — The Hookline: complete.** A thrown bell-wire grapple (keyboard `I`, gamepad RB, touch
+  **Hook**) targets 35 authored brass rings across eight rooms. It pulls at 420 px/s, hangs for 18
+  ticks, supports jump-off, drop-through, retargeting and wall cancellation, and starts a 12-tick
+  cooldown. The **Longline** pickup in the Wall-Claw Shaft raises reach from 176 to 220 px. The touch
+  lever stays hidden until the ability is earned, then spans both action rows. Pickups bring the
+  region to 24 and the save remains v2 because ability ownership derives from pickup ids. All gates
+  green: 302 unit tests and 41 Playwright tests.
+- **The Drowned Belfry vertical slice is feature-complete; G1 and G2 begin the post-slice combat and
+  traversal expansion.** Physical touch/gamepad testing and Capacitor/Tauri packaging remain the next
+  shipping work.
 
 ## Quick start
 
@@ -85,43 +93,43 @@ First-time E2E setup: `npx playwright install chromium`.
 
 ## Commands
 
-| Command                        | What it does                                                |
-| ------------------------------ | ----------------------------------------------------------- |
-| `npm run dev`                  | Vite dev server                                             |
-| `npm run build`                | Typecheck + production build to `dist/`                     |
-| `npm run preview`              | Serve the built `dist/`                                     |
-| `npm run typecheck`            | `tsc --noEmit`                                              |
-| `npm run lint`                 | ESLint, zero warnings allowed                               |
-| `npm run test`                 | Vitest unit suite                                           |
-| `npm run test:e2e`             | Full Playwright suite (starts the dev server itself)        |
-| `npm run level:check`          | Validate rooms, pickups, benches, gates and map positions   |
-| `npm run assets:check`         | Validate `public/assets/MANIFEST.json` against disk         |
-| `npm run assets:check:strict`  | Same, but fails on UNCLEAR-license placeholders (ship gate) |
-| `npm run fetch-assets`         | Download + unzip the registered asset packs                 |
-| `npm run screenshot -- <path>` | Capture the running game canvas (dev server required)       |
-| `npm run check`                | typecheck + lint + test + build                             |
-| `npm run check:all`            | `check` + E2E                                               |
+| Command                        | What it does                                                     |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `npm run dev`                  | Vite dev server                                                  |
+| `npm run build`                | Typecheck + production build to `dist/`                          |
+| `npm run preview`              | Serve the built `dist/`                                          |
+| `npm run typecheck`            | `tsc --noEmit`                                                   |
+| `npm run lint`                 | ESLint, zero warnings allowed                                    |
+| `npm run test`                 | Vitest unit suite                                                |
+| `npm run test:e2e`             | Full Playwright suite (starts the dev server itself)             |
+| `npm run level:check`          | Validate rooms, pickups, benches, gates, rings and map positions |
+| `npm run assets:check`         | Validate `public/assets/MANIFEST.json` against disk              |
+| `npm run assets:check:strict`  | Same, but fails on UNCLEAR-license placeholders (ship gate)      |
+| `npm run fetch-assets`         | Download + unzip the registered asset packs                      |
+| `npm run screenshot -- <path>` | Capture the running game canvas (dev server required)            |
+| `npm run check`                | typecheck + lint + test + build                                  |
+| `npm run check:all`            | `check` + E2E                                                    |
 
 ## Repository layout
 
 ```
 src/core        fixed timestep, loop, event bus, RNG, math, errors, composition root
-src/config      tunable constants (input, player, combat, enemies, progression, pickups, physics, render, audio, menu, bench, save)
+src/config      tunable constants (input, player, combat, enemies, progression, pickups, physics, render, audio, menu, bench, save, hookline)
 src/data        art keys/rects/clips, enemy/effect sheets, room/pickup/bench definitions and sound/track catalogs
 src/input       keyboard/gamepad/virtual-input manager, touch detection, per-tick snapshots and bindings
 src/physics     body model and the tile collision solver
-src/player      player state machine, Focus/healing, Wall Claw, vitals, i-frames and attack windows
+src/player      player state machine, Focus/healing, Wall Claw, Hookline, vitals, i-frames and attack windows
 src/enemies     shared FSM, melee/caster behaviors, boss phases/patterns and spawn factory
 src/combat      damage resolver, projectile pool and shared hitbox geometry
 src/save        versioned v2 run document, v1 migration, all-or-nothing validation and progression
 src/ui          HUD, title/onboarding, touch overlay, bench, ending, pause flow and the region chart
 src/audio       audio manager and the Howler backend seam (nothing else imports Howler)
-src/world       semantic tile roles (including breakable/sealed), tilemap and room model
-src/render      art provider, procedural fallbacks, camera, character/enemy views, FX, pickups, room scene
+src/world       semantic tile roles (including breakable/sealed), tilemap, room model and hook-line geometry
+src/render      art provider, procedural fallbacks, camera, character/enemy views, FX, pickups, hook rings/rope and room scene
 src/debug       F1 overlay + debug state contract
 scripts         level/content check, asset fetcher/validator, screenshot capture (--run / --combat / --boss / --boss-phase / --overlay / --menu / --settings / --controls / --bench / --map / --title / --onboarding / --touch; add --small for 640x360)
-tests/unit      Vitest (core, world, input, bindings, menus, map, saves, progression, collision, player, boss patterns, camera, animator, combat, enemies, audio, manifest, accessibility)
-tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run, M9 title/onboarding/accessibility, M10 touch)
+tests/unit      Vitest (core, world, input, bindings, menus, map, saves, progression, collision, player, Hookline, boss patterns, camera, animator, combat, enemies, audio, manifest, accessibility)
+tests/e2e       Playwright (boot, movement, jump, collision, fps, overlay, audio, combat/death, menus, bosses, saves/benches/map, M8 progression/full run, M9 title/onboarding/accessibility, M10 touch, Hookline/Longline)
 docs            DECISIONS / PROGRESS / BIBLE / CONTROLS / ASSET_NOTES / MANUAL_DOWNLOADS
 public/assets   downloaded packs, MANIFEST.json and per-pack LICENSE.txt files
 ```

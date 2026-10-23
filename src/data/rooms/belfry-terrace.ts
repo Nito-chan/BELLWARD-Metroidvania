@@ -156,6 +156,13 @@ export const belfryTerrace: RoomDefinition = {
     { kind: 'ghoul', x: 380, y: 192, facing: -1, patrol: { min: 328, max: 432 } },
     { kind: 'adept', x: 872, y: 320, facing: -1 },
   ],
+  anchors: [
+    { id: 'terrace-bell-ring', x: 480, y: 156 },
+    { id: 'terrace-bridge-east', x: 368, y: 156 },
+    { id: 'terrace-dais', x: 704, y: 220 },
+    { id: 'terrace-tower-low', x: 72, y: 232 },
+    { id: 'terrace-tower-high', x: 72, y: 168 },
+  ],
   exits: [
     {
       x: 8,

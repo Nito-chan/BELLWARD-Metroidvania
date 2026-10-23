@@ -1278,3 +1278,93 @@ by content beyond the twelve-room region if the slice is greenlit.
 - Physical gamepad and touch hardware remain unverified; Playwright supplies the input proof.
 - The guard arc and posture bars use existing procedural/art frames; a bespoke guard animation and
   shield silhouette are art-pipeline work for the P0 pass.
+
+---
+
+## G2 — The Hookline (2026-10-23)
+
+**Commit:** this milestone's commit. **Status:** complete, all gates green.
+
+### Shipped
+
+- **The Hookline (`src/player/PlayerHook.ts`, `src/world/hookGeometry.ts`, `src/config/hookline.ts`):**
+  a deterministic ring grapple with `idle → zip → hang → cooldown`. The line leaves the hand 28 px above
+  the feet, targets a ring at 24–176 px, pulls at 420 px/s, snaps within 10 px, hangs the feet 28 px below
+  the ring for 18 ticks, then releases into a 12-tick cooldown. Jump-off is 210 px/s horizontal and
+  500 px/s vertical; down drops through a one-way platform; another cast retargets; a wall hit cancels the
+  pull. Selection rejects rings more than 44 px below the hand, more than 20 px behind the facing
+  direction, or without line of sight, and scores 14 px for a ring ahead and 30 px against one below.
+- **Longline:** the second pickup raises hand-to-ring reach from 176 to 220 px. Both abilities derive
+  from `aqueduct-hookline` and `shaft-longline`, so the v2 save needs no new field or version bump.
+- **Thirty-five authored rings:** terrace 5, Drowned Gallery 6, Ossuary 2, Sunless Aqueduct 6, Bellows 3,
+  Upper Gallery 5, Reliquary 2 and two per boss arena. The Wall-Claw Shaft, Bell Nave and belfry
+  antechamber intentionally have none. `level:check` now proves every ring is within Longline reach of a
+  real standing perch with line of sight, and rejects duplicate, empty, outside, solid-mounted or
+  blocked rings.
+- **Content and presentation:** the Hookline pickup sits on the aqueduct’s high span, the high shard moved
+  to the floor below it, and the Longline sits on the shaft’s upper shelf. The region now has 24 pickups.
+  `HookLayer` draws brass rings, a target reticle, a ten-segment 3 px-sag rope and a grip flare; the
+  `hook` player event reuses an approved SFX. No new art or audio assets.
+- **Input parity:** keyboard `I`, gamepad RB and a touch **Hook** lever. The lever is hidden until the
+  ability is owned, then spans both action rows as a fourth column; it measures above 44 px at the
+  844×390 touch viewport. The binding editor already exposes `cast`; menus label it **Hookline**.
+- **Debug and tests:** `scene.player.hook` exposes state, enabled, anchor, candidate, range and cooldown;
+  `hookline` / `longline` run flags are visible to E2E. Fifteen Hookline/geometry unit tests and two room
+  anchor tests join the suite, plus three Playwright flows and an updated touch flow.
+
+### Gates (final state)
+
+| Gate                          | Result                                                                     |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `npm run typecheck`           | clean                                                                      |
+| `npm run lint`                | clean, zero warnings                                                       |
+| `npm run level:check`         | OK — 12 rooms, 24 pickups, 35 anchors, 3 benches, 3 Ordeals                |
+| `npm run test`                | 302/302 passed (26 files) — up from G1’s 285 (+17)                         |
+| `npm run build`               | ✓ 870 modules, 555.38 kB JS / 157.71 kB gzip, 82.78 kB CSS / 15.68 kB gzip |
+| Playwright                    | 41/41 passed in the full sweep                                             |
+| `npm run assets:check:strict` | OK — 1,914 files, 0 warnings; no new assets                                |
+| `npm run format:check`        | clean                                                                      |
+
+### E2E coverage added
+
+1. **Ability gate:** before the pickup, `KeyI` leaves the hook idle and the hero is not in the hook clip.
+2. **Real pull:** after collecting the aqueduct pickup, the aqueduct span ring is cast with a real key
+   event; the test samples hang position, anchor and cooldown inside one page task so a slow frame cannot
+   skip the 18-tick window.
+3. **Longline:** collecting the shaft pickup raises the live range to 220 px.
+4. **Touch and full run:** the M10 flow asserts **Hook** is hidden before ownership, visible after, at
+   least 36×44 px, and feeds the held `cast` action through a real pointer. The complete playthrough now
+   collects 24 pickups and asserts `hookline` / `longline` survive reload.
+
+### Adjustments
+
+- **The first full-suite Hookline run was flaky, not wrong.** A ghoul lunge could land between room load
+  and the one-shot i-frame grant, leaving the hero in `hurt` when `KeyI` arrived. The E2E now re-casts
+  while the hook is idle and the hero is not hurt/dead, and re-grants i-frames in the same loop.
+- **Cooldown sampling needed one page task.** Returning at the hang and starting a second `evaluate` could
+  take longer than the 30 remaining ticks under SwiftShader, so the sample showed an expired cooldown.
+  Hang and release are now observed by one continuous rAF loop.
+- **The map height assertion measured an entrance frame.** At 640×360 the settled panel is 354 px tall
+  with its bottom at 357; the 8 px `menu-panel-in` offset made a mid-animation sample report 365. The
+  persistence test now waits for `getAnimations().finished` before measuring. This was a test race, not
+  a map layout regression.
+- **The Hook lever collapsed into one row under the compact media query.** Its base `height: auto` was
+  overridden by the 42.39 px action height at 844×390. A final, later `.touch-cast { height: auto; }`
+  restores the two-row stretch and the 44 px target.
+- **Lint saw two TypeScript project roots.** A separate `.kilo` worktree supplied a second `tsconfig` and
+  made typescript-eslint fail every file in the main checkout. `.kilo/**` is now ignored by this repo’s
+  ESLint config; the worktree was not touched.
+- **The audio event map test was exhaustive by design.** Adding the `hook` player event required adding it
+  to the test’s expected key list; no sound mapping was missing.
+- **No assets were added.** Rings, rope and reticle are procedural; the hook cue reuses an approved CC0
+  file. `assets:check:strict` remains 1,914 files / 0 warnings.
+
+### Explicitly deferred / risks
+
+- **Censer and Toll, the three-phase Last Keeper, the earned ending, save v3 and the Tideglass map UI**
+  remain the next content steps; this milestone deliberately does not polish or implement the map.
+- **P0 Tideglass art production and review** has not started. The approved design is still design-only.
+- **Physical gamepad and touch hardware remain unverified.** Playwright covers the input paths at 640×360
+  and 844×390; a real phone/controller pass is still outstanding.
+- **The Hookline uses procedural presentation and an existing SFX.** A bespoke rope/ring art pass is P0
+  work, not a hidden mechanic stub.

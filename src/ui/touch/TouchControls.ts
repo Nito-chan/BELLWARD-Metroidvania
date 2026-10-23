@@ -9,7 +9,7 @@ import type { ActionName } from '../../config/input';
 
 export type TouchAction = Extract<
   ActionName,
-  'left' | 'right' | 'down' | 'jump' | 'attack' | 'guard' | 'dash' | 'heal' | 'interact'
+  'left' | 'right' | 'down' | 'jump' | 'attack' | 'guard' | 'dash' | 'heal' | 'interact' | 'cast'
 >;
 
 export type TouchControlsOptions = {
@@ -50,11 +50,13 @@ const ACTION_BUTTONS: readonly ButtonSpec[] = [
   { action: 'guard', label: 'Guard', text: 'Guard' },
   { action: 'attack', label: 'Strike', text: 'Strike' },
   { action: 'jump', label: 'Jump', text: 'Jump' },
+  { action: 'cast', label: 'Hook', text: 'Hook' },
 ];
 
 export class TouchControls {
   readonly root: HTMLElement;
   private readonly active = new Map<number, ActiveTouch>();
+  private readonly buttons = new Map<TouchAction, HTMLButtonElement>();
   private mounted = false;
   private visibleValue = false;
 
@@ -71,6 +73,7 @@ export class TouchControls {
       this.buildCluster('touch-actions', 'Actions', ACTION_BUTTONS),
       this.buildPause(),
     );
+    this.setActionVisible('cast', false);
     this.root.addEventListener('contextmenu', (event) => {
       if (this.visibleValue) event.preventDefault();
     });
@@ -111,6 +114,22 @@ export class TouchControls {
     this.active.clear();
     for (const active of pressed) this.options.onAction(active.action, false);
   };
+
+  /**
+   * Shows or hides an ability button. The Hook lever collapses the action grid back to
+   * its original three columns until the Hookline is actually owned.
+   */
+  setActionVisible(action: TouchAction, visible: boolean): void {
+    const button = this.buttons.get(action);
+    if (!button || button.hidden === !visible) return;
+    if (!visible) {
+      for (const [pointerId, active] of [...this.active]) {
+        if (active.action === action) this.release(pointerId);
+      }
+    }
+    button.hidden = !visible;
+    if (action === 'cast') this.root.classList.toggle('has-hook', visible);
+  }
 
   debugState(): TouchDebugState {
     return {
@@ -160,6 +179,7 @@ export class TouchControls {
     button.addEventListener('pointerup', (event) => this.release(event.pointerId));
     button.addEventListener('pointercancel', (event) => this.release(event.pointerId));
     button.addEventListener('lostpointercapture', (event) => this.release(event.pointerId));
+    this.buttons.set(spec.action, button);
     return button;
   }
 

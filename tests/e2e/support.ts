@@ -5,9 +5,9 @@ import type { GameDebugState } from '../../src/debug/DebugState';
 export async function openTitle(page: Page): Promise<void> {
   await page.goto('/');
   await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
-    timeout: 15_000,
+    timeout: 30_000,
   });
-  await page.locator('[data-testid="title-root"]').waitFor({ state: 'visible', timeout: 5_000 });
+  await page.locator('[data-testid="title-root"]').waitFor({ state: 'visible', timeout: 10_000 });
 }
 
 /** Clicks the title's primary action and waits for simulation time to run. */
@@ -19,7 +19,7 @@ export async function startFromTitle(page: Page): Promise<void> {
       window.__game?.debugState().title.open === false &&
       (window.__game?.debugState().tickCount ?? 0) > 0,
     undefined,
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
 }
 
@@ -43,11 +43,11 @@ export async function dismissOnboarding(page: Page): Promise<void> {
 export async function reloadGame(page: Page): Promise<void> {
   await page.reload();
   await page.waitForFunction(() => window.__game?.debugState().ready === true, undefined, {
-    timeout: 15_000,
+    timeout: 30_000,
   });
   // ready is set just before the title mounts, so wait for the card itself instead of
   // sampling isVisible() during that one-frame gap.
-  await page.locator('[data-testid="title-root"]').waitFor({ state: 'visible', timeout: 5_000 });
+  await page.locator('[data-testid="title-root"]').waitFor({ state: 'visible', timeout: 10_000 });
   await startFromTitle(page);
   await page.waitForFunction(
     () =>
@@ -55,7 +55,7 @@ export async function reloadGame(page: Page): Promise<void> {
       window.__game?.debugState().scene !== null &&
       (window.__game?.debugState().tickCount ?? 0) > 0,
     undefined,
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
 }
 
@@ -117,7 +117,7 @@ export async function loadRoom(
     { id: roomId, at: spawn },
   );
   await page.waitForFunction((id) => window.__game?.debugState().scene?.roomId === id, roomId, {
-    timeout: 15_000,
+    timeout: 30_000,
   });
 }
 
@@ -151,7 +151,7 @@ export async function waitForBossIdle(page: Page): Promise<void> {
       return boss !== null && boss !== undefined && boss.state === 'idle';
     },
     undefined,
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
 }
 

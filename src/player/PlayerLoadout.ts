@@ -5,12 +5,16 @@ export type PlayerLoadout = {
   readonly charms: readonly CharmId[];
   readonly nailLevel: number;
   readonly wallClaw: boolean;
+  readonly hookline: boolean;
+  readonly longline: boolean;
 };
 
 export const STARTER_LOADOUT: PlayerLoadout = {
   charms: [],
   nailLevel: 0,
   wallClaw: false,
+  hookline: false,
+  longline: false,
 };
 
 export function hasCharm(loadout: PlayerLoadout, id: CharmId): boolean {

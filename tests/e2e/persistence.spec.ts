@@ -58,6 +58,11 @@ test.describe('M7 persistence and the region loop', () => {
     await page.keyboard.press('KeyM');
     const map = page.getByRole('dialog', { name: 'Region Map' });
     await expect(map).toBeVisible();
+    // The panel slides up 8 px on entry. Measure the settled plate, not a frame of its
+    // entrance, or the transient offset reads as a viewport overflow.
+    await map.evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    });
     const mapBox = await map.boundingBox();
     expect(mapBox).not.toBeNull();
     expect(mapBox?.y ?? -1).toBeGreaterThanOrEqual(0);

@@ -1104,3 +1104,51 @@ beats); block-only guard (rejected: no counterplay or posture payoff); per-tick 
 create the opening, not consume it); reuse Hollow Knight's heal-only defence (rejected: too derivative and
 it leaves the announced parry/posture pillar unimplemented); art-dependent guard frames (rejected: the
 existing attack frames communicate the brace and keep the content pipeline unblocked).
+
+## D063 — 2026-10-23 — The Hookline is an authored-ring grapple with a Longline range upgrade
+
+**Decision:** The **Hookline** is the second traversal ability and the first post-slice weapon-system
+step. It is a thrown bell-wire line, not free aim: pressing `cast` (`I`, gamepad RB, touch **Hook**)
+targets the best authored brass ring in front of the hero. Thirty-five rings are placed in eight rooms —
+terrace 5, Drowned Gallery 6, Ossuary 2, Sunless Aqueduct 6, Bellows 3, Upper Gallery 5, Reliquary 2 and
+two in each boss arena. The Wall-Claw Shaft, Bell Nave and belfry antechamber deliberately have none, so
+the shaft's wall climb stays the Wall Claw's test.
+
+Selection is deterministic and readable. A ring is eligible at hand-to-ring distance 24–176 px, no more
+than 44 px below the hand, no more than 20 px behind the facing direction, with a clear line of sight
+(one-way ledges do not block it, masonry does). The score subtracts 14 px for a ring ahead and adds 30 px
+for one below; the best score wins. A pull moves at 420 px/s, snaps within 10 px, and hangs with the feet
+28 px below the ring for 18 ticks. The grip then releases into a 12-tick cooldown. While hanging, jump
+leaves at 210 px/s horizontal and 500 px/s vertical, down sets the normal drop-through state, and another
+cast retargets a different ring. A body collision during the pull cancels it instead of phasing through
+geometry. The **Longline** pickup on the Wall-Claw Shaft's upper shelf raises the range to 220 px.
+
+The ability is owned by the `aqueduct-hookline` pickup and the upgrade by `shaft-longline`; both derive
+from the existing v2 pickup list, so no save field or version bump is needed. `PlayerHook` is a pure
+simulation module with a `HookHost` seam, and the controller exposes phase, anchor, candidate, range and
+cooldown through the debug contract. `HookLayer` draws the rings, the reticle, a ten-segment rope with
+3 px of sag and a grip flare using procedural geometry; no new art or audio was required. On touch, the
+**Hook** lever is hidden until ownership and spans both action rows so it clears the 44 px target without
+crowding the six existing buttons. The Tideglass map UI remains untouched; this step only adds traversal
+content and its proof.
+
+**Why:** A grapple is the announced core of the four-weapon, grapple-first plan, and it must arrive early
+enough to shape the region instead of feeling like a late key. Authoring rings keeps every route legible
+on a 60×24 room and lets the camera and touch pad stay simple; it also avoids a generic "grapple any
+ceiling" rule that would turn every room into a physics puzzle and make level review unbounded. The
+range, hang and cooldown numbers give the pull a real cost: it crosses a gap faster than running but
+does not replace jumping or the Wall Claw, and the 44 px drop cap prevents it from becoming a free
+descender. Longline is a clean second reward for the shaft without a new verb. The 12-tick cooldown stops
+ring-to-ring spam while still allowing deliberate chained routes. Deriving ownership from pickups keeps
+the save honest and avoids a fourth migration for a boolean. The tall touch lever is the only layout that
+keeps the added target above the minimum size at 844×390 and 375 px landscape without shrinking Strike or
+Jump.
+
+**Alternatives:** free-aim reticle (rejected: gamepad/touch precision and readability at 640×360);
+grapple to any solid surface (rejected: unbounded authoring and trivializes existing gaps); unlimited
+hang or no cooldown (rejected: removes the risk/cost loop and lets the player skip combat positioning);
+auto-target rings behind the hero (rejected: fights the facing control and makes the reticle unpredictable
+during a fight); a fourth small touch button (rejected: measured below the 44 px target at 844×390);
+a dedicated `hookline` save boolean (rejected: duplicates pickup state and forces a schema bump); a
+scripted lift in the shaft (rejected: makes the Wall Claw gate skippable and violates the traversal
+contract); implementing the Tideglass map now (deferred: gameplay/content proof comes first).

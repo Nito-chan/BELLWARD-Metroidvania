@@ -163,6 +163,7 @@ export const PLAYER_SFX: Record<PlayerEvent, SfxKey> = {
   wallJump: 'jump',
   heal: 'bell',
   shield: 'bossWard',
+  hook: 'cast',
   hurt: 'playerHurt',
   // The region answers a death with its signature sound: the distant bell.
   death: 'bell',

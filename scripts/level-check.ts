@@ -4,10 +4,14 @@
  * an exit at a blocked spawn, or leave a boss two rooms from the nearest bench.
  */
 import { PICKUP } from '../src/config/pickups';
+import { HOOK } from '../src/config/hookline';
+import { PLAYER } from '../src/config/player';
 import { BENCHES } from '../src/data/benches';
 import { PICKUP_IDS, PICKUPS, type PickupKind } from '../src/data/pickups';
 import { ALL_ROOMS, DEFAULT_ROOM_ID, getRoom } from '../src/data/rooms';
 import { MAP_LAYOUT } from '../src/ui/map/mapLayout';
+import type { Vec2 } from '../src/core/Types';
+import { handPoint, hasHookLineOfSight } from '../src/world/hookGeometry';
 import { createRoom, isStandingPoint } from '../src/world/Room';
 import type { RoomDefinition } from '../src/world/Room';
 import type { Tilemap } from '../src/world/Tilemap';
@@ -30,6 +34,22 @@ const REQUIRED_ROOMS = [
 const errors: string[] = [];
 const fail = (message: string): void => {
   errors.push(message);
+};
+
+/** Authored ring budget per room. Counts are part of the content contract. */
+const ANCHOR_COUNTS: Readonly<Record<string, number>> = {
+  'belfry-terrace': 5,
+  'belfry-antechamber': 0,
+  'bellbearer-arena': 2,
+  'warden-arena': 2,
+  'bellthief-arena': 2,
+  'drowned-gallery': 6,
+  ossuary: 2,
+  'sunless-aqueduct': 6,
+  bellows: 3,
+  'wall-claw-shaft': 0,
+  'upper-gallery': 5,
+  reliquary: 2,
 };
 
 const check = (condition: boolean, message: string): void => {
@@ -170,12 +190,28 @@ function checkContent(): void {
     Object.values(PICKUPS).filter((pickup) => pickup.kind === kind).length;
   check(byKind('healthShard') === 4, `expected 4 mask shards, found ${byKind('healthShard')}`);
   check(byKind('charm') === 5, `expected 5 charms, found ${byKind('charm')}`);
-  check(byKind('ability') === 1, `expected 1 traversal ability, found ${byKind('ability')}`);
+  check(byKind('ability') === 3, `expected 3 traversal abilities, found ${byKind('ability')}`);
   check(byKind('key') === 1, `expected 1 key, found ${byKind('key')}`);
 
   check(
     PICKUPS['aqueduct-wall-claw']?.kind === 'ability',
     'the Wall Claw must remain an ability pickup',
+  );
+  check(
+    PICKUPS['aqueduct-hookline']?.kind === 'ability',
+    'the Hookline must remain an ability pickup',
+  );
+  check(
+    PICKUPS['shaft-longline']?.kind === 'ability',
+    'the Longline must remain an ability pickup',
+  );
+  check(
+    placements.get('aqueduct-hookline') === 'sunless-aqueduct',
+    'the Hookline must be found in the Sunless Aqueduct',
+  );
+  check(
+    placements.get('shaft-longline') === 'wall-claw-shaft',
+    'the Longline must be found at the top of the Wall-Claw Shaft',
   );
   const tideBell = PICKUPS['bellthief-tide-bell'];
   check(tideBell?.kind === 'key', 'the Tide-Bell must remain a key pickup');
@@ -193,6 +229,58 @@ function checkContent(): void {
     bossRooms.every((room) => room.ordeal !== undefined),
     'every boss arena needs an Ordeal altar trigger',
   );
+}
+
+/** Every standable surface top, used to prove each ring has a real casting perch. */
+function standingTops(tilemap: Tilemap): Vec2[] {
+  const points: Vec2[] = [];
+  for (let ty = 1; ty < tilemap.height; ty += 1) {
+    for (let tx = 0; tx < tilemap.width; tx += 1) {
+      if (!tilemap.isSolid(tx, ty)) continue;
+      if (tilemap.isSolid(tx, ty - 1)) continue;
+      const point = { x: tx * 16 + 8, y: ty * 16 };
+      if (isStandingPoint(tilemap, point, PLAYER.size)) points.push(point);
+    }
+  }
+  return points;
+}
+
+/**
+ * Ring contract: unique global ids, the authored per-room budget, and at least one
+ * standable perch within Longline reach with line of sight. A ring that only exists in
+ * the data but can never be cast at is treated as a content bug.
+ */
+function checkAnchors(): number {
+  const ids = new Set<string>();
+  let total = 0;
+  for (const room of ALL_ROOMS) {
+    const anchors = room.anchors ?? [];
+    const expected = ANCHOR_COUNTS[room.id] ?? 0;
+    check(
+      anchors.length === expected,
+      `${room.id} authors ${anchors.length} anchors, expected ${expected}`,
+    );
+    if (anchors.length === 0) continue;
+    const instance = createRoom(room);
+    const perches = standingTops(instance.tilemap);
+    for (const anchor of anchors) {
+      check(!ids.has(anchor.id), `duplicate anchor id "${anchor.id}"`);
+      ids.add(anchor.id);
+      total += 1;
+      const reachable = perches.some((feet) => {
+        const hand = handPoint(feet);
+        const distance = Math.hypot(anchor.x - hand.x, anchor.y - hand.y);
+        return (
+          distance >= HOOK.minRange &&
+          distance <= HOOK.range.long &&
+          hasHookLineOfSight(instance.tilemap, hand, anchor)
+        );
+      });
+      check(reachable, `${room.id}/${anchor.id} has no standing perch within Longline reach`);
+    }
+  }
+  check(total === 35, `expected 35 anchors, found ${total}`);
+  return total;
 }
 
 function checkBenches(): void {
@@ -254,6 +342,7 @@ function main(): void {
   checkBenches();
   checkBenchProximity();
   checkContent();
+  const anchors = checkAnchors();
 
   if (errors.length > 0) {
     console.error(`level:check failed with ${errors.length} issue(s):`);
@@ -262,7 +351,7 @@ function main(): void {
     return;
   }
   console.log(
-    `level:check ok — ${ALL_ROOMS.length} rooms, ${PICKUP_IDS.length} pickups, ${BENCHES.size} benches, 3 Ordeals.`,
+    `level:check ok — ${ALL_ROOMS.length} rooms, ${PICKUP_IDS.length} pickups, ${anchors} anchors, ${BENCHES.size} benches, 3 Ordeals.`,
   );
 }
 

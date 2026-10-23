@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { bootGame, debugState, dismissOnboarding, loadRoom } from './support';
+import { bootGame, dismissOnboarding, loadRoom } from './support';
 
 /**
  * Browser-level proof for the Keeper's Guard: the real key path must start the brace,
@@ -13,30 +13,48 @@ test.describe('the Keeper’s Guard', () => {
     await loadRoom(page, 'belfry-terrace', { x: 130, y: 320 });
 
     await page.keyboard.down('KeyF');
-    await page.waitForFunction(
-      () => window.__game?.debugState().scene?.player.guarding === true,
-      undefined,
-      { timeout: 5_000 },
-    );
-    expect((await debugState(page)).errors).toEqual([]);
+    // Return the opening state from the same observation that proves the brace; a second
+    // read after a yield can race the parishioner's first strike.
+    const opening = await (
+      await page.waitForFunction(
+        () => {
+          const state = window.__game?.debugState();
+          const player = state?.scene?.player;
+          if (!state || player?.guarding !== true) return null;
+          return { guarding: player.guarding, maxPosture: player.maxPosture, errors: state.errors };
+        },
+        undefined,
+        { timeout: 5_000 },
+      )
+    ).jsonValue();
+    if (opening === null) throw new Error('guard opening was not observed');
+    expect(opening.guarding).toBe(true);
+    expect(opening.maxPosture).toBeGreaterThan(0);
+    expect(opening.errors).toEqual([]);
 
-    const opening = await debugState(page);
-    expect(opening.scene?.player.guarding).toBe(true);
-    expect(opening.scene?.player.maxPosture).toBeGreaterThan(0);
-
-    // The parishioner at x=150 chases into range; the held brace spends posture.
-    await page.waitForFunction(
-      () => {
-        const player = window.__game?.debugState().scene?.player;
-        return player !== undefined && player.posture < player.maxPosture;
-      },
-      undefined,
-      { timeout: 15_000 },
-    );
-
-    const blocked = await debugState(page);
-    expect(blocked.scene?.player.guarding).toBe(true);
-    expect(blocked.scene?.player.posture).toBeLessThan(blocked.scene?.player.maxPosture ?? 0);
+    // The parishioner at x=150 chases into range; the held brace spends posture. Require
+    // both facts in one settled observation so a hit cannot masquerade as a block.
+    const blocked = await (
+      await page.waitForFunction(
+        () => {
+          const state = window.__game?.debugState();
+          const player = state?.scene?.player;
+          if (!state || player === undefined) return null;
+          if (player.guarding !== true || player.posture >= player.maxPosture) return null;
+          return {
+            guarding: player.guarding,
+            posture: player.posture,
+            maxPosture: player.maxPosture,
+            errors: state.errors,
+          };
+        },
+        undefined,
+        { timeout: 15_000 },
+      )
+    ).jsonValue();
+    if (blocked === null) throw new Error('guarded block was not observed');
+    expect(blocked.guarding).toBe(true);
+    expect(blocked.posture).toBeLessThan(blocked.maxPosture);
     expect(blocked.errors).toEqual([]);
 
     await page.keyboard.up('KeyF');

@@ -1,4 +1,5 @@
 import { COMBAT } from '../config/combat';
+import { HOOK } from '../config/hookline';
 import { PLAYER } from '../config/player';
 import { NAIL, type CharmId } from '../config/progression';
 import { SIM } from '../config/world';
@@ -6,12 +7,14 @@ import type { Rect, Vec2 } from '../core/Types';
 import type { InputSnapshot } from '../input/InputState';
 import { createBody, type Body } from '../physics/Body';
 import { moveAndCollide, type MoveResult } from '../physics/TileCollision';
+import type { RoomAnchor } from '../world/Room';
 import type { Tilemap } from '../world/Tilemap';
 import { PlayerCombat, type CombatHost } from './PlayerCombat';
 import { PlayerDash, type DashHost } from './PlayerDash';
 import { PlayerFocus } from './PlayerFocus';
 import { PlayerGuard, type GuardHost, type IncomingOutcome } from './PlayerGuard';
 import { PlayerHealing, type HealHost } from './PlayerHealing';
+import { PlayerHook, type HookHost, type HookPhase, type HookTickResult } from './PlayerHook';
 import { PlayerJump, type JumpHost } from './PlayerJump';
 import { hasCharm, STARTER_LOADOUT, type PlayerLoadout } from './PlayerLoadout';
 import { applyGravity, stepRun } from './playerMotion';
@@ -54,6 +57,7 @@ export class PlayerController {
   private readonly reaction = new PlayerReaction();
   private readonly healing = new PlayerHealing();
   private readonly wall = new PlayerWall();
+  private readonly hook = new PlayerHook();
   private loadoutValue: PlayerLoadout = STARTER_LOADOUT;
   private facingValue: -1 | 1 = 1;
   private jumpPeakYValue: number | null = null;
@@ -154,6 +158,37 @@ export class PlayerController {
     return this.guard.active;
   }
 
+  /** True while the Hookline owns movement. */
+  get hooking(): boolean {
+    return this.hook.active;
+  }
+
+  get hookPhase(): HookPhase {
+    return this.hook.phase;
+  }
+
+  /** The ring currently holding the line, or null between pulls. */
+  get hookAnchorId(): string | null {
+    return this.hook.anchorId;
+  }
+
+  /** The ring the reticle is highlighting, or null when nothing is in reach. */
+  get hookCandidateId(): string | null {
+    return this.hook.candidateId;
+  }
+
+  get hookRange(): number {
+    return this.hook.range;
+  }
+
+  get hookCooldown(): number {
+    return this.hook.cooldownTicks;
+  }
+
+  get hookEnabled(): boolean {
+    return this.loadoutValue.hookline || this.loadoutValue.longline;
+  }
+
   /** Player posture for the HUD. */
   get posture(): number {
     return this.guard.posture;
@@ -200,6 +235,8 @@ export class PlayerController {
       charms: [...loadout.charms],
       nailLevel: Math.max(0, Math.min(NAIL.maxLevel, Math.floor(loadout.nailLevel))),
       wallClaw: loadout.wallClaw,
+      hookline: loadout.hookline,
+      longline: loadout.longline,
     };
     const nailBonus = this.loadoutValue.nailLevel * NAIL.damagePerLevel;
     const nailReach = this.loadoutValue.nailLevel * NAIL.reachPerLevel;
@@ -216,6 +253,8 @@ export class PlayerController {
     this.healing.setDuration(Math.round(healTicks));
     this.healing.setSturdyShell(hasCharm(this.loadoutValue, 'sturdyShell'));
     this.wall.setEnabled(this.loadoutValue.wallClaw);
+    this.hook.setEnabled(this.loadoutValue.hookline || this.loadoutValue.longline);
+    this.hook.setRange(this.loadoutValue.longline ? HOOK.range.long : HOOK.range.base);
   }
 
   /** Boss or mask-shard reward: permanently (for this run) raises the mask ceiling. */
@@ -306,7 +345,9 @@ export class PlayerController {
       this.vitals.grantInvulnerability(PLAYER.heal.shieldInvulnerableTicks);
       return false;
     }
-    return this.reaction.takeDamage(this.reactionHost, amount, sourceX);
+    const hit = this.reaction.takeDamage(this.reactionHost, amount, sourceX);
+    if (hit) this.hook.cancel();
+    return hit;
   }
 
   /**
@@ -327,8 +368,8 @@ export class PlayerController {
     this.vitals.debugProtect(ticks);
   }
 
-  /** Advances one fixed tick. */
-  update(input: InputSnapshot, tilemap: Tilemap): void {
+  /** Advances one fixed tick. Anchor data is optional so simulation tests stay lean. */
+  update(input: InputSnapshot, tilemap: Tilemap, anchors: readonly RoomAnchor[] = []): void {
     this.pose.beginTick();
     this.vitals.tick();
     this.wall.tick();
@@ -336,6 +377,7 @@ export class PlayerController {
     if (this.state === 'dead') {
       this.healing.cancel();
       this.guard.cancel();
+      this.hook.cancel();
       this.reaction.stepDead(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
@@ -343,6 +385,7 @@ export class PlayerController {
     if (this.reaction.hurt) {
       this.healing.cancel();
       this.guard.cancel();
+      this.hook.cancel();
       this.reaction.stepHurt(this.reactionHost, tilemap, this.jump.heldButton);
       this.trackJumpPeak();
       return;
@@ -372,6 +415,22 @@ export class PlayerController {
       this.finalizeGuardState();
       this.trackJumpPeak();
       return;
+    }
+
+    // The Hookline is the next claim on the tick after the brace. Starting a pull and
+    // resolving its movement happen together so a ring can never be grabbed and then
+    // immediately overwritten by dash, attack or jump physics.
+    const hookResult: HookTickResult = this.hook.tick(this.hookHost, input, anchors, tilemap);
+    if (hookResult === 'jumped') this.jump.consumeBuffer();
+    if (this.hook.active) {
+      this.hook.step(this.hookHost, tilemap);
+      if (this.hook.active) {
+        this.pose.setState('hook', 'hook');
+        this.trackJumpPeak();
+        return;
+      }
+      // The grip gave out this tick. Fall through into ordinary physics so gravity and
+      // collision resolve the first frame of the drop.
     }
 
     const wasGrounded = this.body.grounded;
@@ -428,6 +487,23 @@ export class PlayerController {
       pose: this.pose,
       facing: this.facingValue,
       grounded: this.body.grounded,
+      busy:
+        this.reaction.hurt ||
+        this.state === 'attack' ||
+        this.state === 'dash' ||
+        this.state === 'heal' ||
+        this.state === 'dead',
+      setFacing: (direction) => {
+        this.facingValue = direction;
+      },
+    };
+  }
+
+  private get hookHost(): HookHost {
+    return {
+      body: this.body,
+      pose: this.pose,
+      facing: this.facingValue,
       busy:
         this.reaction.hurt ||
         this.state === 'attack' ||

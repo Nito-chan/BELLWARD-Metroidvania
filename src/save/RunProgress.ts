@@ -160,6 +160,8 @@ export class RunProgress {
       charms: [...this.charmsEquipped],
       nailLevel: this.nailLevelValue,
       wallClaw: this.hasPickup('aqueduct-wall-claw'),
+      hookline: this.hasPickup('aqueduct-hookline'),
+      longline: this.hasPickup('shaft-longline'),
     };
   }
 
@@ -314,6 +316,8 @@ export class RunProgress {
       charmsOwned: [...this.charmsOwned],
       charmsEquipped: [...this.charmsEquipped],
       wallClaw: this.hasPickup('aqueduct-wall-claw'),
+      hookline: this.hasPickup('aqueduct-hookline'),
+      longline: this.hasPickup('shaft-longline'),
       ordeals: [...this.ordeals],
       sliceComplete: this.sliceCompleteValue,
     };

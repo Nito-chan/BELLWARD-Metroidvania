@@ -23,6 +23,7 @@ import { EffectsLayer } from './EffectsLayer';
 import { EnemyView } from './EnemyView';
 import { ExitGate, type ExitRequest } from './ExitGate';
 import { HeroView } from './HeroView';
+import { HookLayer } from './HookLayer';
 import { LabelLayer } from './LabelLayer';
 import { PickupLayer } from './PickupLayer';
 import { ProjectileView } from './ProjectileView';
@@ -85,6 +86,7 @@ export class RoomScene {
   private readonly backdrop: SceneBackdrop;
   private readonly world = new Container();
   private readonly actorLayer = new Container();
+  private readonly hookLayer: HookLayer;
   private readonly enemyRecords: EnemyRecord[] = [];
   private readonly enemyBuffer: Enemy[] = [];
   private readonly projectiles = new ProjectilePool();
@@ -164,6 +166,7 @@ export class RoomScene {
     this.effects = new EffectsLayer(art);
     this.feedback = new CombatFeedback(audio, this.effects, this.camera);
     this.projectileView = new ProjectileView(art, this.projectiles);
+    this.hookLayer = new HookLayer(room.definition.anchors ?? []);
 
     this.objectives = new RoomObjectives({
       room,
@@ -211,6 +214,7 @@ export class RoomScene {
     });
 
     this.world.addChild(this.actorLayer);
+    this.world.addChild(this.hookLayer.view);
     this.world.addChild(this.effects.view, this.projectileView.view);
     this.world.addChild(new PropLayer(room.definition.props, 'front', art).view);
     this.view.addChild(this.world);
@@ -344,7 +348,7 @@ export class RoomScene {
       return [];
     }
 
-    this.player.update(input, this.room.tilemap);
+    this.player.update(input, this.room.tilemap, this.room.definition.anchors ?? []);
 
     const context: EnemyContext = {
       tilemap: this.room.tilemap,
@@ -482,6 +486,7 @@ export class RoomScene {
 
     for (const record of this.enemyRecords) record.view.sync(record.enemy);
     this.projectileView.sync(this.projectiles, tickCount);
+    this.hookLayer.update(this.player, tickCount);
     this.effects.update();
   }
 

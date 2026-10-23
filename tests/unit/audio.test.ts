@@ -168,6 +168,7 @@ describe('audio data tables', () => {
       'wallJump',
       'heal',
       'shield',
+      'hook',
       'hurt',
       'death',
     ];

@@ -7,6 +7,7 @@ export type PlayerStateName =
   | 'wallslide'
   | 'attack'
   | 'guard'
+  | 'hook'
   | 'dash'
   | 'heal'
   | 'hurt'
@@ -29,5 +30,6 @@ export type PlayerEvent =
   | 'wallJump'
   | 'heal'
   | 'shield'
+  | 'hook'
   | 'hurt'
   | 'death';

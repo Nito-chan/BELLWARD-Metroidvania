@@ -18,12 +18,14 @@ const PICKUPS: readonly {
   { roomId: 'ossuary', spawn: { x: 340, y: 256 }, id: 'ossuary-health-shard' },
   { roomId: 'sunless-aqueduct', spawn: { x: 480, y: 208 }, id: 'aqueduct-wall-claw' },
   { roomId: 'sunless-aqueduct', spawn: { x: 300, y: 256 }, id: 'aqueduct-shard-low' },
-  { roomId: 'sunless-aqueduct', spawn: { x: 800, y: 208 }, id: 'aqueduct-shard-high' },
+  { roomId: 'sunless-aqueduct', spawn: { x: 800, y: 208 }, id: 'aqueduct-hookline' },
+  { roomId: 'sunless-aqueduct', spawn: { x: 880, y: 320 }, id: 'aqueduct-shard-high' },
   { roomId: 'sunless-aqueduct', spawn: { x: 680, y: 256 }, id: 'aqueduct-ember-greed' },
   { roomId: 'sunless-aqueduct', spawn: { x: 440, y: 208 }, id: 'aqueduct-health-shard' },
   { roomId: 'bellows', spawn: { x: 660, y: 256 }, id: 'bellows-shard-low' },
   { roomId: 'bellows', spawn: { x: 840, y: 208 }, id: 'bellows-shard-high' },
   { roomId: 'wall-claw-shaft', spawn: { x: 456, y: 320 }, id: 'shaft-shard' },
+  { roomId: 'wall-claw-shaft', spawn: { x: 820, y: 80 }, id: 'shaft-longline' },
   { roomId: 'upper-gallery', spawn: { x: 300, y: 256 }, id: 'upper-shard-low' },
   { roomId: 'upper-gallery', spawn: { x: 820, y: 208 }, id: 'upper-shard-high' },
   { roomId: 'reliquary', spawn: { x: 496, y: 208 }, id: 'reliquary-long-reach' },
@@ -200,6 +202,8 @@ test.describe('M8 complete playthrough', () => {
     expect(completed.run.charmsEquipped).toEqual(['quickMend', 'lightStep', 'emberGreed']);
     expect(completed.run.nailLevel).toBe(2);
     expect(completed.run.shards).toBe(225);
+    expect(completed.run.hookline).toBe(true);
+    expect(completed.run.longline).toBe(true);
     expect(completed.run.checkpoint?.benchId).toBe('terrace-weeping-stone');
     expect(completed.run.sliceComplete).toBe(true);
     expect(completed.save.lastWrite).toBe('reward');
@@ -220,12 +224,14 @@ test.describe('M8 complete playthrough', () => {
     await reloadGame(page);
     const resumed = await debugState(page);
     expect(resumed.run.visitedRooms).toHaveLength(12);
-    expect(resumed.run.pickups).toHaveLength(22);
+    expect(resumed.run.pickups).toHaveLength(24);
     expect(resumed.run.sigils).toHaveLength(3);
     expect(resumed.run.ordeals).toHaveLength(3);
     expect(resumed.run.maxHp).toBe(9);
     expect(resumed.run.nailLevel).toBe(2);
     expect(resumed.run.shards).toBe(225);
+    expect(resumed.run.hookline).toBe(true);
+    expect(resumed.run.longline).toBe(true);
     expect(resumed.run.sliceComplete).toBe(true);
     expect(resumed.save).toMatchObject({ present: true, loaded: true });
     await page.waitForTimeout(400);

@@ -31,7 +31,7 @@ async function waitForBoss(page: Page, condition: BossCondition, timeout = 15_00
 }
 
 test.describe('M6 bell bosses', () => {
-  test.describe.configure({ timeout: 90_000 });
+  test.describe.configure({ timeout: 180_000 });
 
   test('the bell nave opens all three arenas', async ({ page }) => {
     await bootGame(page);
@@ -214,26 +214,26 @@ test.describe('M6 bell bosses', () => {
 });
 
 test.describe('M6 boss audio', () => {
-  test.describe.configure({ timeout: 120_000 });
+  test.describe.configure({ timeout: 180_000 });
 
   test('the Warden arena requests and plays its boss loop', async ({ page }) => {
     await bootGame(page);
     await page.waitForFunction(
       () => window.__game?.debugState().audio.context === 'running',
       undefined,
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
     await loadRoom(page, 'warden-arena');
     await page.waitForFunction(
       () => window.__game?.debugState().audio.music === 'bossCitadel',
       undefined,
-      { timeout: 15_000 },
+      { timeout: 30_000 },
     );
     try {
       await page.waitForFunction(
         () => window.__game?.debugState().audio.musicPlaying === true,
         undefined,
-        { timeout: 45_000 },
+        { timeout: 60_000 },
       );
     } catch (error) {
       const audio = await page.evaluate(() => window.__game?.debugState().audio);

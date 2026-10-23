@@ -77,6 +77,18 @@ export const PICKUPS: Readonly<Record<string, PickupDef>> = {
     name: 'Wall Claw',
     description: 'A hooked relic. Cling to wet stone, then kick away.',
   },
+  'aqueduct-hookline': {
+    id: 'aqueduct-hookline',
+    kind: 'ability',
+    name: 'Hookline',
+    description: 'A coil of bell wire. Throw it to a brass ring and let the belfry pull.',
+  },
+  'shaft-longline': {
+    id: 'shaft-longline',
+    kind: 'ability',
+    name: 'Longline',
+    description: 'A longer coil, wound by the Keeper. The line reaches what the eye can.',
+  },
   'aqueduct-shard-low': {
     id: 'aqueduct-shard-low',
     kind: 'shard',

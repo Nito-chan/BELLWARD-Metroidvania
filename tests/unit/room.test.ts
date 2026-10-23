@@ -6,6 +6,7 @@ import { belfryAntechamber } from '../../src/data/rooms/belfry-antechamber';
 import { ALL_ROOMS, ROOMS, getRoom } from '../../src/data/rooms';
 import { BellwardError } from '../../src/core/Errors';
 import { createRoom, isStandingPoint } from '../../src/world/Room';
+import { canHangAt } from '../../src/world/hookGeometry';
 
 describe('createRoom', () => {
   it('builds the belfry terrace with the expected dimensions', () => {
@@ -294,5 +295,55 @@ describe('M6 rooms and the bell nave graph', () => {
         benches: [{ ...bench, spawn: { x: bench.x + 47, y: bench.y } }],
       }),
     ).toThrow(/outside its interaction range/);
+  });
+});
+
+describe('Hookline anchors', () => {
+  it('authors 35 globally unique rings, each hanging in open space', () => {
+    const ids = new Set<string>();
+    const counts: Record<string, number> = {};
+    for (const definition of ALL_ROOMS) {
+      counts[definition.id] = definition.anchors?.length ?? 0;
+      const room = createRoom(definition);
+      for (const anchor of definition.anchors ?? []) {
+        expect(ids.has(anchor.id)).toBe(false);
+        ids.add(anchor.id);
+        expect(room.tilemap.isSolid(Math.floor(anchor.x / 16), Math.floor(anchor.y / 16))).toBe(
+          false,
+        );
+        expect(canHangAt(room.tilemap, anchor)).toBe(true);
+      }
+    }
+    expect(ids.size).toBe(35);
+    expect(counts['belfry-terrace']).toBe(5);
+    expect(counts['drowned-gallery']).toBe(6);
+    expect(counts['wall-claw-shaft']).toBe(0);
+    expect(counts['belfry-antechamber']).toBe(0);
+  });
+
+  it('rejects duplicate, empty, outside, solid-mounted and blocked rings', () => {
+    const [anchor] = belfryTerrace.anchors ?? [];
+    expect(anchor).toBeDefined();
+    if (!anchor) return;
+
+    expect(() =>
+      createRoom({ ...belfryTerrace, anchors: [anchor, { ...anchor, x: anchor.x + 2 }] }),
+    ).toThrow(/duplicate anchor id/);
+
+    expect(() => createRoom({ ...belfryTerrace, anchors: [{ ...anchor, id: ' ' }] })).toThrow(
+      /id is empty/,
+    );
+
+    expect(() =>
+      createRoom({ ...belfryTerrace, anchors: [{ ...anchor, id: 'outside', x: 960 }] }),
+    ).toThrow(/leaves the room/);
+
+    expect(() =>
+      createRoom({ ...belfryTerrace, anchors: [{ ...anchor, id: 'solid', x: 8, y: 320 }] }),
+    ).toThrow(/inside solid geometry/);
+
+    expect(() =>
+      createRoom({ ...belfryTerrace, anchors: [{ ...anchor, id: 'blocked', x: 420, y: 306 }] }),
+    ).toThrow(/hang point .* overlaps geometry/);
   });
 });
