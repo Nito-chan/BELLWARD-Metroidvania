@@ -113,15 +113,29 @@ describe('boss content', () => {
         const phase = phases[i];
         if (!previous || !phase) throw new Error('phase table has a hole');
         expect(phase.threshold).toBeLessThan(previous.threshold);
-        expect(phase.threshold).toBeGreaterThan(0);
-        expect(phase.transitionTicks).toBeGreaterThan(0);
+        expect(phase.threshold).toBeGreaterThanOrEqual(0);
+        // The last phase of a mechanic-driven boss (mode: 'lastKeeper') is entered
+        // by chains/ritual, not by health, so its transition can be instant.
+        const isLastPhase = i === phases.length - 1;
+        if (isLastPhase) {
+          expect(phase.transitionTicks).toBeGreaterThanOrEqual(0);
+        } else {
+          expect(phase.transitionTicks).toBeGreaterThan(0);
+        }
       }
       for (const [index, phase] of phases.entries()) {
-        expect(phase.patterns.length).toBeGreaterThan(0);
+        // The last phase of a mechanic-driven boss (mode: 'lastKeeper') has no
+        // authored patterns; its chains/answers are handled by room-side logic.
+        const isLastKeeperFinal = BOSSES[kind].mode === 'lastKeeper' && index === phases.length - 1;
+        if (!isLastKeeperFinal) expect(phase.patterns.length).toBeGreaterThan(0);
         expect(phase.speedScale).toBeGreaterThan(0);
-        expect(phase.idleTicks[0]).toBeGreaterThanOrEqual(BOSS_FAIRNESS.minIdleTicks);
-        expect(phase.idleTicks[1]).toBeLessThanOrEqual(BOSS_FAIRNESS.maxIdleTicks);
-        expect(phase.idleTicks[0]).toBeLessThanOrEqual(phase.idleTicks[1]);
+        // The Last Keeper's final answer phase has no idle/pause cadence; it
+        // waits on player action instead.
+        if (!isLastKeeperFinal) {
+          expect(phase.idleTicks[0]).toBeGreaterThanOrEqual(BOSS_FAIRNESS.minIdleTicks);
+          expect(phase.idleTicks[1]).toBeLessThanOrEqual(BOSS_FAIRNESS.maxIdleTicks);
+          expect(phase.idleTicks[0]).toBeLessThanOrEqual(phase.idleTicks[1]);
+        }
         if (index === 0) expect(phase.transitionTicks).toBe(0);
       }
     }

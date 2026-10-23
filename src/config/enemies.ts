@@ -12,7 +12,7 @@
  * not one melee loop.
  */
 export type EnemyKind = 'parishioner' | 'ghoul' | 'adept';
-export type BossKind = 'bellbearer' | 'wardenMoss' | 'bellThief';
+export type BossKind = 'bellbearer' | 'wardenMoss' | 'bellThief' | 'lastKeeper';
 export type ActorKind = EnemyKind | BossKind;
 
 /** A forward hitbox, relative to the owner's feet-center. Mirrors COMBAT.player.attackBox. */
@@ -187,10 +187,28 @@ export const ENEMIES: Readonly<Record<ActorKind, EnemyStats>> = {
     posture: 150,
     contactDamage: 1,
   },
+  lastKeeper: {
+    displayName: 'The Last Keeper',
+    hp: 40,
+    body: { w: 26, h: 58 },
+    patrolSpeed: 0,
+    chaseSpeed: 0,
+    aggroRange: 0,
+    deaggroRange: 0,
+    verticalRange: 0,
+    staggerTicks: 0,
+    posture: 160,
+    contactDamage: 1,
+  },
 };
 
 export const ENEMY_KINDS: readonly EnemyKind[] = ['parishioner', 'ghoul', 'adept'];
-export const BOSS_KINDS: readonly BossKind[] = ['bellbearer', 'wardenMoss', 'bellThief'];
+export const BOSS_KINDS: readonly BossKind[] = [
+  'bellbearer',
+  'wardenMoss',
+  'bellThief',
+  'lastKeeper',
+];
 export const ACTOR_KINDS: readonly ActorKind[] = [...ENEMY_KINDS, ...BOSS_KINDS];
 
 export function isBossKind(kind: ActorKind): kind is BossKind {

@@ -29,6 +29,7 @@ const REQUIRED_ROOMS = [
   'upper-gallery',
   'ossuary',
   'reliquary',
+  'last-bell',
 ] as const;
 
 const errors: string[] = [];
@@ -50,6 +51,7 @@ const ANCHOR_COUNTS: Readonly<Record<string, number>> = {
   'wall-claw-shaft': 0,
   'upper-gallery': 5,
   reliquary: 2,
+  'last-bell': 3,
 };
 
 const check = (condition: boolean, message: string): void => {
@@ -224,10 +226,10 @@ function checkContent(): void {
   );
 
   const bossRooms = ALL_ROOMS.filter((room) => room.boss);
-  check(bossRooms.length === 3, `expected 3 boss rooms, found ${bossRooms.length}`);
+  check(bossRooms.length === 4, `expected 4 boss rooms, found ${bossRooms.length}`);
   check(
-    bossRooms.every((room) => room.ordeal !== undefined),
-    'every boss arena needs an Ordeal altar trigger',
+    bossRooms.every((room) => room.id === 'last-bell' || room.ordeal !== undefined),
+    'every boss arena except the Last Bell needs an Ordeal altar trigger',
   );
 }
 
@@ -279,7 +281,7 @@ function checkAnchors(): number {
       check(reachable, `${room.id}/${anchor.id} has no standing perch within Longline reach`);
     }
   }
-  check(total === 35, `expected 35 anchors, found ${total}`);
+  check(total === 38, `expected 38 anchors, found ${total}`);
   return total;
 }
 
@@ -305,7 +307,7 @@ function checkBenches(): void {
 }
 
 function checkRooms(): void {
-  check(ALL_ROOMS.length === 12, `expected 12 rooms, found ${ALL_ROOMS.length}`);
+  check(ALL_ROOMS.length === 13, `expected 13 rooms, found ${ALL_ROOMS.length}`);
   for (const id of REQUIRED_ROOMS) {
     check(
       ALL_ROOMS.some((room) => room.id === id),
@@ -351,7 +353,7 @@ function main(): void {
     return;
   }
   console.log(
-    `level:check ok — ${ALL_ROOMS.length} rooms, ${PICKUP_IDS.length} pickups, ${anchors} anchors, ${BENCHES.size} benches, 3 Ordeals.`,
+    `level:check ok — ${ALL_ROOMS.length} rooms, ${PICKUP_IDS.length} pickups, ${anchors} anchors, ${BENCHES.size} benches, ${ALL_ROOMS.filter((room) => room.ordeal !== undefined).length} Ordeals.`,
   );
 }
 

@@ -3,7 +3,14 @@ import type { SfxKey } from '../data/audio';
 
 /** Things a boss did that the scene should hear, feel or announce. */
 export type BossEvent =
-  | { type: 'tell'; patternId: string; sfx: SfxKey }
+  | {
+      type: 'tell';
+      patternId: string;
+      sfx: SfxKey;
+      /** World position of the tell, when relevant (chains, great bell). */
+      x?: number;
+      y?: number;
+    }
   | { type: 'attack'; patternId: string; sfx: SfxKey | null }
   | { type: 'phase'; phase: number; name: string }
   | { type: 'wardBreak'; x: number; y: number }

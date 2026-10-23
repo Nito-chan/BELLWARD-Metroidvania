@@ -9,6 +9,7 @@ import type { BossKind } from '../config/enemies';
 import { ORDEAL } from '../config/progression';
 import { forwardBox } from '../combat/geometry';
 import { clamp } from '../core/Math2D';
+import type { Vec2 } from '../core/Types';
 import type { Rng } from '../core/Rng';
 import type { Rect } from '../core/Types';
 import type { MoveResult } from '../physics/TileCollision';
@@ -18,6 +19,23 @@ import { BossPatternState } from './BossPatternState';
 import { diveLandingX, teleportBehindX } from './bossPlacement';
 import { launchPatternStart, launchRainVolley } from './bossProjectiles';
 import { Enemy, type EnemyContext } from './Enemy';
+
+/** A Toll wave passing through a world position, used for Last Keeper chains and answers. */
+export type TollWaveAt = { readonly x: number; readonly y: number };
+
+/** Last Keeper mechanic tuning. */
+const LAST_KEEPER = {
+  /** Radius (px) within which a Toll wave opens a chain. */
+  chainRadius: 40,
+  /** Ticks the Censer has to break a chain after Toll opens it. */
+  chainWindowTicks: 60,
+  /** Radius (px) within which a Toll wave answers the great bell. */
+  bellRadius: 40,
+  /** Ticks the player has to answer a boss ring. */
+  answerWindowTicks: 24,
+  /** Ticks of the phase 2 → phase 3 transition. */
+  phase3TransitionTicks: 50,
+} as const;
 
 export type { BossEvent } from './BossEvents';
 
@@ -47,6 +65,29 @@ export class Boss extends Enemy {
   private deathElapsedValue = 0;
   private readonly eventBuffer: BossEvent[] = [];
 
+  // Last Keeper mechanic state (only when definition.mode === 'lastKeeper')
+  private lastKeeperModeValue = false;
+  /** Chains broken in phase 2 (0..3). */
+  private chainCountValue = 0;
+  /** A chain is open and waiting for a Censer hit. */
+  private chainOpenValue = false;
+  /** Ticks remaining in the current Censer response window. */
+  private chainWindowTicksValue = 0;
+  /** The three chain positions in world space. */
+  private chainTargetsValue: Vec2[] = [];
+  /** The great bell position in world space. */
+  private greatBellValue: Vec2 | null = null;
+  /** Toll answers given in phase 3 (0..3). */
+  private answerCountValue = 0;
+  /** A boss ring is open and waiting for a Toll answer. */
+  private answerWindowValue = false;
+  /** Ticks remaining in the current answer window. */
+  private answerWindowTicksValue = 0;
+  /** All three answers given; the ritual is solved. */
+  private ritualSolvedValue = false;
+  /** Flood level in phase 2 (0..3, rises after each chain break). */
+  private waterLevelValue = 0;
+
   constructor(kind: BossKind, spawn: EnemySpawn, rng: Rng, variant: BossVariant = 'normal') {
     super(kind, spawn);
     this.definition = BOSSES[kind];
@@ -56,6 +97,9 @@ export class Boss extends Enemy {
     this.hp = this.maxHp;
     this.rng = rng;
     this.wardedValue = this.definition.gate === 'bellShield';
+    this.lastKeeperModeValue = this.definition.mode === 'lastKeeper';
+    this.chainTargetsValue = (spawn as EnemySpawn & { chainTargets?: Vec2[] }).chainTargets ?? [];
+    this.greatBellValue = (spawn as EnemySpawn & { greatBell?: Vec2 }).greatBell ?? null;
     this.beginState('intro', this.scaled(this.definition.introTicks), 'idle');
   }
 
@@ -91,6 +135,51 @@ export class Boss extends Enemy {
 
   get wardFlash(): boolean {
     return this.wardFlashTicks > 0;
+  }
+
+  /** True when this is a Last Keeper encounter. */
+  get lastKeeperMode(): boolean {
+    return this.lastKeeperModeValue;
+  }
+
+  /** Chains broken in phase 2 (0..3). */
+  get chainCount(): number {
+    return this.chainCountValue;
+  }
+
+  /** A chain is open and waiting for a Censer hit. */
+  get chainOpen(): boolean {
+    return this.chainOpenValue;
+  }
+
+  /** The three chain positions in world space. */
+  get chainTargets(): readonly Vec2[] {
+    return this.chainTargetsValue;
+  }
+
+  /** The great bell position in world space. */
+  get greatBell(): Vec2 | null {
+    return this.greatBellValue;
+  }
+
+  /** Toll answers given in phase 3 (0..3). */
+  get answerCount(): number {
+    return this.answerCountValue;
+  }
+
+  /** A boss ring is open and waiting for a Toll answer. */
+  get answerWindow(): boolean {
+    return this.answerWindowValue;
+  }
+
+  /** All three answers given; the ritual is solved. */
+  get ritualSolved(): boolean {
+    return this.ritualSolvedValue;
+  }
+
+  /** Flood level in phase 2 (0..3, rises after each chain break). */
+  get waterLevel(): number {
+    return this.waterLevelValue;
   }
 
   get deathElapsed(): number {
@@ -151,6 +240,13 @@ export class Boss extends Enemy {
     const applied = Math.max(0, Math.floor(amount));
     if (applied === 0) return false;
 
+    // Last Keeper phase 2: health is gated at 1. Chains, not damage, end the phase.
+    if (this.lastKeeperModeValue && this.phaseIndexValue === 1) {
+      this.hp = Math.max(1, this.hp - applied);
+      this.flashTicks = 4;
+      return false;
+    }
+
     this.hp = Math.max(0, this.hp - applied);
     this.flashTicks = 4;
     if (this.hp <= 0) {
@@ -180,6 +276,88 @@ export class Boss extends Enemy {
     if (this.alive) this.defeat();
   }
 
+  /** Called by the room scene when a Toll wave passes through this position. */
+  tollAt(x: number, y: number): void {
+    if (!this.lastKeeperModeValue) return;
+
+    if (this.phaseIndexValue === 1) {
+      // Phase 2: Toll opens the next chain for a 60-tick Censer window.
+      if (!this.chainOpenValue && this.chainWindowTicksValue <= 0) {
+        const target = this.chainTargetsValue[this.chainCountValue];
+        if (target && Math.hypot(x - target.x, y - target.y) < LAST_KEEPER.chainRadius) {
+          this.chainOpenValue = true;
+          this.chainWindowTicksValue = LAST_KEEPER.chainWindowTicks;
+          this.eventBuffer.push({
+            type: 'tell',
+            patternId: 'chain.open',
+            sfx: 'bossBell',
+            x: target.x,
+            y: target.y,
+          });
+        }
+      }
+    } else if (this.phaseIndexValue === 2) {
+      // Phase 3: Toll answers the great bell during an open answer window.
+      if (this.answerWindowValue && this.answerWindowTicksValue > 0) {
+        if (
+          this.greatBellValue &&
+          Math.hypot(x - this.greatBellValue.x, y - this.greatBellValue.y) < LAST_KEEPER.bellRadius
+        ) {
+          // Correct answer: light a pip and close the window.
+          this.answerWindowValue = false;
+          this.answerWindowTicksValue = 0;
+          this.answerCountValue += 1;
+          this.eventBuffer.push({
+            type: 'wardBreak',
+            x: this.greatBellValue.x,
+            y: this.greatBellValue.y,
+          });
+          if (this.answerCountValue >= 3) {
+            this.ritualSolvedValue = true;
+            this.defeat();
+          }
+        }
+      }
+    }
+  }
+
+  /** Called by the room scene when a Censer swing hits this position. */
+  censerAt(x: number, y: number): void {
+    if (!this.lastKeeperModeValue || this.phaseIndexValue !== 1) return;
+    if (!this.chainOpenValue || this.chainWindowTicksValue <= 0) return;
+
+    const target = this.chainTargetsValue[this.chainCountValue];
+    if (target && Math.hypot(x - target.x, y - target.y) < LAST_KEEPER.chainRadius) {
+      // Chain broken: advance flood, open the next chain, or enter phase 3.
+      this.chainOpenValue = false;
+      this.chainWindowTicksValue = 0;
+      this.chainCountValue += 1;
+      this.waterLevelValue += 1;
+      this.eventBuffer.push({
+        type: 'wardBreak',
+        x: target.x,
+        y: target.y,
+      });
+      if (this.chainCountValue >= 3) {
+        this.enterPhase3();
+      }
+    }
+  }
+
+  /** Enter phase 3 (The Answer): invulnerable, solved by Toll answers. */
+  private enterPhase3(): void {
+    this.phaseIndexValue = 2;
+    this.patterns.clear();
+    this.body.vx = 0;
+    this.beginState('phase', this.scaled(LAST_KEEPER.phase3TransitionTicks), 'hurt');
+    this.eventBuffer.push({ type: 'phase', phase: 2, name: 'The Answer' });
+  }
+
+  /** Process a Toll wave at a world position each tick. Called by the room scene. */
+  processTollWave(x: number, y: number): void {
+    this.tollAt(x, y);
+  }
+
   consumeEvents(): BossEvent[] {
     return this.eventBuffer.splice(0, this.eventBuffer.length);
   }
@@ -195,6 +373,39 @@ export class Boss extends Enemy {
   }
 
   protected think(ctx: EnemyContext): void {
+    // Last Keeper mechanic clocks, ticking in every state.
+    if (this.lastKeeperModeValue) {
+      if (this.chainWindowTicksValue > 0) {
+        this.chainWindowTicksValue -= 1;
+        if (this.chainWindowTicksValue === 0) this.chainOpenValue = false;
+      }
+      if (this.answerWindowTicksValue > 0) {
+        this.answerWindowTicksValue -= 1;
+        if (this.answerWindowTicksValue === 0) {
+          this.answerWindowValue = false;
+          // A missed answer sends a telegraphed shockwave; no progress lost.
+          this.eventBuffer.push({ type: 'wallHit', x: this.feet.x, y: this.feet.y });
+        }
+      }
+      // Phase 3: the keeper rings the great bell, opening an answer window.
+      if (
+        this.phaseIndexValue === 2 &&
+        !this.answerWindowValue &&
+        this.answerWindowTicksValue <= 0 &&
+        this.answerCountValue < 3
+      ) {
+        this.answerWindowValue = true;
+        this.answerWindowTicksValue = LAST_KEEPER.answerWindowTicks;
+        this.eventBuffer.push({
+          type: 'tell',
+          patternId: 'answer.open',
+          sfx: 'bossBell',
+          x: this.greatBellValue?.x ?? this.feet.x,
+          y: this.greatBellValue?.y ?? this.feet.y,
+        });
+      }
+    }
+
     switch (this.stateValue) {
       case 'intro':
         this.body.vx = 0;

@@ -1,8 +1,9 @@
 import type { BossKind } from '../config/enemies';
 import { BellwardError } from '../core/Errors';
 import type { Rng } from '../core/Rng';
+import type { Vec2 } from '../core/Types';
+import type { EnemySpawn, Room } from '../world/Room';
 import { Boss, type BossVariant } from '../enemies/Boss';
-import type { Room } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
 import { BossEncounter } from './BossEncounter';
 import type { Camera } from './Camera';
@@ -25,6 +26,14 @@ export type BossSpawnOptions = {
   allowClaimed?: boolean;
 };
 
+/** Last Keeper data attached to the boss spawn for phase-2 chains and phase-3 bell. */
+export type LastKeeperSpawnData = {
+  /** The three chain positions in world space. */
+  readonly chainTargets: Vec2[];
+  /** The great bell position in world space. */
+  readonly greatBell: Vec2;
+};
+
 /**
  * Builds the room's boss encounter, or returns null when the arena is already claimed.
  * Content errors are loud: a declared boss without a spawn is an authoring mistake.
@@ -38,7 +47,16 @@ export function spawnBoss(options: BossSpawnOptions): BossEncounter | null {
       `room "${options.room.definition.id}" declares boss "${kind}" without a spawn`,
     );
   }
-  return new BossEncounter(new Boss(kind, spawn, options.rng, options.variant ?? 'normal'), {
+
+  // Last Keeper arenas carry chain and great-bell positions for phase mechanics.
+  const bossSpawn = spawn as EnemySpawn & { chainTargets?: Vec2[]; greatBell?: Vec2 };
+  if (options.room.definition.lastKeeper) {
+    const lk = options.room.definition.lastKeeper;
+    bossSpawn.chainTargets = lk.chains.map((c) => ({ x: c.x, y: c.y }));
+    bossSpawn.greatBell = { x: lk.greatBell.x, y: lk.greatBell.y };
+  }
+
+  return new BossEncounter(new Boss(kind, bossSpawn, options.rng, options.variant ?? 'normal'), {
     art: options.art,
     audio: options.audio,
     effects: options.effects,

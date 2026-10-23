@@ -88,6 +88,8 @@ export type BossDef = {
   readonly deathFadeTicks: number;
   /** A shield that blocks every hit until its wall-charge condition is met. */
   readonly gate?: 'bellShield';
+  /** The Last Keeper's phases are mechanic-driven rather than health-based. */
+  readonly mode?: 'lastKeeper';
   readonly wardBreakStunTicks?: number;
   /** Human-readable reward name used by the victory banner and progress log. */
   readonly rewardName: string;

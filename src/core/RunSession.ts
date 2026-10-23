@@ -112,11 +112,19 @@ export class RunSession {
     }
 
     if (scene.consumeEnding()) {
-      if (this.progress.markTideDoorOpened()) this.persist('reward');
       const definition = getRoom(this.roomIdValue);
+      const isFinalEnding = !!definition.lastKeeper;
+      if (isFinalEnding) {
+        if (this.progress.markEndingSeen()) this.persist('ending');
+      } else {
+        if (this.progress.markTideDoorOpened()) this.persist('reward');
+      }
       this.deps?.onEnding?.(
-        definition.ending?.title ?? 'THE TIDE-BELL ANSWERS',
-        definition.ending?.subtitle ?? 'The last door opens. Far below, a bell is still ringing.',
+        definition.ending?.title ?? (isFinalEnding ? 'THE LAST SILENCE' : 'THE TIDE-BELL ANSWERS'),
+        definition.ending?.subtitle ??
+          (isFinalEnding
+            ? 'The Keeper sets down the bell. The water is still.'
+            : 'The last door opens. Far below, a bell is still ringing.'),
       );
     }
 
@@ -199,6 +207,7 @@ export class RunSession {
       sealOpen: this.progress.hasPickup('bellthief-tide-bell'),
       ordealCleared: definition.boss ? this.progress.hasOrdeal(definition.boss) : false,
       endingSeen: this.progress.endingSeen,
+      tideDoorOpened: this.progress.tideDoorOpened,
       announce: deps.announce,
       arrival,
       screenShake: deps.screenShake?.(),

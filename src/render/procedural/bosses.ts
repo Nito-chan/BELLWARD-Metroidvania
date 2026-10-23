@@ -180,12 +180,56 @@ function drawBellThief(ctx: CanvasRenderingContext2D, ox: number, frame: number)
   ctx.fillRect(ox + 44 + sweep, 13 + bob, 2, 3);
 }
 
+function drawLastKeeper(ctx: CanvasRenderingContext2D, ox: number, frame: number): void {
+  const bob = frame % 2;
+  const lean = frame === 2 ? -3 : frame === 3 ? -5 : frame === 4 ? 5 : 0;
+
+  // Drowned keeper's robes, heavy and still.
+  ctx.fillStyle = hex(PALETTE.cavern);
+  const stride = frame === 4 ? 4 : 0;
+  ctx.fillRect(ox + 20 - stride, 61, 7, 10);
+  ctx.fillRect(ox + 32 + stride, 61, 7, 10);
+  ctx.fillStyle = hex(PALETTE.stone);
+  ctx.beginPath();
+  ctx.moveTo(ox + 18, 30 + bob);
+  ctx.lineTo(ox + 39, 30 + bob);
+  ctx.lineTo(ox + 44, 65);
+  ctx.lineTo(ox + 13, 65);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = hex(PALETTE.stoneLit);
+  ctx.fillRect(ox + 24, 36 + bob, 5, 24);
+  ctx.fillStyle = hex(PALETTE.moss);
+  ctx.fillRect(ox + 14, 55, 33, 4);
+
+  // Masked face: hollow eyes, a thin brass mouth.
+  ctx.fillStyle = hex(PALETTE.bone);
+  ctx.beginPath();
+  ctx.ellipse(ox + 29, 24 + bob, 8, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = hex(PALETTE.void);
+  ctx.fillRect(ox + 25, 23 + bob, 2, 2);
+  ctx.fillRect(ox + 32, 23 + bob, 2, 2);
+  ctx.fillStyle = hex(PALETTE.brass);
+  ctx.fillRect(ox + 27, 30 + bob, 5, 2);
+
+  // Great bell-hammer, draped across the body.
+  const handY = 44 + bob - (frame === 2 || frame === 3 ? 8 : 0);
+  ctx.fillStyle = hex(PALETTE.brassDark);
+  ctx.fillRect(ox + 44 + lean, handY, 4, 22);
+  ctx.fillStyle = hex(PALETTE.brass);
+  ctx.fillRect(ox + 39 + lean, handY - 3, 16, 8);
+  ctx.fillStyle = hex(PALETTE.bone);
+  ctx.fillRect(ox + 42 + lean, handY + 1, 8, 2);
+}
+
 const PAINTERS: Readonly<
   Record<BossKind, (ctx: CanvasRenderingContext2D, ox: number, frame: number) => void>
 > = {
   bellbearer: drawBellbearer,
   wardenMoss: drawWardenMoss,
   bellThief: drawBellThief,
+  lastKeeper: drawLastKeeper,
 };
 
 function buildAnimations(): Record<string, AnimationClip> {

@@ -314,7 +314,7 @@ describe('Hookline anchors', () => {
         expect(canHangAt(room.tilemap, anchor)).toBe(true);
       }
     }
-    expect(ids.size).toBe(35);
+    expect(ids.size).toBe(38);
     expect(counts['belfry-terrace']).toBe(5);
     expect(counts['drowned-gallery']).toBe(6);
     expect(counts['wall-claw-shaft']).toBe(0);

@@ -25,6 +25,7 @@ export const MAP_LAYOUT: Readonly<Record<string, MapLayoutNode>> = {
   'wall-claw-shaft': { x: 45, y: 54, label: 'Shaft', kicker: 'CLIMB' },
   'upper-gallery': { x: 30, y: 41, label: 'Upper Gallery', kicker: 'HIGH' },
   reliquary: { x: 30, y: 23, label: 'Reliquary', kicker: 'SECRET' },
+  'last-bell': { x: 30, y: 10, label: 'Last Bell', kicker: 'ABOVE' },
   ossuary: { x: 15, y: 88, label: 'Ossuary', kicker: 'SECRET' },
 };
 

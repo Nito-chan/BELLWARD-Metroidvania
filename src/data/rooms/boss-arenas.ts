@@ -124,3 +124,46 @@ export const bellthiefArena: RoomDefinition = {
   boss: 'bellThief',
   music: 'bossCitadel',
 };
+
+export const lastBellArena: RoomDefinition = {
+  id: 'last-bell',
+  name: 'The Last Bell',
+  rows: arenaRows(),
+  legend: ARENA_LEGEND,
+  backgrounds: ['far', 'mid'],
+  ambient: { tint: 'deepWater', alpha: 0.25 },
+  props: [
+    { art: 'door', x: 32, y: 320, layer: 'back' },
+    { art: 'bell', x: 480, y: 148, layer: 'back' },
+    { art: 'column', x: 220, y: 320, layer: 'front' },
+    { art: 'column', x: 740, y: 320, layer: 'front' },
+  ],
+  labels: [{ x: 72, y: 228, text: 'THE LAST BELL', color: 'bone' }],
+  spawn: { x: 120, y: 320 },
+  exits: [
+    {
+      x: 8,
+      y: 260,
+      w: 48,
+      h: 60,
+      targetRoomId: 'upper-gallery',
+      spawn: { x: 660, y: 320 },
+    },
+  ],
+  enemies: [{ kind: 'lastKeeper', x: 560, y: 320, facing: -1 }],
+  anchors: [
+    { id: 'last-bell-chain-west', x: 240, y: 172 },
+    { id: 'last-bell-chain-center', x: 480, y: 172 },
+    { id: 'last-bell-chain-east', x: 720, y: 172 },
+  ],
+  lastKeeper: {
+    chains: [
+      { id: 'last-bell-chain-west', x: 240, y: 172 },
+      { id: 'last-bell-chain-center', x: 480, y: 172 },
+      { id: 'last-bell-chain-east', x: 720, y: 172 },
+    ],
+    greatBell: { id: 'last-bell-great-bell', x: 480, y: 148 },
+  },
+  boss: 'lastKeeper',
+  music: 'bossAbyss',
+};

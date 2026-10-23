@@ -16,9 +16,9 @@ describe('region map model', () => {
       checkpoint: null,
     });
 
-    expect(map.totalCount).toBe(12);
+    expect(map.totalCount).toBe(13);
     expect(map.visitedCount).toBe(1);
-    expect(map.links).toHaveLength(13);
+    expect(map.links).toHaveLength(14);
     expect(map.links.every((link) => !link.revealed)).toBe(true);
     const terrace = map.nodes.find((node) => node.roomId === 'belfry-terrace');
     expect(terrace?.state).toBe('current');
@@ -42,7 +42,7 @@ describe('region map model', () => {
       checkpoint: { name: 'The Weeping Stone', roomId: 'belfry-terrace' },
     });
 
-    expect(map.visitedCount).toBe(12);
+    expect(map.visitedCount).toBe(13);
     expect(map.sigilCount).toBe(1);
     expect(map.links.every((link) => link.revealed)).toBe(true);
     expect(map.nodes.find((node) => node.roomId === 'bellthief-arena')?.state).toBe('current');

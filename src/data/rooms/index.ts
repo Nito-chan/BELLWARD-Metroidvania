@@ -2,7 +2,7 @@ import { BellwardError } from '../../core/Errors';
 import type { RoomDefinition } from '../../world/Room';
 import { belfryAntechamber } from './belfry-antechamber';
 import { belfryTerrace } from './belfry-terrace';
-import { bellbearerArena, bellthiefArena, wardenArena } from './boss-arenas';
+import { bellbearerArena, bellthiefArena, lastBellArena, wardenArena } from './boss-arenas';
 import { DROWNED_ROOMS } from './drowned-rooms';
 
 /** Every room in the vertical slice, keyed by its stable save id. */
@@ -12,6 +12,7 @@ export const ROOMS: Readonly<Record<string, RoomDefinition>> = {
   'bellbearer-arena': bellbearerArena,
   'warden-arena': wardenArena,
   'bellthief-arena': bellthiefArena,
+  'last-bell': lastBellArena,
   ...Object.fromEntries(DROWNED_ROOMS.map((room) => [room.id, room])),
 };
 

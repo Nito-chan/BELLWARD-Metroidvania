@@ -72,7 +72,7 @@ describe('run save validation', () => {
     expect(maxHpForSigils(3)).toBe(8);
     expect(maxHpForProgress(3, 4)).toBe(9);
     expect(maxHpForProgress(0, 3)).toBe(5);
-    expect(() => maxHpForSigils(4)).toThrow(/sigil count/);
+    expect(() => maxHpForSigils(5)).toThrow(/sigil count/);
     expect(() => maxHpForSigils(-1)).toThrow(/sigil count/);
   });
 

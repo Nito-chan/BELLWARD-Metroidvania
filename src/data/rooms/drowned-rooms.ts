@@ -465,6 +465,15 @@ export const upperGallery: RoomDefinition = {
       targetRoomId: 'reliquary',
       spawn: { x: 80, y: 320 },
     },
+    {
+      x: 648,
+      y: 272,
+      w: 48,
+      h: 48,
+      targetRoomId: 'last-bell',
+      spawn: { x: 80, y: FLOOR_Y },
+      requiresArsenal: true,
+    },
   ],
 };
 

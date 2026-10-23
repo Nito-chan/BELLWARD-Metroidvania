@@ -112,6 +112,8 @@ export type RoomExit = {
   targetRoomId: string;
   /** Feet position in the destination room. */
   spawn: RoomSpawn;
+  /** The Ward of Four: sealed until the player owns Censer and Toll. */
+  requiresArsenal?: boolean;
 };
 
 /** A carved plaque or other short world-space label. */
@@ -157,6 +159,11 @@ export type RoomDefinition = {
   ordeal?: RoomOrdeal;
   /** The Tide-door ending, present only in the upper gallery. */
   ending?: RoomEnding;
+  /** Last Keeper chain positions and great bell, only for the Last Bell room. */
+  lastKeeper?: {
+    chains: readonly RoomAnchor[];
+    greatBell: RoomAnchor;
+  };
 };
 
 export type Room = {

@@ -3,11 +3,13 @@ import { COMBAT } from '../config/combat';
 import { BOSS_KINDS, isBossKind, type BossKind } from '../config/enemies';
 import { CAMERA } from '../config/render';
 import { CombatSystem } from '../combat/CombatSystem';
+import { overlaps } from '../combat/geometry';
 import { ProjectilePool, type ProjectileSpawnOptions } from '../combat/ProjectilePool';
 import type { Rng } from '../core/Rng';
 import type { SceneDebugState } from '../debug/DebugState';
 import { createEnemy } from '../enemies/createEnemy';
 import type { Enemy, EnemyContext } from '../enemies/Enemy';
+import { Boss } from '../enemies/Boss';
 import type { InputSnapshot } from '../input/InputState';
 import type { PlayerLoadout } from '../player/PlayerLoadout';
 import { PlayerController, type PlayerEvent } from '../player/PlayerController';
@@ -60,6 +62,8 @@ export type RoomSceneOptions = {
   ordealCleared?: boolean;
   /** The earned final ending already played in this run. */
   endingSeen?: boolean;
+  /** The Tide-door midpoint card already shown this run. */
+  tideDoorOpened?: boolean;
   /** Screen-reader announcement hook; the scene never touches the DOM. */
   announce?: (text: string) => void;
   /** Optional arrival banner shown above the HUD for a rest or respawn. */
@@ -187,6 +191,7 @@ export class RoomScene {
       ordealCleared: options.ordealCleared,
       sigilCount: options.sigilCount,
       endingSeen: options.endingSeen,
+      tideDoorOpened: options.tideDoorOpened,
     });
 
     for (const enemySpawn of room.definition.enemies) {
@@ -402,6 +407,42 @@ export class RoomScene {
     this.feedback.apply(result.events);
     this.feedback.update();
 
+    // Last Keeper mechanics: Toll waves open chains and answer the great bell;
+    // Censer swings break open chains.
+    if (this.room.definition.lastKeeper && this.bossDirector.boss) {
+      const boss = this.bossDirector.boss as Boss;
+      for (const slot of this.projectiles.all) {
+        if (slot.active && slot.owner === 'player') {
+          boss.processTollWave(slot.x, slot.y);
+        }
+      }
+      if (this.player.currentWeapon === 'censer' && this.player.attackActive) {
+        const swingBox = this.player.attackHitbox();
+        if (swingBox) {
+          for (const chain of this.room.definition.lastKeeper.chains) {
+            const chainBox = {
+              x: chain.x - 16,
+              y: chain.y - 16,
+              w: 32,
+              h: 32,
+            };
+            if (overlaps(swingBox, chainBox)) {
+              boss.censerAt(chain.x, chain.y);
+            }
+          }
+        }
+      }
+
+      // Final ending: interact with the great bell when the ritual is solved.
+      if (boss.ritualSolved && input.pressed.has('interact')) {
+        const bell = this.room.definition.lastKeeper.greatBell;
+        const feet = this.player.feet;
+        if (Math.hypot(feet.x - bell.x, feet.y - bell.y) < 48) {
+          this.objectives.triggerFinalEnding();
+        }
+      }
+    }
+
     this.removeFallenEnemies();
     this.objectives.updatePickups();
     this.objectives.tryBreakSecret();
@@ -482,11 +523,14 @@ export class RoomScene {
    * Boss arenas keep their exit locked until the boss is dead.
    */
   private updateExit(): void {
-    this.exitGate.update(
-      this.player.body,
-      this.room.definition.exits ?? [],
-      this.bossDirector.alive,
-    );
+    const exits = this.room.definition.exits ?? [];
+    const unlockedExits = exits.filter((exit) => {
+      if (exit.requiresArsenal) {
+        return this.player.hasCenser && this.player.hasToll;
+      }
+      return true;
+    });
+    this.exitGate.update(this.player.body, unlockedExits, this.bossDirector.alive);
   }
 
   private syncViews(tickCount: number): void {

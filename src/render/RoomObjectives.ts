@@ -38,6 +38,8 @@ export type RoomObjectivesOptions = {
   readonly sigilCount?: number;
   /** The earned final ending already played in this run. */
   readonly endingSeen?: boolean;
+  /** The Tide-door midpoint card already shown this run. */
+  readonly tideDoorOpened?: boolean;
 };
 
 export class RoomObjectives {
@@ -50,15 +52,18 @@ export class RoomObjectives {
   private pendingBossDefeatValue: BossKind | null = null;
   private pendingOrdealDefeatValue: BossKind | null = null;
   private pendingEndingValue = false;
-  /** Ending triggers are one-shot per run, so closing the card cannot reopen it. */
+  /** The tide-door midpoint card is one-shot per run. */
   private endingFired: boolean;
+  /** The final ending is one-shot per run. */
+  private finalEndingFired: boolean;
 
   constructor(private readonly options: RoomObjectivesOptions) {
     this.secretBrokenThisVisitValue = options.secretBroken ?? false;
     this.arenaClaimedValue = options.bossRewardClaimed ?? false;
     this.ordealClearedValue = options.ordealCleared ?? false;
     this.sigilCountValue = options.sigilCount ?? 0;
-    this.endingFired = options.endingSeen ?? false;
+    this.endingFired = options.tideDoorOpened ?? false;
+    this.finalEndingFired = options.endingSeen ?? false;
   }
 
   get arenaClaimed(): boolean {
@@ -185,5 +190,13 @@ export class RoomObjectives {
     this.options.banner.show(ending.title, ending.subtitle, 240);
     this.options.announce(`${ending.title}. ${ending.subtitle}`);
     this.options.audio.playSfx('bell');
+  }
+
+  /** The Last Keeper's ritual is solved: interacting with the great bell fires the
+   *  final ending once. */
+  triggerFinalEnding(): void {
+    if (this.finalEndingFired || this.pendingEndingValue) return;
+    this.finalEndingFired = true;
+    this.pendingEndingValue = true;
   }
 }
