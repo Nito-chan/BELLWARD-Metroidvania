@@ -11,6 +11,10 @@ export type EndingStats = {
   readonly bossCount: number;
   readonly shards: number;
   readonly charms: number;
+  /** Arsenal weapons owned, e.g. "4 / 4". Only shown for the earned ending. */
+  readonly arsenal?: string;
+  /** Whether the Tideglass was found, shown only for the earned ending. */
+  readonly tideglass?: string;
 };
 
 export type EndingOverlayOptions = {
@@ -81,11 +85,14 @@ export class EndingOverlay {
     this.openValue = true;
     this.title.textContent = title;
     this.subtitle.textContent = subtitle;
-    this.stats.replaceChildren(
+    const rows: HTMLElement[] = [
       this.stat('SIGILS', `${stats.sigils} / ${stats.bossCount}`),
       this.stat('SHARDS', String(stats.shards)),
       this.stat('CHARMS', String(stats.charms)),
-    );
+    ];
+    if (stats.arsenal !== undefined) rows.push(this.stat('ARSENAL', stats.arsenal));
+    if (stats.tideglass !== undefined) rows.push(this.stat('TIDEGLASS', stats.tideglass));
+    this.stats.replaceChildren(...rows);
     this.sealPips.replaceChildren();
     for (let index = 0; index < stats.bossCount; index += 1) {
       this.sealPips.append(

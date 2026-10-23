@@ -356,6 +356,13 @@ export class Game {
 
   private openEnding(title: string, subtitle: string): void {
     const progress = this.run.progress;
+    const loadout = progress.loadout;
+    const owned = [
+      true, // Nail is always owned
+      loadout.hookline,
+      loadout.censer,
+      loadout.toll,
+    ].filter(Boolean).length;
     this.touch.hide();
     this.run.scene?.hideBanner();
     this.input.reset();
@@ -365,6 +372,10 @@ export class Game {
       bossCount: BOSS_KINDS.length,
       shards: progress.shards,
       charms: progress.charmsOwned.length,
+      ...(owned === 4 ? { arsenal: `${owned} / 4` } : undefined),
+      ...(progress.hasPickup('terrace-tideglass')
+        ? { tideglass: 'Found' }
+        : { tideglass: 'Not found' }),
     });
   }
 
