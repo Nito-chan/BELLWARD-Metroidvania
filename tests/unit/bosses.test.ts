@@ -54,7 +54,22 @@ function makeBoss(
 ): Boss {
   return new Boss(
     kind,
-    { kind, x: options.x ?? 800, y: FEET_Y, facing: options.facing ?? -1 },
+    {
+      kind,
+      x: options.x ?? 800,
+      y: FEET_Y,
+      facing: options.facing ?? -1,
+      ...(kind === 'lastKeeper'
+        ? {
+            chainTargets: [
+              { x: 240, y: 172 },
+              { x: 480, y: 172 },
+              { x: 720, y: 172 },
+            ],
+            greatBell: { x: 480, y: 148 },
+          }
+        : {}),
+    },
     new Rng(options.seed ?? 7),
   );
 }
@@ -465,5 +480,123 @@ describe('Boss FSM', () => {
     boss.update(ctx);
     expect(boss.deathElapsed).toBe(2);
     expect(boss.consumeEvents()).toHaveLength(0);
+  });
+
+  describe('Last Keeper', () => {
+    it('gates phase 2 health at 1', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+      expect(boss.phaseIndex).toBe(0);
+      expect(boss.phase.name).toBe('The Vigil');
+
+      // Bring hp below the phase 2 threshold (24). Phase 2 gates health at 1.
+      while (boss.phaseIndex === 0 && boss.hp > 0) boss.takeDamage(1, 0);
+      expect(boss.phaseIndex).toBe(1);
+      expect(boss.hp).toBe(24);
+    });
+
+    it('toll opens a chain window and censer breaks it', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      // Phase 2 is entered when hp drops below 0.6 threshold (24 hp). Damage to 23.
+      while (boss.hp > 23) boss.takeDamage(1, 0);
+      expect(boss.phaseIndex).toBe(1);
+      expect(boss.phase.name).toBe('The Drowning Toll');
+      expect(boss.chainCount).toBe(0);
+      expect(boss.chainOpen).toBe(false);
+
+      // Toll at chain 0 opens the window
+      const chain0 = boss.chainTargets[0]!;
+      boss.tollAt(chain0.x, chain0.y);
+      expect(boss.chainOpen).toBe(true);
+
+      // Censer at chain 0 breaks it
+      boss.censerAt(chain0.x, chain0.y);
+      expect(boss.chainOpen).toBe(false);
+      expect(boss.chainCount).toBe(1);
+      expect(boss.waterLevel).toBe(1);
+    });
+
+    it('censer cannot break a chain that is not open', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      while (boss.hp > 23) boss.takeDamage(1, 0);
+      expect(boss.phaseIndex).toBe(1);
+
+      const chain0 = boss.chainTargets[0]!;
+      boss.censerAt(chain0.x, chain0.y);
+      expect(boss.chainCount).toBe(0);
+      expect(boss.chainOpen).toBe(false);
+    });
+
+    it('three chain breaks enter phase 3', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      while (boss.hp > 23) boss.takeDamage(1, 0);
+      expect(boss.phaseIndex).toBe(1);
+
+      for (let chain = 0; chain < 3; chain += 1) {
+        const target = boss.chainTargets[chain]!;
+        boss.tollAt(target.x, target.y);
+        expect(boss.chainOpen).toBe(true);
+        boss.censerAt(target.x, target.y);
+        expect(boss.chainOpen).toBe(false);
+        expect(boss.chainCount).toBe(chain + 1);
+      }
+
+      expect(boss.phaseIndex).toBe(2);
+      expect(boss.phase.name).toBe('The Answer');
+      expect(boss.ritualSolved).toBe(false);
+    });
+
+    it('toll answers open windows in phase 3, three answers solve the ritual', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      while (boss.hp > 23) boss.takeDamage(1, 0);
+      for (let chain = 0; chain < 3; chain += 1) {
+        const target = boss.chainTargets[chain]!;
+        boss.tollAt(target.x, target.y);
+        boss.censerAt(target.x, target.y);
+      }
+      expect(boss.phaseIndex).toBe(2);
+
+      // Force answer windows open (simulates boss ringing) and answer them
+      boss.debugForceAnswerWindow();
+      const bell = boss.greatBell!;
+      boss.tollAt(bell.x, bell.y);
+      expect(boss.answerCount).toBe(1);
+      expect(boss.answerWindow).toBe(false);
+
+      // Open two more windows and answer them
+      boss.debugForceAnswerWindow();
+      boss.tollAt(bell.x, bell.y);
+      expect(boss.answerCount).toBe(2);
+
+      boss.debugForceAnswerWindow();
+      boss.tollAt(bell.x, bell.y);
+      expect(boss.answerCount).toBe(3);
+      expect(boss.ritualSolved).toBe(true);
+      expect(boss.alive).toBe(false);
+    });
+
+    it('censer in phase 1 does nothing to chains', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      const chain0 = boss.chainTargets[0]!;
+      boss.censerAt(chain0.x, chain0.y);
+      expect(boss.chainCount).toBe(0);
+      expect(boss.chainOpen).toBe(false);
+    });
   });
 });
