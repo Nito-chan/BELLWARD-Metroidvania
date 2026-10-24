@@ -276,6 +276,13 @@ export class Boss extends Enemy {
     if (this.alive) this.defeat();
   }
 
+  /** Test hook: force an answer window open in phase 3. */
+  debugForceAnswerWindow(): void {
+    if (!this.lastKeeperModeValue || this.phaseIndexValue !== 2) return;
+    this.answerWindowValue = true;
+    this.answerWindowTicksValue = LAST_KEEPER.answerWindowTicks;
+  }
+
   /** Called by the room scene when a Toll wave passes through this position. */
   tollAt(x: number, y: number): void {
     if (!this.lastKeeperModeValue) return;
