@@ -483,6 +483,19 @@ describe('Boss FSM', () => {
   });
 
   describe('Last Keeper', () => {
+    /**
+     * Drop the Keeper to phase 2 without spinning in its invulnerable transition.
+     * `takeDamage` is intentionally blocked while the FSM owns the hero in `phase`,
+     * so the final point of damage must wait for the transition to finish.
+     */
+    function enterDrowningToll(boss: Boss, ctx: ReturnType<typeof context>): void {
+      while (boss.hp > 24) boss.takeDamage(1, 0);
+      expect(boss.phaseIndex).toBe(1);
+      step(boss, ctx, (BOSSES.lastKeeper.phases[1]?.transitionTicks ?? 0) + 1);
+      boss.takeDamage(1, 0);
+      expect(boss.hp).toBe(23);
+    }
+
     it('gates phase 2 health at 1', () => {
       const boss = makeBoss('lastKeeper');
       const ctx = context(GROUND);
@@ -494,6 +507,10 @@ describe('Boss FSM', () => {
       while (boss.phaseIndex === 0 && boss.hp > 0) boss.takeDamage(1, 0);
       expect(boss.phaseIndex).toBe(1);
       expect(boss.hp).toBe(24);
+
+      step(boss, ctx, (BOSSES.lastKeeper.phases[1]?.transitionTicks ?? 0) + 1);
+      boss.takeDamage(1, 0);
+      expect(boss.hp).toBe(23);
     });
 
     it('toll opens a chain window and censer breaks it', () => {
@@ -501,8 +518,7 @@ describe('Boss FSM', () => {
       const ctx = context(GROUND);
       step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
 
-      // Phase 2 is entered when hp drops below 0.6 threshold (24 hp). Damage to 23.
-      while (boss.hp > 23) boss.takeDamage(1, 0);
+      enterDrowningToll(boss, ctx);
       expect(boss.phaseIndex).toBe(1);
       expect(boss.phase.name).toBe('The Drowning Toll');
       expect(boss.chainCount).toBe(0);
@@ -525,7 +541,7 @@ describe('Boss FSM', () => {
       const ctx = context(GROUND);
       step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
 
-      while (boss.hp > 23) boss.takeDamage(1, 0);
+      enterDrowningToll(boss, ctx);
       expect(boss.phaseIndex).toBe(1);
 
       const chain0 = boss.chainTargets[0]!;
@@ -539,7 +555,7 @@ describe('Boss FSM', () => {
       const ctx = context(GROUND);
       step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
 
-      while (boss.hp > 23) boss.takeDamage(1, 0);
+      enterDrowningToll(boss, ctx);
       expect(boss.phaseIndex).toBe(1);
 
       for (let chain = 0; chain < 3; chain += 1) {
@@ -561,7 +577,7 @@ describe('Boss FSM', () => {
       const ctx = context(GROUND);
       step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
 
-      while (boss.hp > 23) boss.takeDamage(1, 0);
+      enterDrowningToll(boss, ctx);
       for (let chain = 0; chain < 3; chain += 1) {
         const target = boss.chainTargets[chain]!;
         boss.tollAt(target.x, target.y);
