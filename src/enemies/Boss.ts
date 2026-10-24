@@ -18,7 +18,7 @@ import type { BossEvent } from './BossEvents';
 import { BossPatternState } from './BossPatternState';
 import { diveLandingX, teleportBehindX } from './bossPlacement';
 import { launchPatternStart, launchRainVolley } from './bossProjectiles';
-import { Enemy, type EnemyContext } from './Enemy';
+import { Enemy, type EnemyContext, type PostureResult } from './Enemy';
 
 /** A Toll wave passing through a world position, used for Last Keeper chains and answers. */
 export type TollWaveAt = { readonly x: number; readonly y: number };
@@ -33,8 +33,6 @@ const LAST_KEEPER = {
   bellRadius: 40,
   /** Ticks the player has to answer a boss ring. */
   answerWindowTicks: 24,
-  /** Ticks of the phase 2 → phase 3 transition. */
-  phase3TransitionTicks: 50,
 } as const;
 
 export type { BossEvent } from './BossEvents';
@@ -142,6 +140,14 @@ export class Boss extends Enemy {
     return this.lastKeeperModeValue;
   }
 
+  /**
+   * The Last Keeper's final phase is a ritual, not a damage race. Health and posture are
+   * sealed until the three Toll answers are given, and no normal pattern may start.
+   */
+  get ritualActive(): boolean {
+    return this.lastKeeperModeValue && this.phaseIndexValue === 2;
+  }
+
   /** Chains broken in phase 2 (0..3). */
   get chainCount(): number {
     return this.chainCountValue;
@@ -198,8 +204,10 @@ export class Boss extends Enemy {
     return (
       this.wardedValue ||
       this.hiddenValue ||
+      this.ritualActive ||
       this.stateValue === 'intro' ||
-      this.stateValue === 'phase'
+      this.stateValue === 'phase' ||
+      this.stateValue === 'ritual'
     );
   }
 
@@ -257,6 +265,16 @@ export class Boss extends Enemy {
     return true;
   }
 
+  override takePostureDamage(amount: number, sourceX: number): PostureResult {
+    if (this.ritualActive) return 'none';
+    return super.takePostureDamage(amount, sourceX);
+  }
+
+  override applyPosture(amount: number): PostureResult {
+    if (this.ritualActive) return 'none';
+    return super.applyPosture(amount);
+  }
+
   /** Break the bell shield immediately. Used by a wall charge and by E2E cheats. */
   forceBreakWard(): boolean {
     if (!this.wardedValue) return false;
@@ -266,6 +284,7 @@ export class Boss extends Enemy {
 
   /** Test/debug hook: start a specific pattern with its authored telegraph. */
   debugForcePattern(id: string): void {
+    if (this.ritualActive) return;
     const pattern = this.findPattern(id);
     if (!pattern) return;
     this.beginPattern(pattern);
@@ -276,9 +295,9 @@ export class Boss extends Enemy {
     if (this.alive) this.defeat();
   }
 
-  /** Test hook: force an answer window open in phase 3. */
+  /** Test hook: force an answer window open once the final ritual has begun. */
   debugForceAnswerWindow(): void {
-    if (!this.lastKeeperModeValue || this.phaseIndexValue !== 2) return;
+    if (!this.ritualActive || this.stateValue !== 'ritual') return;
     this.answerWindowValue = true;
     this.answerWindowTicksValue = LAST_KEEPER.answerWindowTicks;
   }
@@ -356,7 +375,7 @@ export class Boss extends Enemy {
     this.phaseIndexValue = 2;
     this.patterns.clear();
     this.body.vx = 0;
-    this.beginState('phase', this.scaled(LAST_KEEPER.phase3TransitionTicks), 'hurt');
+    this.beginState('phase', this.scaled(this.phase.transitionTicks), 'hurt');
     this.eventBuffer.push({ type: 'phase', phase: 2, name: 'The Answer' });
   }
 
@@ -394,9 +413,11 @@ export class Boss extends Enemy {
           this.eventBuffer.push({ type: 'wallHit', x: this.feet.x, y: this.feet.y });
         }
       }
-      // Phase 3: the keeper rings the great bell, opening an answer window.
+      // Phase 3: the keeper rings the great bell, opening an answer window. Wait until
+      // the transition has settled so the first ring is never eaten by the fade.
       if (
-        this.phaseIndexValue === 2 &&
+        this.ritualActive &&
+        this.stateValue === 'ritual' &&
         !this.answerWindowValue &&
         this.answerWindowTicksValue <= 0 &&
         this.answerCountValue < 3
@@ -421,7 +442,15 @@ export class Boss extends Enemy {
         return;
       case 'phase':
         this.body.vx = 0;
-        if (this.stateTicks <= 0) this.beginIdle();
+        if (this.stateTicks <= 0) {
+          // The Last Keeper's phase transition ends in a terminal ritual, never idle.
+          if (this.ritualActive) this.beginRitual();
+          else this.beginIdle();
+        }
+        return;
+      case 'ritual':
+        this.body.vx = 0;
+        this.facePlayer(ctx);
         return;
       case 'stagger':
         this.body.vx = 0;
@@ -530,6 +559,10 @@ export class Boss extends Enemy {
   }
 
   private beginIdle(): void {
+    if (this.ritualActive) {
+      this.beginRitual();
+      return;
+    }
     this.patterns.clear();
     this.hiddenValue = false;
     this.body.vx = 0;
@@ -538,6 +571,14 @@ export class Boss extends Enemy {
       this.scaled(this.rng.int(this.phase.idleTicks[0], this.phase.idleTicks[1])),
       'idle',
     );
+  }
+
+  /** Terminal phase 3 state: the Keeper holds the bell and waits for Toll answers. */
+  private beginRitual(): void {
+    this.patterns.clear();
+    this.hiddenValue = false;
+    this.body.vx = 0;
+    this.beginState('ritual', 0, 'idle');
   }
 
   private beginRecover(): void {

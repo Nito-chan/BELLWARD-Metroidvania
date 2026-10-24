@@ -496,6 +496,27 @@ describe('Boss FSM', () => {
       expect(boss.hp).toBe(23);
     }
 
+    function breakAllChains(boss: Boss): void {
+      for (let chain = 0; chain < 3; chain += 1) {
+        const target = boss.chainTargets[chain]!;
+        boss.tollAt(target.x, target.y);
+        expect(boss.chainOpen).toBe(true);
+        boss.censerAt(target.x, target.y);
+        expect(boss.chainOpen).toBe(false);
+        expect(boss.chainCount).toBe(chain + 1);
+      }
+    }
+
+    function enterAnswer(boss: Boss, ctx: ReturnType<typeof context>): void {
+      enterDrowningToll(boss, ctx);
+      breakAllChains(boss);
+      expect(boss.phaseIndex).toBe(2);
+      expect(boss.state).toBe('phase');
+      step(boss, ctx, BOSSES.lastKeeper.phases[2]?.transitionTicks ?? 0);
+      expect(boss.state).toBe('ritual');
+      expect(boss.ritualSolved).toBe(false);
+    }
+
     it('gates phase 2 health at 1', () => {
       const boss = makeBoss('lastKeeper');
       const ctx = context(GROUND);
@@ -558,18 +579,37 @@ describe('Boss FSM', () => {
       enterDrowningToll(boss, ctx);
       expect(boss.phaseIndex).toBe(1);
 
-      for (let chain = 0; chain < 3; chain += 1) {
-        const target = boss.chainTargets[chain]!;
-        boss.tollAt(target.x, target.y);
-        expect(boss.chainOpen).toBe(true);
-        boss.censerAt(target.x, target.y);
-        expect(boss.chainOpen).toBe(false);
-        expect(boss.chainCount).toBe(chain + 1);
-      }
+      breakAllChains(boss);
 
       expect(boss.phaseIndex).toBe(2);
       expect(boss.phase.name).toBe('The Answer');
+      expect(boss.state).toBe('phase');
       expect(boss.ritualSolved).toBe(false);
+    });
+
+    it('settles into a terminal ritual without patterns and seals health and posture', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      enterAnswer(boss, ctx);
+      const hp = boss.hp;
+      const posture = boss.posture;
+      expect(boss.pattern).toBeNull();
+
+      expect(boss.takeDamage(5, 0)).toBe(false);
+      expect(boss.hp).toBe(hp);
+      expect(boss.takePostureDamage(999, 0)).toBe('none');
+      expect(boss.applyPosture(999)).toBe('none');
+      expect(boss.posture).toBe(posture);
+
+      // Long enough for several rings: the FSM must stay in the ritual, not choose a
+      // pattern from an empty phase and crash.
+      step(boss, ctx, 180);
+      expect(boss.state).toBe('ritual');
+      expect(boss.phaseIndex).toBe(2);
+      expect(boss.pattern).toBeNull();
+      expect(boss.hp).toBe(hp);
     });
 
     it('toll answers open windows in phase 3, three answers solve the ritual', () => {
@@ -577,13 +617,9 @@ describe('Boss FSM', () => {
       const ctx = context(GROUND);
       step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
 
-      enterDrowningToll(boss, ctx);
-      for (let chain = 0; chain < 3; chain += 1) {
-        const target = boss.chainTargets[chain]!;
-        boss.tollAt(target.x, target.y);
-        boss.censerAt(target.x, target.y);
-      }
-      expect(boss.phaseIndex).toBe(2);
+      enterAnswer(boss, ctx);
+      expect(boss.answerCount).toBe(0);
+      expect(boss.answerWindow).toBe(false);
 
       // Force answer windows open (simulates boss ringing) and answer them
       boss.debugForceAnswerWindow();

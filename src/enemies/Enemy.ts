@@ -21,6 +21,7 @@ export type EnemyState =
   | 'active'
   | 'recover'
   | 'phase'
+  | 'ritual'
   | 'stagger'
   | 'dead';
 

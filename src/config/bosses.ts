@@ -428,7 +428,7 @@ export const BOSSES: Readonly<Record<BossKind, BossDef>> = {
         threshold: 0,
         patterns: [],
         idleTicks: [0, 0],
-        transitionTicks: 0,
+        transitionTicks: 50,
         speedScale: 1,
       },
     ],
