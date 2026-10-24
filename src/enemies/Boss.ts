@@ -7,6 +7,7 @@ import {
 } from '../config/bossTypes';
 import type { BossKind } from '../config/enemies';
 import { ORDEAL } from '../config/progression';
+import { RESONANCE } from '../config/weapons';
 import { forwardBox } from '../combat/geometry';
 import { clamp } from '../core/Math2D';
 import type { Vec2 } from '../core/Types';
@@ -303,6 +304,8 @@ export class Boss extends Enemy {
       this.wardedValue ||
       this.hiddenValue ||
       this.ritualActive ||
+      // The Drowning Toll is a chain puzzle: its health is sealed at 1 on entry.
+      (this.lastKeeperModeValue && this.phaseIndexValue === 1) ||
       this.stateValue === 'intro' ||
       this.stateValue === 'phase' ||
       this.stateValue === 'ritual'
@@ -350,6 +353,16 @@ export class Boss extends Enemy {
     if (this.wardedValue) this.wardFlashTicks = 8;
   }
 
+  /**
+   * A Toll wave is the designed way to stagger the Drowning Toll. Its body is sealed,
+   * so the wave deals no health damage, but its resonance and posture still land.
+   */
+  override onBlockedWave(posture: number): void {
+    if (!this.lastKeeperModeValue || this.phaseIndexValue !== 1 || !this.alive) return;
+    this.markResonance(RESONANCE.ticks);
+    this.applyPosture(posture);
+  }
+
   override takeDamage(amount: number, _sourceX: number): boolean {
     if (!this.alive) return false;
     if (this.damageBlocked) {
@@ -359,12 +372,8 @@ export class Boss extends Enemy {
     const applied = Math.max(0, Math.floor(amount));
     if (applied === 0) return false;
 
-    // Last Keeper phase 2: health is gated at 1. Chains, not damage, end the phase.
-    if (this.lastKeeperModeValue && this.phaseIndexValue === 1) {
-      this.hp = Math.max(1, this.hp - applied);
-      this.flashTicks = 4;
-      return false;
-    }
+    // Defensive guard for direct calls: phase 2 is solved by chains, never by damage.
+    if (this.lastKeeperModeValue && this.phaseIndexValue === 1) return false;
 
     this.hp = Math.max(0, this.hp - applied);
     this.flashTicks = 4;
@@ -413,10 +422,20 @@ export class Boss extends Enemy {
     this.ritualTicksValue = LAST_KEEPER.answerWindowTicks;
   }
 
+  /** DEV-only: set the flood step for visual and input probes. */
+  debugSetWaterLevel(level: number): boolean {
+    if (!this.lastKeeperModeValue || !this.alive || this.phaseIndexValue < 1) return false;
+    this.waterLevelValue = Math.max(0, Math.min(3, Math.floor(level)));
+    return true;
+  }
+
   /** DEV-only: skip to a settled phase 3 ritual for browser final-act coverage. */
   debugEnterRitual(): boolean {
     if (!this.lastKeeperModeValue) return false;
     this.phaseIndexValue = 2;
+    // Mirror a real phase-2 clear so the debug ritual shows the authored final flood.
+    this.hp = 1;
+    this.waterLevelValue = 3;
     this.patterns.clear();
     this.hiddenValue = false;
     this.wardedValue = false;
@@ -523,6 +542,8 @@ export class Boss extends Enemy {
   /** Enter phase 3 (The Answer): invulnerable, solved by Toll answers. */
   private enterPhase3(): void {
     this.phaseIndexValue = 2;
+    this.hp = 1;
+    this.waterLevelValue = 3;
     this.patterns.clear();
     this.body.vx = 0;
     this.beginState('phase', this.scaled(this.phase.transitionTicks), 'hurt');
@@ -833,6 +854,11 @@ export class Boss extends Enemy {
       this.patterns.clear();
       this.hiddenValue = false;
       this.body.vx = 0;
+      if (this.lastKeeperModeValue && this.phaseIndexValue === 1) {
+        // The Drowning Toll's health is sealed at 1; the three chains end the phase.
+        this.hp = 1;
+        this.waterLevelValue = 0;
+      }
       this.beginState('phase', this.scaled(next.transitionTicks), 'hurt');
       this.eventBuffer.push({ type: 'phase', phase: this.phaseIndexValue, name: next.name });
       return;

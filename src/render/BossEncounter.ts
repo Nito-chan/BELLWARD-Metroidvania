@@ -77,6 +77,10 @@ export class BossEncounter {
     this.boss.debugDefeat();
   }
 
+  debugSetWater(level: number): boolean {
+    return this.boss.debugSetWaterLevel(level);
+  }
+
   debugEnterRitual(): boolean {
     return this.boss.debugEnterRitual();
   }

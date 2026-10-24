@@ -3,6 +3,7 @@ import { CombatSystem } from '../../src/combat/CombatSystem';
 import { ProjectilePool } from '../../src/combat/ProjectilePool';
 import { COMBAT } from '../../src/config/combat';
 import { ENEMIES } from '../../src/config/enemies';
+import { FINAL_ACT, floodLineForLevel, isFlooded } from '../../src/config/finalAct';
 import type { ActionName } from '../../src/config/input';
 import { TOLL, RESONANCE } from '../../src/config/weapons';
 import type { EnemyHazard } from '../../src/enemies/Enemy';
@@ -33,8 +34,14 @@ class HazardEnemy extends MeleeEnemy {
 }
 
 class SealedEnemy extends MeleeEnemy {
+  blockedPosture = 0;
+
   override get damageBlocked(): boolean {
     return true;
+  }
+
+  override onBlockedWave(posture: number): void {
+    this.blockedPosture += posture;
   }
 }
 
@@ -80,6 +87,29 @@ describe('player damage', () => {
     expect(player.body.vx).toBeLessThan(0);
     expect(player.facing).toBe(1);
     expect(player.events).toContain('hurt');
+  });
+
+  it('uses the normal i-frame window for flood damage below the surface', () => {
+    const player = new PlayerController({ x: 80, y: 128 });
+    expireSpawnInvuln(player);
+    const line = floodLineForLevel(2)!;
+
+    // The high ledge and ring hang are dry; the low ledge is underwater at step two.
+    expect(isFlooded(208, line)).toBe(false);
+    expect(isFlooded(200, line)).toBe(false);
+    expect(isFlooded(272, line)).toBe(true);
+
+    expect(player.takeDamage(FINAL_ACT.flood.damage, 480)).toBe(true);
+    expect(player.hp).toBe(COMBAT.player.maxHp - FINAL_ACT.flood.damage);
+
+    // A second water tick inside the window is ignored, exactly like an enemy hit.
+    expect(player.takeDamage(FINAL_ACT.flood.damage, 480)).toBe(false);
+    expect(player.hp).toBe(COMBAT.player.maxHp - FINAL_ACT.flood.damage);
+    for (let i = 0; i < COMBAT.player.invulnerableTicks; i += 1) {
+      player.update(input(), GROUND);
+    }
+    expect(player.takeDamage(FINAL_ACT.flood.damage, 480)).toBe(true);
+    expect(player.hp).toBe(COMBAT.player.maxHp - FINAL_ACT.flood.damage * 2);
   });
 
   it('grants i-frames, so a second hit in the window is ignored', () => {
@@ -303,7 +333,7 @@ describe('CombatSystem', () => {
     expect(player.hp).toBe(COMBAT.player.maxHp - 2);
   });
 
-  it('does not emit a hit when a Toll wave strikes a damage-blocked boss', () => {
+  it('routes a Toll wave on a sealed boss through blocked feedback', () => {
     const player = new PlayerController({ x: 100, y: 128 });
     const enemy = new SealedEnemy('ghoul', {
       kind: 'ghoul',
@@ -327,6 +357,8 @@ describe('CombatSystem', () => {
     const result = new CombatSystem().resolve(player, [enemy], pool, GROUND);
     expect(enemy.hp).toBe(hp);
     expect(result.events.some((event) => event.type === 'enemyHit')).toBe(false);
+    expect(result.events.some((event) => event.type === 'enemyBlocked')).toBe(true);
+    expect(enemy.blockedPosture).toBe(TOLL.posture);
   });
 });
 

@@ -166,13 +166,25 @@ export class CombatSystem {
         }
         const damage = knell ? Math.ceil(base * COMBAT.knell.damageMultiplier) : base;
         const landed = enemy.takeDamage(damage, player.feet.x);
+        if (!landed) {
+          enemy.onDeflect(player.feet.x);
+          events.push({
+            type: 'enemyBlocked',
+            enemy,
+            x: feet.x,
+            y: feet.y - enemy.stats.body.h * 0.55,
+            facing: player.facing,
+          });
+          hitstop = Math.max(hitstop, COMBAT.enemy.blockedHitstopTicks);
+          continue;
+        }
         let broke = false;
-        if (landed && enemy.alive && !knell) {
+        if (enemy.alive && !knell) {
           broke = enemy.takePostureDamage(player.attackPostureDamage, player.feet.x) === 'broken';
         }
-        if (landed) player.gainFocusOnHit();
+        player.gainFocusOnHit();
         // A Censer hit leaves a brine cloud that ticks posture while it lasts.
-        if (weapon === 'censer' && landed) this.spawnCenserCloud(feet.x, feet.y);
+        if (weapon === 'censer') this.spawnCenserCloud(feet.x, feet.y);
         events.push({
           type: 'enemyHit',
           enemy,
@@ -333,18 +345,38 @@ export class CombatSystem {
         if (!enemy.targetable || slot.hitEnemies.has(enemy)) continue;
         if (!overlaps(waveBox, enemy.bounds())) continue;
         slot.hitEnemies.add(enemy);
-        // A warded or ritual-sealed boss absorbs the wave without taking damage or
-        // producing ordinary hit feedback. Its state is the signal, not a false hit.
-        if (enemy.damageBlocked) continue;
+        // A warded or ritual-sealed boss absorbs the wave without taking health damage.
+        // The Last Keeper still accepts Toll posture/resonance during the Drowning Toll.
+        if (enemy.damageBlocked) {
+          enemy.onBlockedWave(slot.posture);
+          events.push({
+            type: 'enemyBlocked',
+            enemy,
+            x: slot.x,
+            y: slot.y,
+            facing: player.facing,
+          });
+          continue;
+        }
 
         const knell = enemy.postureBroken;
         const damage = knell ? Math.ceil(slot.damage * COMBAT.knell.damageMultiplier) : slot.damage;
         const landed = enemy.takeDamage(damage, slot.x);
+        if (!landed) {
+          events.push({
+            type: 'enemyBlocked',
+            enemy,
+            x: slot.x,
+            y: slot.y,
+            facing: player.facing,
+          });
+          continue;
+        }
         let broke = false;
-        if (landed && enemy.alive && !knell) {
+        if (enemy.alive && !knell) {
           broke = enemy.takePostureDamage(slot.posture, slot.x) === 'broken';
         }
-        if (landed) enemy.markResonance(RESONANCE.ticks);
+        enemy.markResonance(RESONANCE.ticks);
         events.push({
           type: 'enemyHit',
           enemy,

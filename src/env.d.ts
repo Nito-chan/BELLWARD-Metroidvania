@@ -15,6 +15,7 @@ declare global {
       debugDamageBoss: (amount: number) => boolean;
       debugBreakWard: () => boolean;
       debugDefeatBoss: () => void;
+      debugSetKeeperWater: (level: number) => boolean;
       debugEnterKeeperRitual: () => boolean;
       debugSolveKeeperRitual: () => boolean;
     };

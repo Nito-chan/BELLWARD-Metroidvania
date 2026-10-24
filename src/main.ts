@@ -48,6 +48,7 @@ async function main(): Promise<void> {
         debugDamageBoss: (amount: number) => game.debugDamageBoss(amount),
         debugBreakWard: () => game.debugBreakWard(),
         debugDefeatBoss: () => game.debugDefeatBoss(),
+        debugSetKeeperWater: (level: number) => game.debugSetKeeperWater(level),
         debugEnterKeeperRitual: () => game.debugEnterKeeperRitual(),
         debugSolveKeeperRitual: () => game.debugSolveKeeperRitual(),
       }),

@@ -106,6 +106,10 @@ export class BossDirector {
     this.encounterValue?.debugDefeat();
   }
 
+  debugSetKeeperWater(level: number): boolean {
+    return this.encounterValue?.debugSetWater(level) ?? false;
+  }
+
   debugEnterRitual(): boolean {
     return this.encounterValue?.debugEnterRitual() ?? false;
   }

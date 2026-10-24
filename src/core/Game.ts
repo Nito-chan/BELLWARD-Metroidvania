@@ -430,6 +430,11 @@ export class Game {
     this.run.scene?.debugDefeatBoss();
   }
 
+  /** DEV-only: set the Last Keeper's flood step for browser coverage. */
+  debugSetKeeperWater(level: number): boolean {
+    return this.run.scene?.debugSetKeeperWater(level) ?? false;
+  }
+
   /** DEV-only: settle the Last Keeper into its final ritual for browser coverage. */
   debugEnterKeeperRitual(): boolean {
     return this.run.scene?.debugEnterKeeperRitual() ?? false;

@@ -1,7 +1,7 @@
 import { Container } from 'pixi.js';
 import { COMBAT } from '../config/combat';
 import { BOSS_KINDS, isBossKind, type BossKind } from '../config/enemies';
-import { FINAL_ACT } from '../config/finalAct';
+import { FINAL_ACT, floodLineForLevel, isFlooded } from '../config/finalAct';
 import { CAMERA } from '../config/render';
 import { CombatSystem } from '../combat/CombatSystem';
 import { overlaps } from '../combat/geometry';
@@ -27,6 +27,7 @@ import { CombatFeedback, type SceneAudio } from './CombatFeedback';
 import { EffectsLayer } from './EffectsLayer';
 import { EnemyView } from './EnemyView';
 import { ExitGate, type ExitRequest } from './ExitGate';
+import { FloodView } from './FloodView';
 import { HeroView } from './HeroView';
 import { HookLayer } from './HookLayer';
 import { LabelLayer } from './LabelLayer';
@@ -99,6 +100,7 @@ export class RoomScene {
   private readonly projectiles = new ProjectilePool();
   private readonly projectileView: ProjectileView;
   private readonly effects: EffectsLayer;
+  private readonly flood: FloodView;
   private readonly hud = new Hud();
   private readonly combat = new CombatSystem();
   private readonly feedback: CombatFeedback;
@@ -152,6 +154,7 @@ export class RoomScene {
     this.view.addChild(this.backdrop.backgroundView);
 
     this.tileLayer = new TileLayer(room.tilemap, art);
+    this.flood = new FloodView(room.bounds.w, room.bounds.h);
     this.world.addChild(this.tileLayer.view);
     this.world.addChild(new PropLayer(room.definition.props, 'back', art).view);
     this.pickups = new PickupLayer(
@@ -164,6 +167,9 @@ export class RoomScene {
     }
     this.bench = new BenchInteraction(room.definition.benches ?? [], art, this.announce);
     this.world.addChild(this.bench.worldView);
+    // Tint the flooded terrain behind the actors; the readable surface line and a
+    // lighter actor wash are added above the front props below.
+    this.world.addChild(this.flood.volume);
 
     this.actorLayer.sortableChildren = true;
     this.heroView = new HeroView(art);
@@ -232,6 +238,8 @@ export class RoomScene {
     this.world.addChild(this.hookLayer.view);
     this.world.addChild(this.effects.view, this.projectileView.view);
     this.world.addChild(new PropLayer(room.definition.props, 'front', art).view);
+    // The surface line is the exact hazard boundary and must cross submerged actors.
+    this.world.addChild(this.flood.surface);
     this.view.addChild(this.world);
     this.view.addChild(this.backdrop.overlayView);
     this.view.addChild(this.bench.screenView);
@@ -369,6 +377,11 @@ export class RoomScene {
     this.bossDirector.debugDefeat();
   }
 
+  /** DEV-only: set a flood step without replaying a chain break. */
+  debugSetKeeperWater(level: number): boolean {
+    return this.bossDirector.debugSetKeeperWater(level);
+  }
+
   /** DEV-only: settle the Last Keeper into its final ritual for browser coverage. */
   debugEnterKeeperRitual(): boolean {
     return this.bossDirector.debugEnterRitual();
@@ -467,6 +480,7 @@ export class RoomScene {
       }
     }
 
+    this.updateFloodHazard();
     this.updateFinalBell(input);
     this.removeFallenEnemies();
     this.objectives.updatePickups();
@@ -544,6 +558,34 @@ export class RoomScene {
   }
 
   /**
+   * The Drowning Toll's flood is both a readable route change and a real hazard. The
+   * surface Y is the damage boundary; feet above it are dry, feet below it lose a mask
+   * through the normal reaction path (i-frames and outward knockback included).
+   */
+  private updateFloodHazard(): void {
+    const boss = this.bossDirector.boss;
+    if (!(boss instanceof Boss) || !boss.lastKeeperMode) {
+      this.flood.setLevel(null);
+      return;
+    }
+
+    const line = this.finalBellPromptDone ? null : floodLineForLevel(boss.waterLevel);
+    this.flood.setLevel(line);
+    if (line === null || !boss.alive || boss.phaseIndex < 1 || this.player.dead) return;
+
+    const feet = this.player.feet;
+    if (!isFlooded(feet.y, line)) return;
+
+    // Push toward the outside of the arena, where both authored ledges sit, rather than
+    // toward the water at its centre. takeDamage owns i-frames and the hurt reaction.
+    const centreX = this.room.bounds.x + this.room.bounds.w / 2;
+    const sourceX = feet.x + (feet.x < centreX ? 1 : -1);
+    if (this.player.takeDamage(FINAL_ACT.flood.damage, sourceX)) {
+      this.camera.shake(2, 8);
+    }
+  }
+
+  /**
    * The great bell hangs out of standing reach. The centre hook ring is the authored
    * interaction position, and the prompt makes the final input discoverable there.
    *
@@ -580,6 +622,8 @@ export class RoomScene {
 
     this.finalBellPromptDone = true;
     this.finalPrompt.hide();
+    // The final note is the moment the water falls below the floor.
+    this.flood.setLevel(null);
     this.audio.playSfx('bossBell');
     this.objectives.triggerFinalEnding();
   }
@@ -593,7 +637,7 @@ export class RoomScene {
     const exits = this.room.definition.exits ?? [];
     const unlockedExits = exits.filter((exit) => {
       if (exit.requiresArsenal) {
-        return this.player.hasCenser && this.player.hasToll;
+        return this.player.hasFullArsenal;
       }
       return true;
     });

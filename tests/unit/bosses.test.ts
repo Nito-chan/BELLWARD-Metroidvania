@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES, BOSS_PATTERNS, BOSS_PATTERN_IDS } from '../../src/config/bosses';
 import { BOSS_FAIRNESS, type BossPatternDef, type BossPhaseDef } from '../../src/config/bossTypes';
 import { BOSS_KINDS, ENEMIES, type BossKind } from '../../src/config/enemies';
+import { TOLL } from '../../src/config/weapons';
 import type { ProjectileSpawnOptions } from '../../src/combat/ProjectilePool';
 import { Boss } from '../../src/enemies/Boss';
 import type { EnemyContext } from '../../src/enemies/Enemy';
@@ -485,15 +486,17 @@ describe('Boss FSM', () => {
   describe('Last Keeper', () => {
     /**
      * Drop the Keeper to phase 2 without spinning in its invulnerable transition.
-     * `takeDamage` is intentionally blocked while the FSM owns the hero in `phase`,
-     * so the final point of damage must wait for the transition to finish.
+     * Phase 2 seals health at 1 immediately on entry; from then on chains are the only
+     * way to advance, so damage must never move the bar again.
      */
     function enterDrowningToll(boss: Boss, ctx: ReturnType<typeof context>): void {
-      while (boss.hp > 24) boss.takeDamage(1, 0);
+      while (boss.phaseIndex === 0 && boss.hp > 0) boss.takeDamage(1, 0);
       expect(boss.phaseIndex).toBe(1);
+      expect(boss.hp).toBe(1);
       step(boss, ctx, (BOSSES.lastKeeper.phases[1]?.transitionTicks ?? 0) + 1);
-      boss.takeDamage(1, 0);
-      expect(boss.hp).toBe(23);
+      expect(boss.damageBlocked).toBe(true);
+      expect(boss.takeDamage(1, 0)).toBe(false);
+      expect(boss.hp).toBe(1);
     }
 
     function breakAllChains(boss: Boss): void {
@@ -517,21 +520,53 @@ describe('Boss FSM', () => {
       expect(boss.ritualSolved).toBe(false);
     }
 
-    it('gates phase 2 health at 1', () => {
+    it('locks phase 2 health at 1 and blocks body damage', () => {
       const boss = makeBoss('lastKeeper');
       const ctx = context(GROUND);
       step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
       expect(boss.phaseIndex).toBe(0);
       expect(boss.phase.name).toBe('The Vigil');
 
-      // Bring hp below the phase 2 threshold (24). Phase 2 gates health at 1.
+      // Entering the Drowning Toll seals the bar: it does not tick down from 24.
       while (boss.phaseIndex === 0 && boss.hp > 0) boss.takeDamage(1, 0);
       expect(boss.phaseIndex).toBe(1);
-      expect(boss.hp).toBe(24);
+      expect(boss.hp).toBe(1);
+      expect(boss.waterLevel).toBe(0);
 
       step(boss, ctx, (BOSSES.lastKeeper.phases[1]?.transitionTicks ?? 0) + 1);
-      boss.takeDamage(1, 0);
-      expect(boss.hp).toBe(23);
+      expect(boss.damageBlocked).toBe(true);
+      expect(boss.takeDamage(1, 0)).toBe(false);
+      expect(boss.hp).toBe(1);
+    });
+
+    it('raises one flood step per chain without harming the sealed bar', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+      enterDrowningToll(boss, ctx);
+
+      for (let chain = 0; chain < 3; chain += 1) {
+        expect(boss.waterLevel).toBe(chain);
+        const target = boss.chainTargets[chain]!;
+        boss.tollAt(target.x, target.y, 50 + chain);
+        boss.censerAt(target.x, target.y);
+        expect(boss.waterLevel).toBe(chain + 1);
+        expect(boss.hp).toBe(1);
+      }
+      expect(boss.phaseIndex).toBe(2);
+      expect(boss.waterLevel).toBe(3);
+    });
+
+    it('lets a blocked Toll wave ring posture and resonance in phase 2', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+      enterDrowningToll(boss, ctx);
+
+      const posture = boss.posture;
+      boss.onBlockedWave(TOLL.posture);
+      expect(boss.posture).toBeLessThan(posture);
+      expect(boss.hp).toBe(1);
     });
 
     it('toll opens a chain window and censer breaks it', () => {

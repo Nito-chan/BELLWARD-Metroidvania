@@ -195,6 +195,14 @@ export abstract class Enemy {
     // Regular enemies are never guarded.
   }
 
+  /**
+   * Called when a Toll wave is absorbed by this enemy's ward. The default is inert;
+   * the Last Keeper uses it to let resonance and posture through a sealed phase.
+   */
+  onBlockedWave(_posture: number): void {
+    // Regular enemies have no ward to ring.
+  }
+
   /** 0 before a wind-up, rising to 1 on the active frame. Drives the telegraph arc. */
   get telegraph(): number {
     if (this.stateValue !== 'windup' || !this.stats.melee) return 0;
