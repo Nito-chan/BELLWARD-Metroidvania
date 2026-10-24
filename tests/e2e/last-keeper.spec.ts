@@ -2,7 +2,14 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { SAVE } from '../../src/config/save';
 import type { RunSave } from '../../src/save/runSave';
-import { bootGame, debugState, loadRoom, waitForBossIdle } from './support';
+import {
+  bootGame,
+  debugState,
+  loadRoom,
+  openTitle,
+  startFromTitle,
+  waitForBossIdle,
+} from './support';
 
 /**
  * A valid post-Tide-door save with the complete arsenal. The Last Keeper's phase 2/3
@@ -42,13 +49,17 @@ const FULL_ARSENAL_SAVE: RunSave = {
   endingSeen: false,
 };
 
-async function seedLastBell(page: Page): Promise<void> {
+async function seedFullArsenal(page: Page): Promise<void> {
   await page.addInitScript(
     ({ key, save }) => {
       localStorage.setItem(key, JSON.stringify(save));
     },
     { key: SAVE.storageKey, save: FULL_ARSENAL_SAVE },
   );
+}
+
+async function seedLastBell(page: Page): Promise<void> {
+  await seedFullArsenal(page);
   await bootGame(page);
   await loadRoom(page, 'last-bell', { x: 480, y: 320 });
   await page.evaluate(() => window.__game?.debugProtectPlayer());
@@ -77,6 +88,42 @@ async function waitForKeeper(
 
 test.describe('Last Keeper final act', () => {
   test.describe.configure({ timeout: 180_000 });
+
+  test('the title card hides the last-bell gameplay overlays at 375', async ({
+    page,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await seedFullArsenal(page);
+    await openTitle(page);
+
+    const opening = await debugState(page);
+    expect(opening.scene?.roomId).toBe('last-bell');
+    expect(opening.scene?.boss?.phaseName).toBe('The Vigil');
+    expect(opening.scene?.gameplayUiVisible).toBe(false);
+    expect(opening.title.open).toBe(true);
+
+    const width = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+    }));
+    expect(width.document).toBeLessThanOrEqual(width.viewport);
+
+    await testInfo.attach('last-keeper-title-375.png', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+
+    await startFromTitle(page);
+    expect((await debugState(page)).scene?.gameplayUiVisible).toBe(true);
+    expect((await debugState(page)).errors).toEqual([]);
+    expect(errors).toEqual([]);
+  });
 
   test('the Drowning Toll seals health at 1 and raises the flood in three readable steps', async ({
     page,

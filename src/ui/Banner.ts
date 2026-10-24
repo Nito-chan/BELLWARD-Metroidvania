@@ -30,6 +30,8 @@ export class Banner {
   private readonly subtitle = new Text({ text: '', style: SUB_STYLE });
   private ticksLeft = 0;
   private totalTicks = 0;
+  /** Paused while a DOM card owns the screen; the timer resumes with the simulation. */
+  private enabled = true;
 
   constructor() {
     this.back
@@ -51,8 +53,17 @@ export class Banner {
     this.subtitle.text = subtitle;
     this.ticksLeft = ticks;
     this.totalTicks = ticks;
-    this.view.visible = true;
+    this.view.visible = this.enabled;
     this.view.alpha = 1;
+  }
+
+  /**
+   * Hides the current banner without consuming its timer. The title card uses this so a
+   * boss intro or room arrival can resume when gameplay actually starts.
+   */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.view.visible = enabled && this.ticksLeft > 0;
   }
 
   /** Clears the banner immediately when a DOM overlay takes over its message. */
@@ -71,5 +82,6 @@ export class Banner {
     // Fade the final quarter-second so the banner never pops away.
     const fadeTicks = Math.min(24, Math.floor(this.totalTicks * 0.25));
     this.view.alpha = this.ticksLeft < fadeTicks ? this.ticksLeft / fadeTicks : 1;
+    this.view.visible = this.enabled;
   }
 }

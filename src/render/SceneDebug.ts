@@ -19,6 +19,7 @@ export type SceneDebugInput = {
   secretBroken: boolean;
   sealOpen: boolean;
   finalBellPrompt: boolean;
+  gameplayUiVisible: boolean;
   hitstop: number;
 };
 
@@ -99,6 +100,7 @@ export function buildSceneDebugState(input: SceneDebugInput): SceneDebugState {
     secretBroken: input.secretBroken,
     sealOpen: input.sealOpen,
     finalBellPrompt: input.finalBellPrompt,
+    gameplayUiVisible: input.gameplayUiVisible,
     hitstop: input.hitstop,
   };
 }

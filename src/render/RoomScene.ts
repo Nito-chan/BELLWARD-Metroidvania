@@ -119,6 +119,7 @@ export class RoomScene {
   private readonly objectives: RoomObjectives;
   private finalBellPromptDone = false;
   private finalBellAnnounced = false;
+  private gameplayUiVisibleValue = true;
   private hitstopTicks = 0;
   private resetRequestedValue = false;
 
@@ -274,9 +275,23 @@ export class RoomScene {
   }
 
   /** HP carried into the next room or reset. */
-  /** The title screen shows the room without its combat HUD; gameplay turns it back on. */
-  setHudVisible(visible: boolean): void {
+  /**
+   * The title card shows the room without its combat UI. Hide the player HUD, the room
+   * banner and the boss HUD/banner together; their timers stay paused with the loop so
+   * the intro resumes on the first gameplay frame. Prompts are cleared rather than
+   * forced back on, because proximity owns them.
+   */
+  setGameplayUiVisible(visible: boolean): void {
+    this.gameplayUiVisibleValue = visible;
     this.hud.view.visible = visible;
+    this.banner.setEnabled(visible);
+    if (this.bossDirector.encounter) {
+      this.bossDirector.encounter.overlay.visible = visible;
+    }
+    if (!visible) {
+      this.finalPrompt.hide();
+      this.bossDirector.prompt.hide();
+    }
   }
 
   /** The ending plates repeat the trigger's banner copy, so the world banner is retired. */
@@ -536,6 +551,7 @@ export class RoomScene {
       secretBroken: this.objectives.secretBrokenThisVisit,
       sealOpen: this.sealOpen,
       finalBellPrompt: this.finalPrompt.visible,
+      gameplayUiVisible: this.gameplayUiVisibleValue,
       hitstop: this.hitstopTicks,
     });
   }

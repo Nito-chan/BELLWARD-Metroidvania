@@ -155,6 +155,8 @@ export type SceneDebugState = {
   exitLocked: boolean;
   /** True while the great-bell prompt is on screen. */
   finalBellPrompt: boolean;
+  /** False while the title card hides the HUD, banner and boss overlays. */
+  gameplayUiVisible: boolean;
   /** Collectibles still visible in this room. */
   pickupsRemaining: number;
   /** True once this room's secret wall has shattered. */
