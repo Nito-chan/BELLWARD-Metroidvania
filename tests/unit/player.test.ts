@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionName } from '../../src/config/input';
 import { PLAYER } from '../../src/config/player';
+import { CENSER, TOLL } from '../../src/config/weapons';
 import { belfryTerrace } from '../../src/data/rooms/belfry-terrace';
 import { HERO_ART } from '../../src/data/art';
 import type { InputSnapshot } from '../../src/input/InputState';
@@ -289,6 +290,11 @@ describe('PlayerController platforms and determinism', () => {
     for (const name of ['idle', 'run', 'turn', 'jump', 'fall', 'dash'] as const) {
       expect(clipDuration(name)).toBeGreaterThan(0);
     }
+  });
+
+  it('authored a one-shot clip for every attack weapon', () => {
+    expect(clipDuration('censer1')).toBe(CENSER.clipTicks);
+    expect(clipDuration('toll1')).toBe(TOLL.clipTicks);
   });
 });
 

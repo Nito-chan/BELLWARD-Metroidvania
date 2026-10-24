@@ -215,6 +215,11 @@ export const HERO_ART: CharacterArt = {
     fall: knightStrip('hero.fall', [6, 6, 6], true),
     attack1: knightStrip('hero.attack1', [3, 3, 4, 6], false),
     attack2: knightStrip('hero.attack2', [2, 3, 3, 3, 4, 5], false),
+    // The Censer and Toll use the same two attack sheets with their own authored
+    // durations. PlayerCombat selects `${weapon}1`; a missing clip here is a boot-time
+    // crash, so these keys are part of the weapon contract.
+    censer1: knightStrip('hero.attack2', [4, 4, 4, 4, 5, 5], false),
+    toll1: knightStrip('hero.attack1', [5, 5, 5, 5], false),
     dash: knightStrip('hero.dash', [3, 5], false),
     // The Hookline throw is the first attack frame held: the hand is up and the line
     // reads from the pivot. A real grapple animation can replace this one clip later.
