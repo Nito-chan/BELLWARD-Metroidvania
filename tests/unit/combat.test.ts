@@ -5,6 +5,7 @@ import { COMBAT } from '../../src/config/combat';
 import { ENEMIES } from '../../src/config/enemies';
 import type { ActionName } from '../../src/config/input';
 import { TOLL, RESONANCE } from '../../src/config/weapons';
+import type { EnemyHazard } from '../../src/enemies/Enemy';
 import { MeleeEnemy } from '../../src/enemies/MeleeEnemy';
 import type { InputSnapshot } from '../../src/input/InputState';
 import { PlayerController } from '../../src/player/PlayerController';
@@ -16,6 +17,26 @@ const GROUND = Tilemap.fromRows(
   [...Array.from({ length: 8 }, () => EMPTY), 'F'.repeat(20), 'f'.repeat(20)],
   LEGEND,
 );
+
+class HazardEnemy extends MeleeEnemy {
+  hazardId = 1;
+
+  override activeHazard(): EnemyHazard | null {
+    return {
+      id: this.hazardId,
+      box: { x: 0, y: 0, w: 400, h: 200 },
+      damage: 1,
+      unblockable: true,
+      sourceX: this.feet.x,
+    };
+  }
+}
+
+class SealedEnemy extends MeleeEnemy {
+  override get damageBlocked(): boolean {
+    return true;
+  }
+}
 
 function input(
   held: readonly ActionName[] = [],
@@ -246,6 +267,66 @@ describe('CombatSystem', () => {
       result.events.some((event) => event.type === 'projectileHit' && event.surface === 'player'),
     ).toBe(true);
     expect(pool.activeCount).toBe(0);
+  });
+
+  it('lands an enemy shockwave once and lets i-frames ignore a new wave', () => {
+    const player = new PlayerController({ x: 100, y: 128 });
+    expireSpawnInvuln(player);
+    const enemy = new HazardEnemy('parishioner', {
+      kind: 'parishioner',
+      x: 300,
+      y: 128,
+      patrol: { min: 300, max: 300 },
+    });
+    const combat = new CombatSystem();
+    const pool = new ProjectilePool();
+
+    const first = combat.resolve(player, [enemy], pool, GROUND);
+    expect(player.hp).toBe(COMBAT.player.maxHp - 1);
+    const hit = first.events.find((event) => event.type === 'playerHit');
+    expect(hit?.type === 'playerHit' ? hit.source : null).toBe('shockwave');
+
+    // The same hazard id cannot land twice.
+    const repeat = combat.resolve(player, [enemy], pool, GROUND);
+    expect(player.hp).toBe(COMBAT.player.maxHp - 1);
+    expect(repeat.events.some((event) => event.type === 'playerHit')).toBe(false);
+
+    // A fresh hazard that arrives during i-frames is ignored, then the next one lands.
+    enemy.hazardId = 2;
+    combat.resolve(player, [enemy], pool, GROUND);
+    expect(player.hp).toBe(COMBAT.player.maxHp - 1);
+    for (let i = 0; i < COMBAT.player.invulnerableTicks; i += 1) {
+      player.update(input(), GROUND);
+    }
+    enemy.hazardId = 3;
+    combat.resolve(player, [enemy], pool, GROUND);
+    expect(player.hp).toBe(COMBAT.player.maxHp - 2);
+  });
+
+  it('does not emit a hit when a Toll wave strikes a damage-blocked boss', () => {
+    const player = new PlayerController({ x: 100, y: 128 });
+    const enemy = new SealedEnemy('ghoul', {
+      kind: 'ghoul',
+      x: 150,
+      y: 128,
+      patrol: { min: 150, max: 150 },
+    });
+    const hp = enemy.hp;
+    const pool = new ProjectilePool();
+    pool.spawn(
+      enemy.feet.x,
+      enemy.feet.y - 16,
+      1,
+      0,
+      TOLL.wave.speed,
+      TOLL.damage,
+      TOLL.wave.lifeTicks,
+      { style: 'bell', owner: 'player', posture: TOLL.posture },
+    );
+
+    const result = new CombatSystem().resolve(player, [enemy], pool, GROUND);
+    expect(enemy.hp).toBe(hp);
+    expect(result.events.some((event) => event.type === 'enemyHit')).toBe(false);
   });
 });
 

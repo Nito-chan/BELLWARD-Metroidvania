@@ -41,6 +41,17 @@ export type SceneBossDebugState = {
   hidden: boolean;
   alive: boolean;
   deathElapsed: number;
+  /** Last Keeper-only mechanic state, absent on the other bosses. */
+  lastKeeper?: boolean;
+  chainCount?: number;
+  chainOpen?: boolean;
+  chainWindowTicks?: number;
+  answerCount?: number;
+  answerWindow?: boolean;
+  answerWindowTicks?: number;
+  ritualStage?: string;
+  shockwaveStage?: string;
+  waterLevel?: number;
 };
 
 /** Room/art snapshot for the active scene. */
@@ -142,6 +153,8 @@ export type SceneDebugState = {
   } | null;
   /** True while a living boss keeps the arena's return door locked. */
   exitLocked: boolean;
+  /** True while the great-bell prompt is on screen. */
+  finalBellPrompt: boolean;
   /** Collectibles still visible in this room. */
   pickupsRemaining: number;
   /** True once this room's secret wall has shattered. */

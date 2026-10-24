@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js';
 import { COMBAT } from '../config/combat';
 import { BOSS_KINDS, isBossKind, type BossKind } from '../config/enemies';
+import { FINAL_ACT } from '../config/finalAct';
 import { CAMERA } from '../config/render';
 import { CombatSystem } from '../combat/CombatSystem';
 import { overlaps } from '../combat/geometry';
@@ -16,6 +17,7 @@ import { PlayerController, type PlayerEvent } from '../player/PlayerController';
 import { TOLL } from '../config/weapons';
 import { Banner } from '../ui/Banner';
 import { Hud } from '../ui/Hud';
+import { InteractPrompt } from '../ui/InteractPrompt';
 import type { Room, RoomBench, RoomSpawn } from '../world/Room';
 import type { ArtProvider } from './ArtProvider';
 import { BenchInteraction } from './BenchInteraction';
@@ -106,10 +108,15 @@ export class RoomScene {
   private readonly pickups: PickupLayer;
   private readonly tileLayer: TileLayer;
   private readonly banner = new Banner();
+  private readonly finalPrompt = new InteractPrompt();
   private readonly announce: (text: string) => void;
   private readonly arrival: RoomArrival | null;
   private readonly sealOpen: boolean;
+  private readonly bossRewardClaimed: boolean;
+  private readonly endingSeen: boolean;
   private readonly objectives: RoomObjectives;
+  private finalBellPromptDone = false;
+  private finalBellAnnounced = false;
   private hitstopTicks = 0;
   private resetRequestedValue = false;
 
@@ -126,6 +133,8 @@ export class RoomScene {
     const maxHp = options.maxHp ?? COMBAT.player.maxHp;
     const hp = options.hp ?? maxHp;
     this.sealOpen = options.sealOpen ?? false;
+    this.bossRewardClaimed = options.bossRewardClaimed ?? false;
+    this.endingSeen = options.endingSeen ?? false;
     this.announce = options.announce ?? (() => undefined);
     this.arrival = options.arrival ?? null;
     const canCollectPickup: (id: string) => boolean =
@@ -231,6 +240,7 @@ export class RoomScene {
     this.view.addChild(this.banner.view);
     // Boss overlays must sit above the HUD; re-adding moves the initial overlay to the top.
     if (this.bossDirector.encounter) this.view.addChild(this.bossDirector.encounter.overlay);
+    this.view.addChild(this.finalPrompt.view);
     this.hud.setHealth(this.player.hp, this.player.maxHp);
     this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
     this.hud.setPosture(this.player.posture, this.player.maxPosture, this.player.guardBroken);
@@ -346,6 +356,16 @@ export class RoomScene {
     this.bossDirector.debugDefeat();
   }
 
+  /** DEV-only: settle the Last Keeper into its final ritual for browser coverage. */
+  debugEnterKeeperRitual(): boolean {
+    return this.bossDirector.debugEnterRitual();
+  }
+
+  /** DEV-only: solve the Last Keeper ritual without replaying the answer timing. */
+  debugSolveKeeperRitual(): boolean {
+    return this.bossDirector.debugSolveRitual();
+  }
+
   /** Advances the simulation by one fixed tick and returns what that tick produced. */
   update(tickCount: number, input: InputSnapshot): readonly PlayerEvent[] {
     if (this.resetRequestedValue) return [];
@@ -413,7 +433,7 @@ export class RoomScene {
       const boss = this.bossDirector.boss as Boss;
       for (const slot of this.projectiles.all) {
         if (slot.active && slot.owner === 'player') {
-          boss.processTollWave(slot.x, slot.y);
+          boss.processTollWave(slot.x, slot.y, slot.spawnId);
         }
       }
       if (this.player.currentWeapon === 'censer' && this.player.attackActive) {
@@ -433,16 +453,9 @@ export class RoomScene {
         }
       }
 
-      // Final ending: interact with the great bell when the ritual is solved.
-      if (boss.ritualSolved && input.pressed.has('interact')) {
-        const bell = this.room.definition.lastKeeper.greatBell;
-        const feet = this.player.feet;
-        if (Math.hypot(feet.x - bell.x, feet.y - bell.y) < 48) {
-          this.objectives.triggerFinalEnding();
-        }
-      }
     }
 
+    this.updateFinalBell(input);
     this.removeFallenEnemies();
     this.objectives.updatePickups();
     this.objectives.tryBreakSecret();
@@ -496,6 +509,7 @@ export class RoomScene {
       pickupsRemaining: this.pickups.remaining,
       secretBroken: this.objectives.secretBrokenThisVisit,
       sealOpen: this.sealOpen,
+      finalBellPrompt: this.finalPrompt.visible,
       hitstop: this.hitstopTicks,
     });
   }
@@ -515,6 +529,47 @@ export class RoomScene {
         this.enemyRecords.splice(i, 1);
       }
     }
+  }
+
+  /**
+   * The great bell hangs out of standing reach. The centre hook ring is the authored
+   * interaction position, and the prompt makes the final input discoverable there.
+   *
+   * If the arena was already claimed in this run (the Keeper is gone) the solved ritual
+   * is implied by the claimed reward; this keeps the earned ending reachable after a
+   * room rebuild instead of stranding it behind a despawned boss.
+   */
+  private updateFinalBell(input: InputSnapshot): void {
+    const act = this.room.definition.lastKeeper;
+    if (!act || this.endingSeen || this.finalBellPromptDone || this.player.dead) {
+      this.finalPrompt.hide();
+      return;
+    }
+    const boss = this.bossDirector.boss as Boss | null;
+    const solved = boss ? boss.ritualSolved : this.bossRewardClaimed;
+    if (!solved) {
+      this.finalPrompt.hide();
+      return;
+    }
+
+    const feet = this.player.feet;
+    const distance = Math.hypot(feet.x - act.greatBell.x, feet.y - act.greatBell.y);
+    if (distance > FINAL_ACT.bellInteractRadius) {
+      this.finalPrompt.hide();
+      return;
+    }
+
+    this.finalPrompt.show('RING THE FINAL NOTE', 'INTERACT · THE BELL REMEMBERS');
+    if (!this.finalBellAnnounced) {
+      this.finalBellAnnounced = true;
+      this.announce('Ring the final note.');
+    }
+    if (!input.pressed.has('interact')) return;
+
+    this.finalBellPromptDone = true;
+    this.finalPrompt.hide();
+    this.audio.playSfx('bossBell');
+    this.objectives.triggerFinalEnding();
   }
 
   /**

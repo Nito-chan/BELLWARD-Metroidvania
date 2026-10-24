@@ -48,6 +48,11 @@ export class InteractPrompt {
     this.view.visible = false;
   }
 
+  /** True while the prompt is on screen; used by the E2E debug snapshot. */
+  get visible(): boolean {
+    return this.view.visible;
+  }
+
   show(title: string, hint = 'INTERACT TO REST · PROGRESS SAVES'): void {
     const next = title.toUpperCase();
     if (this.title.text !== next) this.title.text = next;

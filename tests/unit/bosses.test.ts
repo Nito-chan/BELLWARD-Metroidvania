@@ -499,7 +499,7 @@ describe('Boss FSM', () => {
     function breakAllChains(boss: Boss): void {
       for (let chain = 0; chain < 3; chain += 1) {
         const target = boss.chainTargets[chain]!;
-        boss.tollAt(target.x, target.y);
+        boss.tollAt(target.x, target.y, 100 + chain);
         expect(boss.chainOpen).toBe(true);
         boss.censerAt(target.x, target.y);
         expect(boss.chainOpen).toBe(false);
@@ -547,7 +547,7 @@ describe('Boss FSM', () => {
 
       // Toll at chain 0 opens the window
       const chain0 = boss.chainTargets[0]!;
-      boss.tollAt(chain0.x, chain0.y);
+      boss.tollAt(chain0.x, chain0.y, 1);
       expect(boss.chainOpen).toBe(true);
 
       // Censer at chain 0 breaks it
@@ -621,23 +621,106 @@ describe('Boss FSM', () => {
       expect(boss.answerCount).toBe(0);
       expect(boss.answerWindow).toBe(false);
 
-      // Force answer windows open (simulates boss ringing) and answer them
+      // Force answer windows open (simulates boss ringing) and answer them with one
+      // distinct wave each.
       boss.debugForceAnswerWindow();
       const bell = boss.greatBell!;
-      boss.tollAt(bell.x, bell.y);
+      boss.tollAt(bell.x, bell.y, 1);
       expect(boss.answerCount).toBe(1);
       expect(boss.answerWindow).toBe(false);
 
       // Open two more windows and answer them
       boss.debugForceAnswerWindow();
-      boss.tollAt(bell.x, bell.y);
+      boss.tollAt(bell.x, bell.y, 2);
       expect(boss.answerCount).toBe(2);
 
       boss.debugForceAnswerWindow();
-      boss.tollAt(bell.x, bell.y);
+      boss.tollAt(bell.x, bell.y, 3);
       expect(boss.answerCount).toBe(3);
       expect(boss.ritualSolved).toBe(true);
       expect(boss.alive).toBe(false);
+    });
+
+    it('never opens answer windows during the phase transition', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+
+      enterDrowningToll(boss, ctx);
+      breakAllChains(boss);
+      expect(boss.phaseIndex).toBe(2);
+      expect(boss.state).toBe('phase');
+
+      step(boss, ctx, (BOSSES.lastKeeper.phases[2]?.transitionTicks ?? 0) - 1);
+      expect(boss.state).toBe('phase');
+      expect(boss.answerWindow).toBe(false);
+      boss.tollAt(boss.greatBell!.x, boss.greatBell!.y, 1);
+      expect(boss.answerCount).toBe(0);
+
+      step(boss, ctx, 1);
+      expect(boss.state).toBe('ritual');
+      expect(boss.answerWindow).toBe(false);
+    });
+
+    it('one Toll wave answers at most one note', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+      enterAnswer(boss, ctx);
+
+      const bell = boss.greatBell!;
+      boss.debugForceAnswerWindow();
+      boss.tollAt(bell.x, bell.y, 7);
+      expect(boss.answerCount).toBe(1);
+      expect(boss.answerWindow).toBe(false);
+
+      // The same wave is still alive and in the bell radius when the next note opens.
+      boss.debugForceAnswerWindow();
+      boss.tollAt(bell.x, bell.y, 7);
+      expect(boss.answerCount).toBe(1);
+      expect(boss.answerWindow).toBe(true);
+
+      // A new wave can answer it.
+      boss.tollAt(bell.x, bell.y, 8);
+      expect(boss.answerCount).toBe(2);
+      expect(boss.answerWindow).toBe(false);
+    });
+
+    it('runs kneel, ring, window, then a miss that resets the note and sends a shockwave', () => {
+      const boss = makeBoss('lastKeeper');
+      const ctx = context(GROUND);
+      step(boss, ctx, BOSSES.lastKeeper.introTicks + 1);
+      enterAnswer(boss, ctx);
+
+      expect(boss.ritualStage).toBe('kneel');
+      step(boss, ctx, boss.ritualStageTicks);
+      expect(boss.ritualStage).toBe('ring');
+      step(boss, ctx, boss.ritualStageTicks);
+      expect(boss.ritualStage).toBe('window');
+      const windowTicks = boss.answerWindowTicks;
+      expect(windowTicks).toBeGreaterThan(0);
+
+      // Let the window close unanswered.
+      step(boss, ctx, windowTicks);
+      expect(boss.answerCount).toBe(0);
+      expect(boss.answerWindow).toBe(false);
+      expect(boss.ritualStage).toBe('recover');
+      expect(boss.shockwaveStage).toBe('telegraph');
+      expect(boss.shockwaveBox).not.toBeNull();
+
+      // The telegraph becomes a real, active hazard with its own identity.
+      step(boss, ctx, boss.shockwaveTiming.telegraphTicks);
+      expect(boss.shockwaveStage).toBe('active');
+      const hazard = boss.activeHazard();
+      expect(hazard).not.toBeNull();
+      expect(hazard?.unblockable).toBe(true);
+      expect(hazard?.box).toEqual(boss.shockwaveBox);
+      expect(hazard?.damage).toBe(1);
+
+      // It closes after its active lifetime.
+      step(boss, ctx, boss.shockwaveTiming.activeTicks + 1);
+      expect(boss.shockwaveStage).toBe('none');
+      expect(boss.activeHazard()).toBeNull();
     });
 
     it('censer in phase 1 does nothing to chains', () => {

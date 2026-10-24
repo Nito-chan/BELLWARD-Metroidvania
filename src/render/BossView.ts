@@ -16,6 +16,7 @@ export class BossView {
   private readonly character: CharacterView;
   private readonly guard = new Graphics();
   private readonly telegraph = new Graphics();
+  private readonly shockwave = new Graphics();
 
   constructor(provider: ArtProvider, boss: Boss) {
     const art = provider.bosses[boss.kind as keyof typeof provider.bosses];
@@ -23,7 +24,7 @@ export class BossView {
       shadow: { rx: 20, ry: 4 },
       shadowAlpha: { grounded: 0.45, airborne: 0.2 },
     });
-    this.view.addChild(this.guard, this.character.view, this.telegraph);
+    this.view.addChild(this.guard, this.character.view, this.telegraph, this.shockwave);
   }
 
   sync(boss: Boss, target: Vec2 | null = null): void {
@@ -47,6 +48,7 @@ export class BossView {
     this.character.tick();
     this.drawGuard(boss);
     this.drawTelegraph(boss, target);
+    this.drawShockwave(boss);
   }
 
   destroy(): void {
@@ -220,6 +222,39 @@ export class BossView {
       color: PALETTE.echo,
       alpha,
     });
+    g.visible = true;
+  }
+
+  /**
+   * The missed-note shockwave is a floor sweep, not a radius: it reads as a red band
+   * the player can jump. During the telegraph the band fills; when active it is solid.
+   */
+  private drawShockwave(boss: Boss): void {
+    const g = this.shockwave;
+    g.clear();
+    const box = boss.shockwaveBox;
+    if (!boss.alive || boss.hidden || boss.shockwaveStage === 'none' || !box) {
+      g.visible = false;
+      return;
+    }
+    const active = boss.shockwaveStage === 'active';
+    const p = boss.shockwaveProgress;
+    const fillAlpha = active ? 0.52 : 0.06 + p * 0.16;
+    g.rect(box.x, box.y, box.w, box.h).fill({
+      color: active ? PALETTE.ember : PALETTE.blood,
+      alpha: fillAlpha,
+    });
+    g.moveTo(box.x, box.y)
+      .lineTo(box.x + box.w, box.y)
+      .stroke({ width: active ? 4 : 2, color: PALETTE.blood, alpha: 0.55 + p * 0.4 });
+    if (!active) {
+      // Hatch marks make the telegraph legible without relying on colour alone.
+      for (let x = box.x + 24; x < box.x + box.w; x += 48) {
+        g.moveTo(x, box.y + 2)
+          .lineTo(x, box.y + box.h)
+          .stroke({ width: 1, color: PALETTE.blood, alpha: 0.22 + p * 0.35 });
+      }
+    }
     g.visible = true;
   }
 }

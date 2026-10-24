@@ -18,10 +18,21 @@ import type { BossEvent } from './BossEvents';
 import { BossPatternState } from './BossPatternState';
 import { diveLandingX, teleportBehindX } from './bossPlacement';
 import { launchPatternStart, launchRainVolley } from './bossProjectiles';
-import { Enemy, type EnemyContext, type PostureResult } from './Enemy';
+import {
+  Enemy,
+  type EnemyContext,
+  type EnemyHazard,
+  type PostureResult,
+} from './Enemy';
 
 /** A Toll wave passing through a world position, used for Last Keeper chains and answers. */
 export type TollWaveAt = { readonly x: number; readonly y: number };
+
+/** The final phase's public ritual cadence. */
+export type RitualStage = 'kneel' | 'ring' | 'window' | 'recover';
+
+/** A miss sends a ground shockwave; it telegraphs before it can hit. */
+export type ShockwaveStage = 'none' | 'telegraph' | 'active';
 
 /** Last Keeper mechanic tuning. */
 const LAST_KEEPER = {
@@ -31,8 +42,19 @@ const LAST_KEEPER = {
   chainWindowTicks: 60,
   /** Radius (px) within which a Toll wave answers the great bell. */
   bellRadius: 40,
+  /** Quiet beat before the Keeper rings the next note. */
+  kneelTicks: 60,
+  /** Ticks for the ring to travel from the bell to the answer circle. */
+  ringTicks: 30,
   /** Ticks the player has to answer a boss ring. */
   answerWindowTicks: 24,
+  /** Closed beat after a note resolves, before the next kneel. */
+  recoverTicks: 36,
+  /** A missed note charges this long before the shockwave becomes dangerous. */
+  shockwaveTelegraphTicks: 30,
+  /** Active hitbox lifetime; long enough to catch a late jump, short enough to dash clear. */
+  shockwaveActiveTicks: 12,
+  shockwaveDamage: 1,
 } as const;
 
 export type { BossEvent } from './BossEvents';
@@ -77,12 +99,19 @@ export class Boss extends Enemy {
   private greatBellValue: Vec2 | null = null;
   /** Toll answers given in phase 3 (0..3). */
   private answerCountValue = 0;
-  /** A boss ring is open and waiting for a Toll answer. */
-  private answerWindowValue = false;
-  /** Ticks remaining in the current answer window. */
-  private answerWindowTicksValue = 0;
+  /** The current beat of the final ritual. */
+  private ritualStageValue: RitualStage = 'kneel';
+  /** Ticks left in the current ritual beat. */
+  private ritualTicksValue = 0;
+  /** One Toll wave may answer at most one note. */
+  private readonly answeredWaveIds = new Set<number>();
   /** All three answers given; the ritual is solved. */
   private ritualSolvedValue = false;
+  /** Ground shockwave spawned by a missed note. */
+  private shockwaveStageValue: ShockwaveStage = 'none';
+  private shockwaveTicksValue = 0;
+  private shockwaveIdValue = 0;
+  private arenaValue: Rect | null = null;
   /** Flood level in phase 2 (0..3, rises after each chain break). */
   private waterLevelValue = 0;
 
@@ -158,6 +187,11 @@ export class Boss extends Enemy {
     return this.chainOpenValue;
   }
 
+  /** Ticks remaining in the current Censer chain window. */
+  get chainWindowTicks(): number {
+    return this.chainWindowTicksValue;
+  }
+
   /** The three chain positions in world space. */
   get chainTargets(): readonly Vec2[] {
     return this.chainTargetsValue;
@@ -173,14 +207,72 @@ export class Boss extends Enemy {
     return this.answerCountValue;
   }
 
+  /** The current beat of the final ritual. */
+  get ritualStage(): RitualStage {
+    return this.ritualStageValue;
+  }
+
+  /** Ticks left in the current ritual beat (the window timer during `window`). */
+  get ritualStageTicks(): number {
+    return this.ritualTicksValue;
+  }
+
   /** A boss ring is open and waiting for a Toll answer. */
   get answerWindow(): boolean {
-    return this.answerWindowValue;
+    return this.ritualStageValue === 'window';
+  }
+
+  /** Ticks remaining in the current answer window (0 outside it). */
+  get answerWindowTicks(): number {
+    return this.answerWindow ? this.ritualTicksValue : 0;
   }
 
   /** All three answers given; the ritual is solved. */
   get ritualSolved(): boolean {
     return this.ritualSolvedValue;
+  }
+
+  /** Current shockwave beat, used by the view and HUD. */
+  get shockwaveStage(): ShockwaveStage {
+    return this.shockwaveStageValue;
+  }
+
+  /** Ticks left in the current shockwave beat. */
+  get shockwaveTicks(): number {
+    return this.shockwaveTicksValue;
+  }
+
+  /** The floor box the shockwave will sweep; present for both telegraph and active. */
+  get shockwaveBox(): Rect | null {
+    if (this.shockwaveStageValue === 'none' || !this.arenaValue) return null;
+    return {
+      x: this.arenaValue.x,
+      y: this.feet.y - 20,
+      w: this.arenaValue.w,
+      h: 20,
+    };
+  }
+
+  /** 0..1 during the telegraph, then held at 1 while active. */
+  get shockwaveProgress(): number {
+    if (this.shockwaveStageValue === 'none') return 0;
+    if (this.shockwaveStageValue === 'active') return 1;
+    return clamp(
+      1 - this.shockwaveTicksValue / LAST_KEEPER.shockwaveTelegraphTicks,
+      0,
+      1,
+    );
+  }
+
+  /** Test/UI contract for the authored durations. */
+  get shockwaveTiming(): {
+    readonly telegraphTicks: number;
+    readonly activeTicks: number;
+  } {
+    return {
+      telegraphTicks: LAST_KEEPER.shockwaveTelegraphTicks,
+      activeTicks: LAST_KEEPER.shockwaveActiveTicks,
+    };
   }
 
   /** Flood level in phase 2 (0..3, rises after each chain break). */
@@ -209,6 +301,19 @@ export class Boss extends Enemy {
       this.stateValue === 'phase' ||
       this.stateValue === 'ritual'
     );
+  }
+
+  override activeHazard(): EnemyHazard | null {
+    if (!this.alive || !this.ritualActive || this.shockwaveStageValue !== 'active') return null;
+    const box = this.shockwaveBox;
+    if (!box) return null;
+    return {
+      id: this.shockwaveIdValue,
+      box,
+      damage: LAST_KEEPER.shockwaveDamage,
+      unblockable: true,
+      sourceX: this.greatBellValue?.x ?? this.feet.x,
+    };
   }
 
   /** 0..1 warning fill for the current wind-up. */
@@ -298,12 +403,41 @@ export class Boss extends Enemy {
   /** Test hook: force an answer window open once the final ritual has begun. */
   debugForceAnswerWindow(): void {
     if (!this.ritualActive || this.stateValue !== 'ritual') return;
-    this.answerWindowValue = true;
-    this.answerWindowTicksValue = LAST_KEEPER.answerWindowTicks;
+    this.ritualStageValue = 'window';
+    this.ritualTicksValue = LAST_KEEPER.answerWindowTicks;
   }
 
-  /** Called by the room scene when a Toll wave passes through this position. */
-  tollAt(x: number, y: number): void {
+  /** DEV-only: skip to a settled phase 3 ritual for browser final-act coverage. */
+  debugEnterRitual(): boolean {
+    if (!this.lastKeeperModeValue) return false;
+    this.phaseIndexValue = 2;
+    this.patterns.clear();
+    this.hiddenValue = false;
+    this.wardedValue = false;
+    this.body.vx = 0;
+    this.beginState('ritual', 0, 'idle');
+    this.startRitualStage('kneel');
+    this.eventBuffer.push({ type: 'phase', phase: 2, name: this.phase.name });
+    return true;
+  }
+
+  /** DEV-only: mark the ritual solved and run the real defeat path for the final bell. */
+  debugSolveRitual(): boolean {
+    if (!this.lastKeeperModeValue) return false;
+    if (!this.ritualActive) this.debugEnterRitual();
+    this.answerCountValue = 3;
+    this.ritualSolvedValue = true;
+    this.ritualStageValue = 'recover';
+    this.ritualTicksValue = 0;
+    this.defeat();
+    return true;
+  }
+
+  /**
+   * Called by the room scene when a Toll wave passes through this position.
+   * `waveId` is the projectile's spawn identity: one wave can answer at most one note.
+   */
+  tollAt(x: number, y: number, waveId: number): void {
     if (!this.lastKeeperModeValue) return;
 
     if (this.phaseIndexValue === 1) {
@@ -322,29 +456,39 @@ export class Boss extends Enemy {
           });
         }
       }
-    } else if (this.phaseIndexValue === 2) {
-      // Phase 3: Toll answers the great bell during an open answer window.
-      if (this.answerWindowValue && this.answerWindowTicksValue > 0) {
-        if (
-          this.greatBellValue &&
-          Math.hypot(x - this.greatBellValue.x, y - this.greatBellValue.y) < LAST_KEEPER.bellRadius
-        ) {
-          // Correct answer: light a pip and close the window.
-          this.answerWindowValue = false;
-          this.answerWindowTicksValue = 0;
-          this.answerCountValue += 1;
-          this.eventBuffer.push({
-            type: 'wardBreak',
-            x: this.greatBellValue.x,
-            y: this.greatBellValue.y,
-          });
-          if (this.answerCountValue >= 3) {
-            this.ritualSolvedValue = true;
-            this.defeat();
-          }
-        }
-      }
+      return;
     }
+
+    if (
+      this.phaseIndexValue !== 2 ||
+      this.stateValue !== 'ritual' ||
+      !this.answerWindow ||
+      this.answeredWaveIds.has(waveId)
+    ) {
+      return;
+    }
+
+    const bell = this.greatBellValue;
+    if (!bell || Math.hypot(x - bell.x, y - bell.y) >= LAST_KEEPER.bellRadius) return;
+
+    // Correct answer: one wave spends its note, closes the window, and lights a pip.
+    this.answeredWaveIds.add(waveId);
+    this.answerCountValue += 1;
+    this.eventBuffer.push({
+      type: 'answer',
+      count: this.answerCountValue,
+      total: 3,
+      x: bell.x,
+      y: bell.y,
+    });
+    if (this.answerCountValue >= 3) {
+      this.ritualSolvedValue = true;
+      this.ritualStageValue = 'recover';
+      this.ritualTicksValue = 0;
+      this.defeat();
+      return;
+    }
+    this.startRitualStage('recover');
   }
 
   /** Called by the room scene when a Censer swing hits this position. */
@@ -380,8 +524,8 @@ export class Boss extends Enemy {
   }
 
   /** Process a Toll wave at a world position each tick. Called by the room scene. */
-  processTollWave(x: number, y: number): void {
-    this.tollAt(x, y);
+  processTollWave(x: number, y: number, waveId: number): void {
+    this.tollAt(x, y, waveId);
   }
 
   consumeEvents(): BossEvent[] {
@@ -393,6 +537,7 @@ export class Boss extends Enemy {
       this.deathElapsedValue += 1;
       return;
     }
+    this.arenaValue = ctx.arena ?? this.arenaValue;
     this.patterns.advanceClock();
     if (this.wardFlashTicks > 0) this.wardFlashTicks -= 1;
     super.update(ctx);
@@ -405,32 +550,13 @@ export class Boss extends Enemy {
         this.chainWindowTicksValue -= 1;
         if (this.chainWindowTicksValue === 0) this.chainOpenValue = false;
       }
-      if (this.answerWindowTicksValue > 0) {
-        this.answerWindowTicksValue -= 1;
-        if (this.answerWindowTicksValue === 0) {
-          this.answerWindowValue = false;
-          // A missed answer sends a telegraphed shockwave; no progress lost.
-          this.eventBuffer.push({ type: 'wallHit', x: this.feet.x, y: this.feet.y });
-        }
-      }
-      // Phase 3: the keeper rings the great bell, opening an answer window. Wait until
-      // the transition has settled so the first ring is never eaten by the fade.
-      if (
-        this.ritualActive &&
-        this.stateValue === 'ritual' &&
-        !this.answerWindowValue &&
-        this.answerWindowTicksValue <= 0 &&
-        this.answerCountValue < 3
-      ) {
-        this.answerWindowValue = true;
-        this.answerWindowTicksValue = LAST_KEEPER.answerWindowTicks;
-        this.eventBuffer.push({
-          type: 'tell',
-          patternId: 'answer.open',
-          sfx: 'bossBell',
-          x: this.greatBellValue?.x ?? this.feet.x,
-          y: this.greatBellValue?.y ?? this.feet.y,
-        });
+      // Advance an existing shockwave before the cadence so a miss' new telegraph gets
+      // its full wind-up instead of losing a tick on the frame it spawns.
+      if (this.shockwaveStageValue !== 'none') this.tickShockwave();
+      // Phase 3 runs its own kneel -> ring -> window -> recover cadence. It never
+      // chooses a pattern, and the cadence only starts after the transition settles.
+      if (this.ritualActive && this.stateValue === 'ritual') {
+        this.tickRitual();
       }
     }
 
@@ -579,6 +705,112 @@ export class Boss extends Enemy {
     this.hiddenValue = false;
     this.body.vx = 0;
     this.beginState('ritual', 0, 'idle');
+    this.startRitualStage('kneel');
+    this.eventBuffer.push({
+      type: 'tell',
+      patternId: 'ritual.begin',
+      sfx: 'bossPhase',
+      x: this.greatBellValue?.x ?? this.feet.x,
+      y: this.greatBellValue?.y ?? this.feet.y,
+    });
+  }
+
+  /** One tick of the final cadence. Windows only exist after the transition. */
+  private tickRitual(): void {
+    if (this.ritualSolvedValue) return;
+    this.ritualTicksValue -= 1;
+    if (this.ritualTicksValue > 0) return;
+
+    switch (this.ritualStageValue) {
+      case 'kneel': {
+        this.startRitualStage('ring');
+        const bell = this.greatBellValue;
+        this.eventBuffer.push({
+          type: 'tell',
+          patternId: 'ritual.ring',
+          sfx: 'bossBell',
+          x: bell?.x ?? this.feet.x,
+          y: bell?.y ?? this.feet.y,
+        });
+        return;
+      }
+      case 'ring': {
+        this.startRitualStage('window');
+        const bell = this.greatBellValue;
+        this.eventBuffer.push({
+          type: 'tell',
+          patternId: 'answer.open',
+          sfx: 'bossBell',
+          x: bell?.x ?? this.feet.x,
+          y: bell?.y ?? this.feet.y,
+        });
+        return;
+      }
+      case 'window':
+        // The window closed unanswered: retry the note and send a real hazard.
+        this.missNote();
+        return;
+      case 'recover':
+        this.startRitualStage('kneel');
+        return;
+    }
+  }
+
+  private startRitualStage(stage: RitualStage): void {
+    this.ritualStageValue = stage;
+    switch (stage) {
+      case 'kneel':
+        this.ritualTicksValue = LAST_KEEPER.kneelTicks;
+        return;
+      case 'ring':
+        this.ritualTicksValue = LAST_KEEPER.ringTicks;
+        return;
+      case 'window':
+        this.ritualTicksValue = LAST_KEEPER.answerWindowTicks;
+        return;
+      case 'recover':
+        this.ritualTicksValue = LAST_KEEPER.recoverTicks;
+        return;
+    }
+  }
+
+  private missNote(): void {
+    this.startRitualStage('recover');
+    this.beginShockwave();
+    this.eventBuffer.push({
+      type: 'miss',
+      x: this.greatBellValue?.x ?? this.feet.x,
+      y: this.greatBellValue?.y ?? this.feet.y,
+    });
+  }
+
+  private beginShockwave(): void {
+    this.shockwaveStageValue = 'telegraph';
+    this.shockwaveTicksValue = LAST_KEEPER.shockwaveTelegraphTicks;
+    const box = this.shockwaveBox;
+    if (!box) return;
+    this.eventBuffer.push({
+      type: 'shockwave',
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+      windupTicks: LAST_KEEPER.shockwaveTelegraphTicks,
+      activeTicks: LAST_KEEPER.shockwaveActiveTicks,
+    });
+  }
+
+  private tickShockwave(): void {
+    this.shockwaveTicksValue -= 1;
+    if (this.shockwaveTicksValue > 0) return;
+    if (this.shockwaveStageValue === 'telegraph') {
+      this.shockwaveStageValue = 'active';
+      this.shockwaveTicksValue = LAST_KEEPER.shockwaveActiveTicks;
+      this.shockwaveIdValue += 1;
+      return;
+    }
+    this.shockwaveStageValue = 'none';
+    this.shockwaveTicksValue = 0;
   }
 
   private beginRecover(): void {

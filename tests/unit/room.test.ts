@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { FINAL_ACT } from '../../src/config/finalAct';
+import { HOOK } from '../../src/config/hookline';
 import { PLAYER } from '../../src/config/player';
 import { BENCHES } from '../../src/data/benches';
 import { belfryTerrace } from '../../src/data/rooms/belfry-terrace';
@@ -345,5 +347,32 @@ describe('Hookline anchors', () => {
     expect(() =>
       createRoom({ ...belfryTerrace, anchors: [{ ...anchor, id: 'blocked', x: 420, y: 306 }] }),
     ).toThrow(/hang point .* overlaps geometry/);
+  });
+});
+
+describe('The Last Bell', () => {
+  it('puts the centre hang comfortably inside the final interaction radius', () => {
+    const room = getRoom('last-bell');
+    const act = room.lastKeeper;
+    expect(act).toBeDefined();
+    if (!act) return;
+    const centre = act.chains.find((chain) => chain.id === 'last-bell-chain-center');
+    expect(centre).toBeDefined();
+    if (!centre) return;
+
+    const hangFeet = { x: centre.x, y: centre.y + HOOK.hangOffsetY };
+    const distance = Math.hypot(hangFeet.x - act.greatBell.x, hangFeet.y - act.greatBell.y);
+    expect(FINAL_ACT.bellInteractRadius).toBeGreaterThanOrEqual(64);
+    expect(distance).toBeLessThan(FINAL_ACT.bellInteractRadius);
+  });
+
+  it('uses the earned ending copy and leaves the midpoint card distinct', () => {
+    expect(FINAL_ACT.ending).toEqual({
+      eyebrow: 'THE LAST BELL',
+      title: 'THE BELL REMEMBERS',
+      subtitle: 'The Keeper sets down the bell. The water is still.',
+      closeLabel: 'Continue the climb',
+    });
+    expect(FINAL_ACT.ending.eyebrow).not.toContain('END OF THE SLICE');
   });
 });

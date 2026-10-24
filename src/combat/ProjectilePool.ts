@@ -24,6 +24,8 @@ export type ProjectileSpawnOptions = {
 export type Projectile = {
   /** Stable slot index, used by the view to keep a sprite per slot. */
   readonly index: number;
+  /** Monotonic identity for one spawn; ritual mechanics allow one answer per wave. */
+  spawnId: number;
   active: boolean;
   x: number;
   y: number;
@@ -59,10 +61,12 @@ export type ProjectileHit = {
  */
 export class ProjectilePool {
   private readonly slots: Projectile[];
+  private nextSpawnId = 1;
 
   constructor(capacity: number = COMBAT.projectilePoolSize) {
     this.slots = Array.from({ length: capacity }, (_, index) => ({
       index,
+      spawnId: 0,
       active: false,
       x: 0,
       y: 0,
@@ -100,6 +104,8 @@ export class ProjectilePool {
     const length = Math.hypot(dirX, dirY);
     if (length <= 0) return;
     const slot = this.acquire();
+    slot.spawnId = this.nextSpawnId;
+    this.nextSpawnId += 1;
     slot.active = true;
     slot.x = x;
     slot.y = y;

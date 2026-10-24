@@ -2,6 +2,7 @@
  * The Tide-door ending card. Accessible DOM like the pause flow; the world stays mounted
  * behind it, so the player can close the card and keep exploring after the slice ends.
  */
+import type { EndingCopy } from '../../config/finalAct';
 import '../menu/menu.css';
 import './ending.css';
 import { el, makeBellMark, makeButton, makeHint } from '../menu/menuDom';
@@ -24,10 +25,12 @@ export type EndingOverlayOptions = {
 
 export class EndingOverlay {
   readonly root: HTMLElement;
+  private readonly eyebrow: HTMLElement;
   private readonly title: HTMLElement;
   private readonly subtitle: HTMLElement;
   private readonly stats: HTMLElement;
   private readonly sealPips: HTMLElement;
+  private readonly closeButton: HTMLButtonElement;
   private readonly panel: HTMLElement;
   private openValue = false;
 
@@ -43,12 +46,12 @@ export class EndingOverlay {
     this.panel.dataset.screen = 'ending';
 
     const header = el('header', 'menu-header');
-    header.append(el('p', 'menu-eyebrow', 'THE DROWNED BELFRY · END OF THE SLICE'));
-    this.title = el('h2', 'menu-title', 'The Bell Remembers');
+    this.eyebrow = el('p', 'menu-eyebrow', '');
+    this.title = el('h2', 'menu-title', '');
     this.title.id = 'ending-title';
     this.subtitle = el('p', 'menu-subtitle', '');
     this.subtitle.id = 'ending-subtitle';
-    header.append(this.title, this.subtitle);
+    header.append(this.eyebrow, this.title, this.subtitle);
 
     const seal = el('div', 'ending-seal');
     seal.setAttribute('aria-hidden', 'true');
@@ -61,14 +64,14 @@ export class EndingOverlay {
 
     const footer = el('footer', 'menu-footer');
     footer.append(makeHint('Esc', 'Return'), makeHint('Enter', 'Continue'));
-    const leave = makeButton(
+    this.closeButton = makeButton(
       'Return to the belfry',
       'continue',
       'menu-back-button ending-continue',
     );
-    leave.dataset.focusId = 'ending:continue';
-    leave.addEventListener('click', () => this.close());
-    footer.append(leave);
+    this.closeButton.dataset.focusId = 'ending:continue';
+    this.closeButton.addEventListener('click', () => this.close());
+    footer.append(this.closeButton);
 
     this.panel.append(makeBellMark(), header, body, footer);
     this.root.append(scrim, this.panel);
@@ -80,11 +83,13 @@ export class EndingOverlay {
     return this.openValue;
   }
 
-  open(title: string, subtitle: string, stats: EndingStats): void {
+  open(ending: EndingCopy, stats: EndingStats): void {
     if (this.openValue) return;
     this.openValue = true;
-    this.title.textContent = title;
-    this.subtitle.textContent = subtitle;
+    this.eyebrow.textContent = ending.eyebrow;
+    this.title.textContent = ending.title;
+    this.subtitle.textContent = ending.subtitle;
+    this.closeButton.textContent = ending.closeLabel;
     const rows: HTMLElement[] = [
       this.stat('SIGILS', `${stats.sigils} / ${stats.bossCount}`),
       this.stat('SHARDS', String(stats.shards)),
@@ -101,7 +106,7 @@ export class EndingOverlay {
     }
     this.root.hidden = false;
     this.panel.querySelector<HTMLElement>('[data-focus-id]')?.focus();
-    this.options.announce(`${title}. ${subtitle}`);
+    this.options.announce(`${ending.title}. ${ending.subtitle}`);
   }
 
   close(): void {

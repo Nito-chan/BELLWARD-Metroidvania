@@ -18,6 +18,7 @@ export type SceneDebugInput = {
   pickupsRemaining: number;
   secretBroken: boolean;
   sealOpen: boolean;
+  finalBellPrompt: boolean;
   hitstop: number;
 };
 
@@ -97,6 +98,7 @@ export function buildSceneDebugState(input: SceneDebugInput): SceneDebugState {
     pickupsRemaining: input.pickupsRemaining,
     secretBroken: input.secretBroken,
     sealOpen: input.sealOpen,
+    finalBellPrompt: input.finalBellPrompt,
     hitstop: input.hitstop,
   };
 }

@@ -13,6 +13,7 @@ import { InputManager } from '../input/InputManager';
 import { loadBindings, saveBindings, type Bindings } from '../input/bindings';
 import { isTouchDevice } from '../input/device';
 import { AccessibilitySettings } from '../settings/AccessibilitySettings';
+import type { EndingCopy } from '../config/finalAct';
 import { Announcer } from '../ui/Announcer';
 import { BenchController } from '../ui/bench/BenchController';
 import { EndingOverlay } from '../ui/ending/EndingOverlay';
@@ -178,7 +179,7 @@ export class Game {
       stage: this.app.stage,
       announce: (text) => this.announcer.say(text),
       onBench: (bench) => this.bench.open(bench),
-      onEnding: (title, subtitle) => this.openEnding(title, subtitle),
+      onEnding: (ending) => this.openEnding(ending),
       screenShake: () => this.accessibility.screenShake,
     });
     window.addEventListener('resize', this.onResize);
@@ -354,7 +355,7 @@ export class Game {
     this.touch.show();
   }
 
-  private openEnding(title: string, subtitle: string): void {
+  private openEnding(ending: EndingCopy): void {
     const progress = this.run.progress;
     const loadout = progress.loadout;
     const owned = [
@@ -367,7 +368,7 @@ export class Game {
     this.run.scene?.hideBanner();
     this.input.reset();
     this.loop.pause();
-    this.endingOverlay.open(title, subtitle, {
+    this.endingOverlay.open(ending, {
       sigils: progress.sigils.length,
       bossCount: BOSS_KINDS.length,
       shards: progress.shards,
@@ -418,6 +419,16 @@ export class Game {
   /** DEV-only: kill the active boss to exercise rewards, banners and door unlocking. */
   debugDefeatBoss(): void {
     this.run.scene?.debugDefeatBoss();
+  }
+
+  /** DEV-only: settle the Last Keeper into its final ritual for browser coverage. */
+  debugEnterKeeperRitual(): boolean {
+    return this.run.scene?.debugEnterKeeperRitual() ?? false;
+  }
+
+  /** DEV-only: solve the Last Keeper ritual to exercise the final bell and ending. */
+  debugSolveKeeperRitual(): boolean {
+    return this.run.scene?.debugSolveKeeperRitual() ?? false;
   }
 
   private onRender(alpha: number): void {

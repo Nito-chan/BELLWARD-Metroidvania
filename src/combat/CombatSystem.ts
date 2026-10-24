@@ -35,7 +35,7 @@ export type CombatEvent =
       x: number;
       y: number;
       damage: number;
-      source: 'contact' | 'melee' | 'projectile';
+      source: 'contact' | 'melee' | 'projectile' | 'shockwave';
     }
   | {
       /** A perfect parry: the attacker's posture took the blow. */
@@ -96,6 +96,8 @@ export class CombatSystem {
   private readonly lastSwingByEnemy = new WeakMap<Enemy, number>();
   /** Attack id that last reached the guard, so one swing blocks/parries once. */
   private readonly lastMeleeByEnemy = new WeakMap<Enemy, number>();
+  /** Hazard id that last reached the player, so one shockwave lands once. */
+  private readonly lastHazardByEnemy = new WeakMap<Enemy, number>();
   /** Lingering Censer clouds; one slot per cloud, reused when inactive. */
   private readonly clouds: CenserCloud[] = [];
 
@@ -199,6 +201,39 @@ export class CombatSystem {
           }
           continue;
         }
+        const hazard = enemy.activeHazard();
+        if (
+          hazard &&
+          this.lastHazardByEnemy.get(enemy) !== hazard.id &&
+          overlaps(hazard.box, playerBox)
+        ) {
+          this.lastHazardByEnemy.set(enemy, hazard.id);
+          const outcome = player.resolveIncoming(
+            hazard.damage,
+            hazard.sourceX,
+            hazard.unblockable,
+          );
+          if (outcome === 'parry') {
+            enemy.onParried(player.feet.x);
+            events.push({ type: 'playerParry', ...hitPoint });
+            hitstop = Math.max(hitstop, COMBAT.enemy.hitstopTicks);
+          } else if (outcome === 'block') {
+            events.push({ type: 'playerBlock', ...hitPoint });
+            hitstop = Math.max(hitstop, COMBAT.enemy.blockedHitstopTicks);
+          } else if (outcome === 'broken') {
+            events.push({ type: 'playerGuardBreak', ...hitPoint });
+            hitstop = Math.max(hitstop, COMBAT.player.hitstopTicks);
+          } else if (player.takeDamage(hazard.damage, hazard.sourceX)) {
+            events.push({
+              type: 'playerHit',
+              ...hitPoint,
+              damage: hazard.damage,
+              source: 'shockwave',
+            });
+            hitstop = Math.max(hitstop, COMBAT.player.hitstopTicks);
+          }
+          continue;
+        }
         if (enemy.contactHazard && overlaps(enemy.bounds(), playerBox)) {
           const damage = enemy.stats.contactDamage;
           if (player.takeDamage(damage, enemy.feet.x)) {
@@ -280,6 +315,9 @@ export class CombatSystem {
         if (!enemy.targetable || slot.hitEnemies.has(enemy)) continue;
         if (!overlaps(waveBox, enemy.bounds())) continue;
         slot.hitEnemies.add(enemy);
+        // A warded or ritual-sealed boss absorbs the wave without taking damage or
+        // producing ordinary hit feedback. Its state is the signal, not a false hit.
+        if (enemy.damageBlocked) continue;
 
         const knell = enemy.postureBroken;
         const damage = knell ? Math.ceil(slot.damage * COMBAT.knell.damageMultiplier) : slot.damage;

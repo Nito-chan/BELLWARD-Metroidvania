@@ -77,6 +77,14 @@ export class BossEncounter {
     this.boss.debugDefeat();
   }
 
+  debugEnterRitual(): boolean {
+    return this.boss.debugEnterRitual();
+  }
+
+  debugSolveRitual(): boolean {
+    return this.boss.debugSolveRitual();
+  }
+
   debugState(): SceneBossDebugState {
     const pattern = this.boss.pattern;
     return {
@@ -100,6 +108,20 @@ export class BossEncounter {
       hidden: this.boss.hidden,
       alive: this.boss.alive,
       deathElapsed: this.boss.deathElapsed,
+      ...(this.boss.lastKeeperMode
+        ? {
+            lastKeeper: true,
+            chainCount: this.boss.chainCount,
+            chainOpen: this.boss.chainOpen,
+            chainWindowTicks: this.boss.chainWindowTicks,
+            answerCount: this.boss.answerCount,
+            answerWindow: this.boss.answerWindow,
+            answerWindowTicks: this.boss.answerWindowTicks,
+            ritualStage: this.boss.ritualStage,
+            shockwaveStage: this.boss.shockwaveStage,
+            waterLevel: this.boss.waterLevel,
+          }
+        : {}),
     };
   }
 
@@ -154,6 +176,28 @@ export class BossEncounter {
         this.options.audio.playSfx('bossSlam');
         this.options.effects.spark(event.x, event.y - 12, 1);
         this.options.camera.shake(3, 8);
+        return;
+      case 'answer':
+        this.options.audio.playSfx('bossBell');
+        this.options.effects.spark(event.x, event.y, this.boss.facing);
+        this.options.camera.shake(4, 12);
+        if (event.count === event.total) {
+          this.banner.show('THE BELL REMEMBERS', 'The final note is given', 160);
+          this.options.announce?.('The third note answers. The bell remembers.');
+        } else {
+          this.banner.show(`NOTE ${event.count} / ${event.total}`, 'The great bell answers', 80);
+          this.options.announce?.(`Note ${event.count} of ${event.total} answered.`);
+        }
+        return;
+      case 'miss':
+        this.options.audio.playSfx('bossWard');
+        this.options.camera.shake(2, 8);
+        this.options.announce?.('The note fades unanswered.');
+        return;
+      case 'shockwave':
+        this.options.audio.playSfx('bossSlam');
+        this.options.camera.shake(3, 10);
+        this.options.announce?.('The bell sends a shockwave across the floor. Jump.');
         return;
       case 'defeated':
         this.handleDefeat(event.kind);

@@ -52,6 +52,16 @@ export type EnemyContext = {
 /** What a posture hit did. `broken` is the moment before a KNELL becomes possible. */
 export type PostureResult = 'none' | 'damaged' | 'broken';
 
+/** A world hazard owned by an enemy, such as the Last Keeper's missed-note shockwave. */
+export type EnemyHazard = {
+  /** Changes each time a new hazard becomes active, so one wave lands only once. */
+  readonly id: number;
+  readonly box: Rect;
+  readonly damage: number;
+  readonly unblockable: boolean;
+  readonly sourceX: number;
+};
+
 /**
  * Base for every enemy: tile physics, health, hit reaction, the animation contract and
  * small steering helpers. Subclasses own only their decision making (`think`).
@@ -173,6 +183,11 @@ export abstract class Enemy {
   /** True when a player swing should clang off instead of applying damage. */
   get damageBlocked(): boolean {
     return false;
+  }
+
+  /** An independent world hazard (not a melee swing), resolved by CombatSystem. */
+  activeHazard(): EnemyHazard | null {
+    return null;
   }
 
   /** Called when a swing hits a blocked target; bosses use it to flash their ward. */

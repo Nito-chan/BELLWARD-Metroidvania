@@ -15,4 +15,28 @@ export type BossEvent =
   | { type: 'phase'; phase: number; name: string }
   | { type: 'wardBreak'; x: number; y: number }
   | { type: 'wallHit'; x: number; y: number }
+  | {
+      /** A correct Toll answer at the great bell. */
+      type: 'answer';
+      count: number;
+      total: number;
+      x: number;
+      y: number;
+    }
+  | {
+      /** An answer window closed without a Toll note. */
+      type: 'miss';
+      x: number;
+      y: number;
+    }
+  | {
+      /** A ground shockwave begins its telegraph; the box is in world pixels. */
+      type: 'shockwave';
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      windupTicks: number;
+      activeTicks: number;
+    }
   | { type: 'defeated'; kind: BossKind };

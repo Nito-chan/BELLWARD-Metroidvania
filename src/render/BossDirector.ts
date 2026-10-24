@@ -106,6 +106,14 @@ export class BossDirector {
     this.encounterValue?.debugDefeat();
   }
 
+  debugEnterRitual(): boolean {
+    return this.encounterValue?.debugEnterRitual() ?? false;
+  }
+
+  debugSolveRitual(): boolean {
+    return this.encounterValue?.debugSolveRitual() ?? false;
+  }
+
   private startOrdeal(): void {
     const kind = this.options.room.definition.boss;
     if (!kind) return;

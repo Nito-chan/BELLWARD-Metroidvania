@@ -5,6 +5,7 @@
  */
 import type { Container } from 'pixi.js';
 import type { AudioManager } from '../audio/AudioManager';
+import { FINAL_ACT, type EndingCopy } from '../config/finalAct';
 import { PLAYER } from '../config/player';
 import { ORDEAL } from '../config/progression';
 import type { Rng } from '../core/Rng';
@@ -29,8 +30,8 @@ export type RunSessionDeps = {
   readonly announce: (text: string) => void;
   /** Called after a rest rebuilt the room, so Game can open the bench equipment screen. */
   readonly onBench?: (bench: BenchRef) => void;
-  /** Called when the Tide-door ending fires. */
-  readonly onEnding?: (title: string, subtitle: string) => void;
+  /** Called when either ending card fires; the copy belongs to the room's act. */
+  readonly onEnding?: (ending: EndingCopy) => void;
   /** Current accessibility preference for camera kicks. */
   readonly screenShake?: () => boolean;
 };
@@ -119,13 +120,17 @@ export class RunSession {
       } else {
         if (this.progress.markTideDoorOpened()) this.persist('reward');
       }
-      this.deps?.onEnding?.(
-        definition.ending?.title ?? (isFinalEnding ? 'THE LAST SILENCE' : 'THE TIDE-BELL ANSWERS'),
-        definition.ending?.subtitle ??
-          (isFinalEnding
-            ? 'The Keeper sets down the bell. The water is still.'
-            : 'The last door opens. Far below, a bell is still ringing.'),
-      );
+      const copy: EndingCopy = isFinalEnding
+        ? FINAL_ACT.ending
+        : {
+            eyebrow: 'THE DROWNED BELFRY · END OF THE SLICE',
+            title: definition.ending?.title ?? 'THE TIDE-BELL ANSWERS',
+            subtitle:
+              definition.ending?.subtitle ??
+              'The last door opens. Far below, a bell is still ringing.',
+            closeLabel: 'Return to the belfry',
+          };
+      this.deps?.onEnding?.(copy);
     }
 
     const vitals = scene.vitals;
