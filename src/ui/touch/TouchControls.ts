@@ -6,6 +6,7 @@
  */
 import './touch.css';
 import type { ActionName } from '../../config/input';
+import { WEAPON_LABELS, type WeaponId } from '../../config/weapons';
 
 export type TouchAction = Extract<
   ActionName,
@@ -33,6 +34,7 @@ export type TouchDebugState = {
   enabled: boolean;
   visible: boolean;
   held: string[];
+  weapon: WeaponId;
 };
 
 type ActiveTouch = {
@@ -60,7 +62,6 @@ const ACTION_BUTTONS: readonly ButtonSpec[] = [
   { action: 'guard', label: 'Guard', text: 'Guard' },
   { action: 'attack', label: 'Strike', text: 'Strike' },
   { action: 'jump', label: 'Jump', text: 'Jump' },
-  { action: 'cast', label: 'Hook', text: 'Hook' },
 ];
 
 export class TouchControls {
@@ -68,6 +69,8 @@ export class TouchControls {
   private readonly active = new Map<number, ActiveTouch>();
   private readonly buttons = new Map<TouchAction, HTMLButtonElement>();
   private readonly swapButton: HTMLButtonElement;
+  private readonly swapName: HTMLElement;
+  private weaponValue: WeaponId = 'nail';
   private mounted = false;
   private visibleValue = false;
 
@@ -79,13 +82,28 @@ export class TouchControls {
     this.root.setAttribute('aria-label', 'Touch controls');
     this.root.hidden = true;
 
-    this.swapButton = this.buildSwapButton();
-    this.root.append(
+    this.swapName = document.createElement('span');
+    this.swapName.className = 'touch-swap-name';
+    this.swapName.textContent = WEAPON_LABELS.nail;
+    this.swapButton = this.buildSwapButton(this.swapName);
+
+    // Swap and Hook live in a utility row above the action pad. Keeping the pad three
+    // columns wide is what lets both thumbs fit comfortably at 375 px.
+    const utility = document.createElement('div');
+    utility.className = 'touch-utility';
+    utility.setAttribute('role', 'group');
+    utility.setAttribute('aria-label', 'Weapons');
+    utility.append(
       this.swapButton,
+      this.buildButton({ action: 'cast', label: 'Hookline', text: 'Hook' }),
+    );
+    this.root.append(
+      utility,
       this.buildCluster('touch-move', 'Movement', MOVE_BUTTONS),
       this.buildCluster('touch-actions', 'Actions', ACTION_BUTTONS),
       this.buildPause(),
     );
+    this.setWeapon('nail');
     this.setActionVisible('cast', false);
     this.setActionVisible('weapon', false);
     this.root.addEventListener('contextmenu', (event) => {
@@ -129,10 +147,7 @@ export class TouchControls {
     for (const active of pressed) this.options.onAction(active.action, false);
   };
 
-  /**
-   * Shows or hides an ability button. The Hook lever collapses the action grid back to
-   * its original three columns until the Hookline is actually owned.
-   */
+  /** Shows or hides an owned ability without changing the action-pad geometry. */
   setActionVisible(action: TouchAction, visible: boolean): void {
     const button = this.buttons.get(action);
     if (!button || button.hidden === !visible) return;
@@ -142,8 +157,15 @@ export class TouchControls {
       }
     }
     button.hidden = !visible;
-    if (action === 'cast') this.root.classList.toggle('has-hook', visible);
-    if (action === 'weapon') this.root.classList.toggle('has-weapon', visible);
+  }
+
+  /** Reflects the attack-cycle weapon on the Swap key and its accessible label. */
+  setWeapon(weapon: WeaponId): void {
+    this.weaponValue = weapon;
+    const label = WEAPON_LABELS[weapon];
+    this.swapName.textContent = label;
+    this.swapButton.dataset.weapon = weapon;
+    this.swapButton.setAttribute('aria-label', `Swap weapon. Current: ${label}`);
   }
 
   debugState(): TouchDebugState {
@@ -151,6 +173,7 @@ export class TouchControls {
       enabled: this.options.enabled,
       visible: this.visibleValue,
       held: [...new Set([...this.active.values()].map((active) => active.action))],
+      weapon: this.weaponValue,
     };
   }
 
@@ -198,14 +221,18 @@ export class TouchControls {
     return button;
   }
 
-  private buildSwapButton(): HTMLButtonElement {
+  private buildSwapButton(name: HTMLElement): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'touch-button touch-swap';
     button.dataset.action = 'weapon';
-    button.setAttribute('aria-label', 'Swap');
+    button.setAttribute('aria-label', 'Swap weapon');
     button.tabIndex = -1;
-    button.textContent = 'Swap';
+    const kicker = document.createElement('span');
+    kicker.className = 'touch-swap-kicker';
+    kicker.setAttribute('aria-hidden', 'true');
+    kicker.textContent = 'Swap';
+    button.append(kicker, name);
     button.addEventListener('pointerdown', (event) => this.press(event, button, 'weapon'));
     button.addEventListener('pointerup', (event) => this.release(event.pointerId));
     button.addEventListener('pointercancel', (event) => this.release(event.pointerId));

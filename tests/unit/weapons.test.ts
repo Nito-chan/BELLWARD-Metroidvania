@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ProjectilePool } from '../../src/combat/ProjectilePool';
 import { COMBAT } from '../../src/config/combat';
 import type { ActionName } from '../../src/config/input';
 import { CENSER, TOLL, WEAPON_ORDER, nextWeapon, type WeaponId } from '../../src/config/weapons';
@@ -185,5 +186,16 @@ describe('PlayerController weapon switching', () => {
     expect(player.attackDamage).toBe(3);
     expect(player.attackPostureDamage).toBe(30);
     expect(player.focusGain).toBe(0);
+  });
+
+  it('Toll waves retain their spawn lifetime for the ring animation', () => {
+    const pool = new ProjectilePool(1);
+    pool.spawn(100, 100, 1, 0, TOLL.wave.speed, TOLL.damage, TOLL.wave.lifeTicks, {
+      style: 'bell',
+      owner: 'player',
+    });
+    const slot = pool.all[0]!;
+    expect(slot.maxLifeTicks).toBe(TOLL.wave.lifeTicks);
+    expect(slot.ticksLeft).toBe(TOLL.wave.lifeTicks);
   });
 });

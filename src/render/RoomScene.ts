@@ -14,7 +14,7 @@ import { Boss } from '../enemies/Boss';
 import type { InputSnapshot } from '../input/InputState';
 import type { PlayerLoadout } from '../player/PlayerLoadout';
 import { PlayerController, type PlayerEvent } from '../player/PlayerController';
-import { TOLL } from '../config/weapons';
+import { TOLL, type WeaponId } from '../config/weapons';
 import { Banner } from '../ui/Banner';
 import { Hud } from '../ui/Hud';
 import { InteractPrompt } from '../ui/InteractPrompt';
@@ -244,6 +244,14 @@ export class RoomScene {
     this.hud.setHealth(this.player.hp, this.player.maxHp);
     this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
     this.hud.setPosture(this.player.posture, this.player.maxPosture, this.player.guardBroken);
+    this.hud.setArsenal(
+      this.player.currentWeapon,
+      this.player.hasCenser,
+      this.player.hasToll,
+      this.player.hookEnabled,
+      this.player.tollCooldown,
+      TOLL.cooldownTicks,
+    );
     this.hud.setShards(options.shards ?? 0);
     this.hud.setSigils(this.objectives.sigilCount, BOSS_KINDS.length);
     if (this.arrival) {
@@ -270,6 +278,11 @@ export class RoomScene {
 
   get vitals(): { hp: number; maxHp: number } {
     return { hp: this.player.hp, maxHp: this.player.maxHp };
+  }
+
+  /** The attack-cycle weapon currently selected by the hero. */
+  get currentWeapon(): WeaponId {
+    return this.player.currentWeapon;
   }
 
   /** Focus carried between rooms; benches refill it. */
@@ -452,7 +465,6 @@ export class RoomScene {
           }
         }
       }
-
     }
 
     this.updateFinalBell(input);
@@ -607,6 +619,7 @@ export class RoomScene {
     for (const record of this.enemyRecords) record.view.sync(record.enemy);
     this.projectileView.sync(this.projectiles, tickCount);
     this.hookLayer.update(this.player, tickCount);
+    this.effects.syncClouds(this.combat.activeCenserClouds);
     this.effects.update();
   }
 
@@ -614,6 +627,14 @@ export class RoomScene {
     this.hud.setHealth(this.player.hp, this.player.maxHp);
     this.hud.setFocus(this.player.focusValue, this.player.maxFocus, this.player.healProgress);
     this.hud.setPosture(this.player.posture, this.player.maxPosture, this.player.guardBroken);
+    this.hud.setArsenal(
+      this.player.currentWeapon,
+      this.player.hasCenser,
+      this.player.hasToll,
+      this.player.hookEnabled,
+      this.player.tollCooldown,
+      TOLL.cooldownTicks,
+    );
     this.hud.setDamage(this.feedback.damageAlpha);
     const death = this.player.dead
       ? Math.min(1, this.player.deathElapsed / COMBAT.player.deathTicks)

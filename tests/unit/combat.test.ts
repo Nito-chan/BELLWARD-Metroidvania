@@ -451,4 +451,22 @@ describe('Censer and Toll', () => {
     expect(enemy.posture).toBeLessThan(startPosture);
     expect(enemy.posture).toBeGreaterThan(0);
   });
+
+  it('exposes live brine clouds to the renderer with their full lifetime', () => {
+    const player = new PlayerController({ x: 100, y: 128 });
+    const pool = new ProjectilePool();
+    const combat = new CombatSystem();
+    expect(combat.activeCenserClouds).toEqual([]);
+
+    combat.spawnCenserCloud(200, 300);
+    expect(combat.activeCenserClouds).toEqual([
+      { x: 200, y: 300, ticksLeft: 90, maxTicks: 90, radius: 24 },
+    ]);
+
+    combat.resolve(player, [], pool, GROUND);
+    expect(combat.activeCenserClouds[0]?.ticksLeft).toBe(89);
+
+    combat.reset();
+    expect(combat.activeCenserClouds).toEqual([]);
+  });
 });

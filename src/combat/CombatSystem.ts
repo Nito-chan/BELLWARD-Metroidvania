@@ -72,6 +72,15 @@ type CenserCloud = {
   nextTick: number;
 };
 
+/** Read-only cloud data for the renderer; the simulation keeps ownership. */
+export type CenserCloudSnapshot = {
+  readonly x: number;
+  readonly y: number;
+  readonly ticksLeft: number;
+  readonly maxTicks: number;
+  readonly radius: number;
+};
+
 /** Brine cloud radius and posture pulse, in pixels/ticks. */
 const CENSER_CLOUD = {
   ticks: 90,
@@ -100,6 +109,19 @@ export class CombatSystem {
   private readonly lastHazardByEnemy = new WeakMap<Enemy, number>();
   /** Lingering Censer clouds; one slot per cloud, reused when inactive. */
   private readonly clouds: CenserCloud[] = [];
+
+  /** Copies only the live clouds so render code cannot mutate simulation state. */
+  get activeCenserClouds(): readonly CenserCloudSnapshot[] {
+    return this.clouds
+      .filter((cloud) => cloud.ticksLeft > 0)
+      .map((cloud) => ({
+        x: cloud.x,
+        y: cloud.y,
+        ticksLeft: cloud.ticksLeft,
+        maxTicks: CENSER_CLOUD.ticks,
+        radius: CENSER_CLOUD.radius,
+      }));
+  }
 
   resolve(
     player: PlayerController,
@@ -208,11 +230,7 @@ export class CombatSystem {
           overlaps(hazard.box, playerBox)
         ) {
           this.lastHazardByEnemy.set(enemy, hazard.id);
-          const outcome = player.resolveIncoming(
-            hazard.damage,
-            hazard.sourceX,
-            hazard.unblockable,
-          );
+          const outcome = player.resolveIncoming(hazard.damage, hazard.sourceX, hazard.unblockable);
           if (outcome === 'parry') {
             enemy.onParried(player.feet.x);
             events.push({ type: 'playerParry', ...hitPoint });

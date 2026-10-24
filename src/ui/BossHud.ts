@@ -1,20 +1,8 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { PALETTE } from '../config/palette';
+import { bossHudSubtitle, type BossHudInfo, type LastKeeperHudInfo } from './hudModel';
 
-/** Everything the boss bar needs from the simulation, with no entity references. */
-export type BossHudInfo = {
-  readonly name: string;
-  readonly hp: number;
-  readonly maxHp: number;
-  readonly phaseIndex: number;
-  readonly phaseCount: number;
-  readonly phaseName: string;
-  readonly warded: boolean;
-  readonly posture: number;
-  readonly maxPosture: number;
-  readonly postureBroken: boolean;
-  readonly alive: boolean;
-};
+export type { BossHudInfo, LastKeeperHudInfo } from './hudModel';
 
 const BAR_X = 180;
 const BAR_Y = 25;
@@ -37,6 +25,17 @@ const SUB_STYLE = {
   letterSpacing: 1.5,
   stroke: { color: PALETTE.void, width: 2 },
 } as const;
+
+function sameKeeper(a: LastKeeperHudInfo | undefined, b: LastKeeperHudInfo | undefined): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.chainCount === b.chainCount &&
+    a.chainOpen === b.chainOpen &&
+    a.answerCount === b.answerCount &&
+    a.answerWindow === b.answerWindow &&
+    a.ritualActive === b.ritualActive
+  );
+}
 
 /**
  * Screen-space boss bar. It appears only while a boss encounter exists, shows the phase
@@ -90,16 +89,15 @@ export class BossHud {
       last.posture === info.posture &&
       last.maxPosture === info.maxPosture &&
       last.postureBroken === info.postureBroken &&
-      last.alive === info.alive
+      last.alive === info.alive &&
+      sameKeeper(last.lastKeeper, info.lastKeeper)
     );
   }
 
   private redraw(info: BossHudInfo): void {
     const ratio = info.maxHp > 0 ? Math.max(0, Math.min(1, info.hp / info.maxHp)) : 0;
     this.title.text = info.alive ? info.name : `${info.name} — FELLED`;
-    this.subtitle.text = info.alive
-      ? `${info.phaseName}${info.warded ? '  ·  WARDED' : ''}`
-      : 'A bell-sigil remains';
+    this.subtitle.text = bossHudSubtitle(info);
 
     this.back.clear();
     this.back.roundRect(BAR_X, BAR_Y, BAR_W, BAR_H, 2).fill({ color: PALETTE.void, alpha: 0.82 });

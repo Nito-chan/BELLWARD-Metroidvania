@@ -85,14 +85,14 @@ test.describe('M10 touch controls', () => {
       { timeout: 5_000 },
     );
 
-    // The Hook lever is absent until the ability is earned, then it joins the action pad.
-    const hook = page.getByRole('button', { name: 'Hook' });
+    // The Hookline joins the utility row once the ability is earned; the action pad stays
+    // three columns wide.
+    const hook = page.getByRole('button', { name: 'Hookline' });
     await expect(hook).toBeHidden();
     await collectPickup(page, 'sunless-aqueduct', { x: 800, y: 208 }, 'aqueduct-hookline');
     await expect(hook).toBeVisible();
-    await expect(page.getByTestId('touch-controls')).toHaveClass(/has-hook/);
     const hookBox = await hook.boundingBox();
-    expect(hookBox?.width ?? 0).toBeGreaterThanOrEqual(36);
+    expect(hookBox?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(hookBox?.height ?? 0).toBeGreaterThanOrEqual(44);
 
     await pressPointer(hook, 21);

@@ -5,7 +5,7 @@ import type { SceneBossDebugState } from '../debug/DebugState';
 import type { Boss, BossEvent } from '../enemies/Boss';
 import type { EnemyContext } from '../enemies/Enemy';
 import { Banner } from '../ui/Banner';
-import { BossHud } from '../ui/BossHud';
+import { BossHud, type BossHudInfo } from '../ui/BossHud';
 import type { ArtProvider } from './ArtProvider';
 import { BossView } from './BossView';
 import type { Camera } from './Camera';
@@ -125,19 +125,7 @@ export class BossEncounter {
     };
   }
 
-  private info(): {
-    name: string;
-    hp: number;
-    maxHp: number;
-    phaseIndex: number;
-    phaseCount: number;
-    phaseName: string;
-    warded: boolean;
-    posture: number;
-    maxPosture: number;
-    postureBroken: boolean;
-    alive: boolean;
-  } {
+  private info(): BossHudInfo {
     return {
       name: this.boss.title,
       hp: this.boss.hp,
@@ -150,6 +138,17 @@ export class BossEncounter {
       maxPosture: this.boss.postureMax,
       postureBroken: this.boss.postureBroken,
       alive: this.boss.alive,
+      ...(this.boss.lastKeeperMode
+        ? {
+            lastKeeper: {
+              chainCount: this.boss.chainCount,
+              chainOpen: this.boss.chainOpen,
+              answerCount: this.boss.answerCount,
+              answerWindow: this.boss.answerWindow,
+              ritualActive: this.boss.ritualActive,
+            },
+          }
+        : {}),
     };
   }
 
@@ -169,8 +168,14 @@ export class BossEncounter {
         this.options.audio.playSfx('bossWard');
         this.options.effects.spark(event.x, event.y, this.boss.facing);
         this.options.camera.shake(4, 14);
-        this.banner.show('THE BELL SHIELD BREAKS', 'The Bellbearer is vulnerable', 120);
-        this.options.announce?.('The Bellbearer’s shield breaks. It is vulnerable.');
+        if (this.boss.lastKeeperMode) {
+          const count = this.boss.chainCount;
+          this.banner.show(`CHAIN ${count} / 3 BROKEN`, 'The Keeper’s hold weakens', 120);
+          this.options.announce?.(`A chain breaks. ${count} of 3 broken.`);
+        } else {
+          this.banner.show('THE BELL SHIELD BREAKS', 'The Bellbearer is vulnerable', 120);
+          this.options.announce?.('The Bellbearer’s shield breaks. It is vulnerable.');
+        }
         return;
       case 'wallHit':
         this.options.audio.playSfx('bossSlam');

@@ -246,6 +246,8 @@ export type TouchDebugState = {
   visible: boolean;
   /** Actions currently held by a pointer, for diagnostics. */
   held: string[];
+  /** The attack-cycle weapon currently shown on the Swap control. */
+  weapon: string;
 };
 
 export type AccessibilityDebugState = {

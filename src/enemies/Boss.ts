@@ -18,12 +18,7 @@ import type { BossEvent } from './BossEvents';
 import { BossPatternState } from './BossPatternState';
 import { diveLandingX, teleportBehindX } from './bossPlacement';
 import { launchPatternStart, launchRainVolley } from './bossProjectiles';
-import {
-  Enemy,
-  type EnemyContext,
-  type EnemyHazard,
-  type PostureResult,
-} from './Enemy';
+import { Enemy, type EnemyContext, type EnemyHazard, type PostureResult } from './Enemy';
 
 /** A Toll wave passing through a world position, used for Last Keeper chains and answers. */
 export type TollWaveAt = { readonly x: number; readonly y: number };
@@ -192,6 +187,11 @@ export class Boss extends Enemy {
     return this.chainWindowTicksValue;
   }
 
+  /** Authored Censer response window, for HUD and ring countdowns. */
+  get chainWindowTotal(): number {
+    return LAST_KEEPER.chainWindowTicks;
+  }
+
   /** The three chain positions in world space. */
   get chainTargets(): readonly Vec2[] {
     return this.chainTargetsValue;
@@ -227,6 +227,16 @@ export class Boss extends Enemy {
     return this.answerWindow ? this.ritualTicksValue : 0;
   }
 
+  /** Authored answer window, for HUD and ring countdowns. */
+  get answerWindowTotal(): number {
+    return LAST_KEEPER.answerWindowTicks;
+  }
+
+  /** Authored travel time for a boss ring before the answer window opens. */
+  get ritualRingTotal(): number {
+    return LAST_KEEPER.ringTicks;
+  }
+
   /** All three answers given; the ritual is solved. */
   get ritualSolved(): boolean {
     return this.ritualSolvedValue;
@@ -257,11 +267,7 @@ export class Boss extends Enemy {
   get shockwaveProgress(): number {
     if (this.shockwaveStageValue === 'none') return 0;
     if (this.shockwaveStageValue === 'active') return 1;
-    return clamp(
-      1 - this.shockwaveTicksValue / LAST_KEEPER.shockwaveTelegraphTicks,
-      0,
-      1,
-    );
+    return clamp(1 - this.shockwaveTicksValue / LAST_KEEPER.shockwaveTelegraphTicks, 0, 1);
   }
 
   /** Test/UI contract for the authored durations. */

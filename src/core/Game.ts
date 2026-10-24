@@ -7,6 +7,7 @@ import { PALETTE } from '../config/palette';
 import { BOSS_KINDS } from '../config/enemies';
 import { RENDER } from '../config/render';
 import { SIM, VIEW, WORLD } from '../config/world';
+import { WEAPON_LABELS, type WeaponId } from '../config/weapons';
 import type { GameDebugState } from '../debug/DebugState';
 import { DebugOverlay } from '../debug/DebugOverlay';
 import { InputManager } from '../input/InputManager';
@@ -77,6 +78,8 @@ export class Game {
 
   private ready = false;
   private lastWholeSecond = 0;
+  /** The last attack-cycle weapon announced to touch and screen readers. */
+  private lastWeapon: WeaponId = 'nail';
   private overlayFrameCounter = 0;
   /** Suppress the menu key edges that closed an overlay on the first resumed tick. */
   private menuLatch = false;
@@ -296,6 +299,12 @@ export class Game {
       const loadout = this.run.progress.loadout;
       this.touch.setActionVisible('cast', loadout.hookline || loadout.longline);
       this.touch.setActionVisible('weapon', loadout.censer || loadout.toll);
+      const weapon = this.run.scene?.currentWeapon ?? 'nail';
+      if (weapon !== this.lastWeapon) {
+        this.lastWeapon = weapon;
+        this.touch.setWeapon(weapon);
+        this.announcer.say(`Weapon: ${WEAPON_LABELS[weapon]}.`);
+      }
     }
     this.audio.tick(this.loop.stats.tickCount);
   }

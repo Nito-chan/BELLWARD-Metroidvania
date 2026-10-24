@@ -37,6 +37,8 @@ export type Projectile = {
   /** Posture damage the shot applies to an enemy (player-owned waves only). */
   posture: number;
   ticksLeft: number;
+  /** Lifetime at spawn, so a view can animate one shot without external state. */
+  maxLifeTicks: number;
   /** 'enemy' shots can hurt the player; 'player' shots (Toll waves) hurt enemies instead. */
   owner: 'enemy' | 'player';
   /** Enemies this shot has already passed through, so a piercing wave hits each once. */
@@ -77,6 +79,7 @@ export class ProjectilePool {
       damage: 0,
       posture: 0,
       ticksLeft: 0,
+      maxLifeTicks: 0,
       owner: 'enemy' as const,
       hitEnemies: new Set<Enemy>(),
     }));
@@ -116,6 +119,7 @@ export class ProjectilePool {
     slot.damage = damage;
     slot.posture = options.posture ?? 0;
     slot.ticksLeft = lifeTicks;
+    slot.maxLifeTicks = lifeTicks;
     slot.owner = options.owner ?? 'enemy';
     slot.hitEnemies.clear();
   }

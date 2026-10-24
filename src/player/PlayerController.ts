@@ -249,6 +249,11 @@ export class PlayerController {
     return this.weaponOwnedValue.has('toll');
   }
 
+  /** Ticks before the next Toll ring may start (0 when ready). */
+  get tollCooldown(): number {
+    return this.combat.tollCooldown;
+  }
+
   /** True once the player owns the complete arsenal: Hookline, Censer and Toll. */
   get hasFullArsenal(): boolean {
     return this.loadoutValue.hookline && this.hasCenser && this.hasToll;

@@ -14,9 +14,12 @@ import { CharacterView } from './CharacterView';
 export class BossView {
   readonly view = new Container();
   private readonly character: CharacterView;
+  private readonly chains = new Graphics();
+  private readonly resonance = new Graphics();
   private readonly guard = new Graphics();
   private readonly telegraph = new Graphics();
   private readonly shockwave = new Graphics();
+  private readonly ritual = new Graphics();
 
   constructor(provider: ArtProvider, boss: Boss) {
     const art = provider.bosses[boss.kind as keyof typeof provider.bosses];
@@ -24,7 +27,15 @@ export class BossView {
       shadow: { rx: 20, ry: 4 },
       shadowAlpha: { grounded: 0.45, airborne: 0.2 },
     });
-    this.view.addChild(this.guard, this.character.view, this.telegraph, this.shockwave);
+    this.view.addChild(
+      this.chains,
+      this.resonance,
+      this.guard,
+      this.character.view,
+      this.telegraph,
+      this.shockwave,
+      this.ritual,
+    );
   }
 
   sync(boss: Boss, target: Vec2 | null = null): void {
@@ -47,13 +58,231 @@ export class BossView {
     });
     this.character.tick();
     this.drawGuard(boss);
+    this.drawChains(boss);
+    this.drawResonance(boss);
     this.drawTelegraph(boss, target);
     this.drawShockwave(boss);
+    this.drawRitual(boss);
   }
 
   destroy(): void {
     this.view.removeFromParent();
     this.view.destroy({ children: true });
+  }
+
+  /**
+   * The three chains are world props, not HUD pips. A closed chain still hangs in the
+   * arena; a broken chain drops its lower links; an open chain grows a segmented Censer
+   * window so the answer is readable without looking away from the fight.
+   */
+  private drawChains(boss: Boss): void {
+    const g = this.chains;
+    g.clear();
+    if (
+      !boss.lastKeeperMode ||
+      !boss.alive ||
+      boss.hidden ||
+      boss.phaseIndex < 1 ||
+      boss.chainTargets.length === 0
+    ) {
+      g.visible = false;
+      return;
+    }
+
+    for (let i = 0; i < boss.chainTargets.length; i += 1) {
+      const target = boss.chainTargets[i]!;
+      const broken = i < boss.chainCount;
+      const active = i === boss.chainCount && boss.phaseIndex === 1;
+      const open = active && boss.chainOpen;
+      const colour = broken ? PALETTE.stoneLit : active ? PALETTE.brass : PALETTE.stone;
+      const alpha = broken ? 0.28 : active ? 1 : 0.58;
+      const top = target.y - 62;
+
+      if (!broken) {
+        for (let y = top; y < target.y - 15; y += 8) {
+          const sway = i % 2 === 0 ? 1.6 : -1.6;
+          g.ellipse(target.x + sway, y, 3.2, 4.4).stroke({
+            width: 1,
+            color: colour,
+            alpha,
+          });
+        }
+      } else {
+        // A broken chain keeps one short, dead end above the target.
+        for (let y = top; y < target.y - 42; y += 8) {
+          g.ellipse(target.x, y, 3.2, 4.4).stroke({
+            width: 1,
+            color: colour,
+            alpha,
+          });
+        }
+        g.moveTo(target.x - 4, target.y - 32)
+          .lineTo(target.x + 5, target.y - 24)
+          .stroke({ width: 2, color: colour, alpha });
+        g.moveTo(target.x + 4, target.y - 32)
+          .lineTo(target.x - 5, target.y - 24)
+          .stroke({ width: 2, color: colour, alpha });
+      }
+
+      g.circle(target.x, target.y, 14).stroke({
+        width: active ? 2 : 1,
+        color: colour,
+        alpha,
+      });
+      if (active) {
+        g.circle(target.x, target.y, 18 + (open ? 2 : 0)).stroke({
+          width: open ? 2 : 1,
+          color: open ? PALETTE.ember : PALETTE.brassDark,
+          alpha: open ? 0.95 : 0.5,
+        });
+      }
+
+      if (open) {
+        const ratio = Math.max(
+          0,
+          Math.min(1, boss.chainWindowTicks / Math.max(1, boss.chainWindowTotal)),
+        );
+        const segments = 8;
+        for (let s = 0; s < segments; s += 1) {
+          const angle = -Math.PI / 2 + (s / segments) * Math.PI * 2;
+          const filled = s < Math.ceil(ratio * segments);
+          g.circle(
+            target.x + Math.cos(angle) * 23,
+            target.y + Math.sin(angle) * 23,
+            filled ? 2.4 : 1.5,
+          ).fill({
+            color: filled ? PALETTE.ember : PALETTE.stoneLit,
+            alpha: filled ? 0.95 : 0.45,
+          });
+        }
+      }
+    }
+    g.visible = true;
+  }
+
+  /** Toll marks read as three brass notches orbiting the enemy's chest. */
+  private drawResonance(boss: Boss): void {
+    const g = this.resonance;
+    g.clear();
+    if (!boss.alive || boss.hidden || boss.resonance <= 0) {
+      g.visible = false;
+      return;
+    }
+    const feet = boss.feet;
+    const pulse = 0.55 + 0.25 * Math.sin(boss.resonance * 0.25);
+    g.circle(feet.x, feet.y - 30, 27).stroke({
+      width: 1,
+      color: PALETTE.echo,
+      alpha: pulse,
+    });
+    for (let i = 0; i < 3; i += 1) {
+      const angle = -Math.PI / 2 + (i / 3) * Math.PI * 2;
+      const x = feet.x + Math.cos(angle) * 32;
+      const y = feet.y - 30 + Math.sin(angle) * 32;
+      g.poly([x, y - 4, x + 3, y, x, y + 4, x - 3, y]).fill({
+        color: PALETTE.echo,
+        alpha: 0.9,
+      });
+    }
+    g.visible = true;
+  }
+
+  /**
+   * The final bell's answer travel: kneel, ring, window, recover. The outer circle is
+   * always visible while the ritual is live; the travelling ring and pips make the
+   * timing legible as a musical call and response rather than an invisible timer.
+   */
+  private drawRitual(boss: Boss): void {
+    const g = this.ritual;
+    g.clear();
+    const bell = boss.greatBell;
+    if (
+      !boss.lastKeeperMode ||
+      !boss.alive ||
+      boss.hidden ||
+      !boss.ritualActive ||
+      boss.ritualSolved ||
+      !bell
+    ) {
+      g.visible = false;
+      return;
+    }
+
+    const stage = boss.ritualStage;
+    const stageTicks = boss.ritualStageTicks;
+    const ringProgress =
+      stage === 'ring'
+        ? 1 - stageTicks / Math.max(1, boss.ritualRingTotal)
+        : stage === 'window'
+          ? 1
+          : 0;
+    const windowRatio =
+      stage === 'window'
+        ? Math.max(0, Math.min(1, boss.answerWindowTicks / Math.max(1, boss.answerWindowTotal)))
+        : 0;
+
+    g.circle(bell.x, bell.y, 40).stroke({
+      width: 1,
+      color: PALETTE.brassDark,
+      alpha: stage === 'recover' ? 0.18 : 0.4,
+    });
+    g.circle(bell.x, bell.y, 7).fill({
+      color: stage === 'window' ? PALETTE.ember : PALETTE.brass,
+      alpha: 0.85,
+    });
+
+    if (stage === 'kneel') {
+      const breath = 0.5 + 0.5 * Math.sin(stageTicks * 0.18);
+      g.circle(bell.x, bell.y, 12 + breath * 7).stroke({
+        width: 1,
+        color: PALETTE.brass,
+        alpha: 0.25 + breath * 0.2,
+      });
+    } else if (stage === 'ring') {
+      g.circle(bell.x, bell.y, 12 + ringProgress * 28).stroke({
+        width: 3,
+        color: PALETTE.ember,
+        alpha: 0.35 + ringProgress * 0.55,
+      });
+      g.circle(bell.x, bell.y, 12 + ringProgress * 20).stroke({
+        width: 1,
+        color: PALETTE.bone,
+        alpha: 0.2 + ringProgress * 0.35,
+      });
+    } else if (stage === 'window') {
+      g.circle(bell.x, bell.y, 40).stroke({
+        width: 3,
+        color: PALETTE.ember,
+        alpha: 0.72,
+      });
+      const segments = 8;
+      for (let s = 0; s < segments; s += 1) {
+        const angle = -Math.PI / 2 + (s / segments) * Math.PI * 2;
+        const filled = s < Math.ceil(windowRatio * segments);
+        g.circle(bell.x + Math.cos(angle) * 48, bell.y + Math.sin(angle) * 48, 2.2).fill({
+          color: filled ? PALETTE.ember : PALETTE.stoneLit,
+          alpha: filled ? 0.95 : 0.4,
+        });
+      }
+    }
+
+    // Three gold note-pips sit above the bell until answered.
+    for (let i = 0; i < 3; i += 1) {
+      const x = bell.x - 16 + i * 16;
+      const y = bell.y - 28;
+      const answered = i < boss.answerCount;
+      const current = i === boss.answerCount && stage === 'window';
+      g.poly([x, y - 4, x + 3.5, y, x, y + 4, x - 3.5, y]).fill({
+        color: answered ? PALETTE.ember : PALETTE.void,
+        alpha: answered ? 1 : 0.7,
+      });
+      g.poly([x, y - 4, x + 3.5, y, x, y + 4, x - 3.5, y]).stroke({
+        width: current ? 2 : 1,
+        color: current ? PALETTE.ember : PALETTE.brass,
+        alpha: current ? 1 : 0.65,
+      });
+    }
+    g.visible = true;
   }
 
   private drawGuard(boss: Boss): void {

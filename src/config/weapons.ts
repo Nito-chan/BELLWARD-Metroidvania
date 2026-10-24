@@ -24,6 +24,16 @@ export const WEAPON_ORDER: readonly WeaponId[] = ['nail', 'censer', 'toll'];
 /** The weapon the run starts with. */
 export const STARTER_WEAPON: WeaponId = 'nail';
 
+/** Display names shared by the HUD and the touch Swap control. */
+export const WEAPON_LABELS: Readonly<Record<WeaponId, string>> = {
+  nail: 'Nail',
+  censer: 'Censer',
+  toll: 'Toll',
+};
+
+/** The fourth weapon is not in the attack cycle; it still belongs on the arsenal plaque. */
+export const HOOKLINE_LABEL = 'Hookline';
+
 export type WeaponKind = 'melee' | 'wave';
 
 export type WeaponProfile = {

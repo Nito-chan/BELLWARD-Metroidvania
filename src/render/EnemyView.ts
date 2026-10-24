@@ -13,6 +13,7 @@ import { CharacterView } from './CharacterView';
 export class EnemyView {
   readonly view = new Container();
   private readonly character: CharacterView;
+  private readonly resonance = new Graphics();
   private readonly telegraph = new Graphics();
   private readonly postureBar = new Graphics();
 
@@ -22,7 +23,7 @@ export class EnemyView {
     this.character = new CharacterView(provider, art, {
       shadow: { rx: Math.max(7, body.w * 0.65), ry: 3 },
     });
-    this.view.addChild(this.character.view, this.telegraph, this.postureBar);
+    this.view.addChild(this.resonance, this.character.view, this.telegraph, this.postureBar);
   }
 
   /** Syncs the view to one enemy after its simulation tick. */
@@ -41,6 +42,7 @@ export class EnemyView {
 
     this.view.visible = enemy.alive;
     this.view.zIndex = feet.y;
+    this.drawResonance(enemy);
     this.drawTelegraph(enemy);
     this.drawPosture(enemy);
   }
@@ -48,6 +50,34 @@ export class EnemyView {
   destroy(): void {
     this.view.removeFromParent();
     this.view.destroy({ children: true });
+  }
+
+  /** Three echo notches mark a Toll resonance; the next Nail or Censer hit spends it. */
+  private drawResonance(enemy: Enemy): void {
+    const g = this.resonance;
+    g.clear();
+    if (!enemy.alive || enemy.resonance <= 0) {
+      g.visible = false;
+      return;
+    }
+    const feet = enemy.feet;
+    const centreY = feet.y - enemy.stats.body.h / 2;
+    const radius = Math.max(12, enemy.stats.body.w * 0.62);
+    g.circle(feet.x, centreY, radius).stroke({
+      width: 1,
+      color: PALETTE.echo,
+      alpha: 0.45 + 0.25 * Math.sin(enemy.resonance * 0.25),
+    });
+    for (let i = 0; i < 3; i += 1) {
+      const angle = -Math.PI / 2 + (i / 3) * Math.PI * 2;
+      const x = feet.x + Math.cos(angle) * (radius + 4);
+      const y = centreY + Math.sin(angle) * (radius + 4);
+      g.poly([x, y - 3, x + 2.5, y, x, y + 3, x - 2.5, y]).fill({
+        color: PALETTE.echo,
+        alpha: 0.9,
+      });
+    }
+    g.visible = true;
   }
 
   private drawTelegraph(enemy: Enemy): void {

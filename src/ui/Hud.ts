@@ -1,6 +1,20 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { PALETTE } from '../config/palette';
 import { VIEW } from '../config/world';
+import type { WeaponId } from '../config/weapons';
+import { arsenalReadout } from './hudModel';
+
+const ARSENAL_X = 8;
+const ARSENAL_Y = 47;
+const ARSENAL_SLOT_W = 42;
+const ARSENAL_SLOT_H = 17;
+
+const ARSENAL_STYLE = {
+  fontFamily: 'monospace',
+  fontSize: 7,
+  fill: PALETTE.bone,
+  letterSpacing: 0.2,
+} as const;
 
 /**
  * The combat HUD: masks, Focus, boss sigils, shards, a damage vignette and the death
@@ -13,6 +27,13 @@ export class Hud {
   private readonly pips = new Graphics();
   private readonly focusBar = new Graphics();
   private readonly postureBar = new Graphics();
+  private readonly arsenal = new Graphics();
+  private readonly arsenalLabels = [
+    new Text({ text: '', style: ARSENAL_STYLE }),
+    new Text({ text: '', style: ARSENAL_STYLE }),
+    new Text({ text: '', style: ARSENAL_STYLE }),
+    new Text({ text: '', style: ARSENAL_STYLE }),
+  ];
   private readonly sigils = new Graphics();
   private readonly death = new Graphics().rect(0, 0, VIEW.width, VIEW.height).fill(PALETTE.void);
   private readonly shardText = new Text({
@@ -32,6 +53,7 @@ export class Hud {
   private lastPosture = -1;
   private lastPostureMax = -1;
   private lastPostureBroken = false;
+  private lastArsenalKey = '';
   private lastShards = -1;
   private lastSigils = -1;
   private lastSigilTotal = -1;
@@ -45,11 +67,22 @@ export class Hud {
     this.death.visible = false;
     this.shardText.anchor.set(1, 0);
     this.shardText.position.set(VIEW.width - 8, 30);
+    for (let i = 0; i < this.arsenalLabels.length; i += 1) {
+      const label = this.arsenalLabels[i]!;
+      label.anchor.set(0.5, 0.5);
+      label.position.set(
+        ARSENAL_X + i * ARSENAL_SLOT_W + ARSENAL_SLOT_W / 2,
+        ARSENAL_Y + ARSENAL_SLOT_H / 2,
+      );
+      label.resolution = 2;
+    }
     this.view.addChild(
       this.damage,
       this.pips,
       this.focusBar,
       this.postureBar,
+      this.arsenal,
+      ...this.arsenalLabels,
       this.sigils,
       this.shardText,
       this.death,
@@ -142,6 +175,63 @@ export class Hud {
       g.rect(8, 38, width, 3).fill({ color: PALETTE.blood, alpha: 0.95 });
     } else if (ratio > 0) {
       g.rect(8, 38, width * ratio, 3).fill({ color: PALETTE.brass, alpha: 0.85 });
+    }
+  }
+
+  /**
+   * The four-slot arsenal plaque. Hookline is shown as an owned tool, never as the
+   * active attack; Toll carries a four-segment radial-ish cooldown at its right edge.
+   */
+  setArsenal(
+    weapon: WeaponId,
+    hasCenser: boolean,
+    hasToll: boolean,
+    hasHookline: boolean,
+    tollCooldown: number,
+    tollCooldownMax: number,
+  ): void {
+    const slots = arsenalReadout(weapon, hasCenser, hasToll, hasHookline);
+    const ratio =
+      tollCooldownMax > 0 ? 1 - Math.max(0, Math.min(1, tollCooldown / tollCooldownMax)) : 1;
+    const litSegments = hasToll ? Math.ceil(ratio * 4) : 0;
+    const key = `${weapon}|${hasCenser}|${hasToll}|${hasHookline}|${litSegments}`;
+    if (key === this.lastArsenalKey) return;
+    this.lastArsenalKey = key;
+
+    const g = this.arsenal;
+    g.clear();
+    for (let i = 0; i < slots.length; i += 1) {
+      const slot = slots[i]!;
+      const x = ARSENAL_X + i * ARSENAL_SLOT_W;
+      g.roundRect(x, ARSENAL_Y, ARSENAL_SLOT_W - 2, ARSENAL_SLOT_H, 3).fill({
+        color: PALETTE.void,
+        alpha: slot.owned ? 0.62 : 0.34,
+      });
+      g.roundRect(x, ARSENAL_Y, ARSENAL_SLOT_W - 2, ARSENAL_SLOT_H, 3).stroke({
+        width: slot.active ? 1.5 : 1,
+        color: slot.active ? PALETTE.ember : PALETTE.brassDark,
+        alpha: slot.active ? 1 : slot.owned ? 0.65 : 0.28,
+      });
+      const label = this.arsenalLabels[i]!;
+      label.text = slot.label;
+      label.tint = slot.active ? PALETTE.ember : slot.owned ? PALETTE.bone : PALETTE.stoneLit;
+      label.alpha = slot.owned ? 1 : 0.36;
+      if (slot.active) {
+        g.rect(x + 4, ARSENAL_Y + ARSENAL_SLOT_H, ARSENAL_SLOT_W - 10, 1.5).fill({
+          color: PALETTE.ember,
+          alpha: 0.9,
+        });
+      }
+    }
+
+    if (hasToll) {
+      const x = ARSENAL_X + 3 * ARSENAL_SLOT_W + ARSENAL_SLOT_W - 8;
+      for (let s = 0; s < 4; s += 1) {
+        g.rect(x, ARSENAL_Y + 2 + s * 3.4, 2, 2).fill({
+          color: s < litSegments ? PALETTE.echo : PALETTE.stone,
+          alpha: s < litSegments ? 0.95 : 0.5,
+        });
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { PALETTE } from '../config/palette';
 import { VIEW } from '../config/world';
 import type { ProjectilePool, ProjectileStyle } from '../combat/ProjectilePool';
@@ -21,6 +21,7 @@ const STYLE_TINT: Readonly<Record<ProjectileStyle, number>> = {
 export class ProjectileView {
   readonly view = new Container();
   private readonly sprites: Sprite[] = [];
+  private readonly bells: Graphics[] = [];
   private readonly frames: Texture[] = [];
   private readonly frameTicks: number;
 
@@ -37,7 +38,10 @@ export class ProjectileView {
       sprite.scale.set(art.scale);
       sprite.visible = false;
       this.sprites.push(sprite);
-      this.view.addChild(sprite);
+      const bell = new Graphics();
+      bell.visible = false;
+      this.bells.push(bell);
+      this.view.addChild(sprite, bell);
     }
   }
 
@@ -47,11 +51,43 @@ export class ProjectileView {
     const texture = this.frames[frameIndex] ?? this.frames[0];
     for (const slot of pool.all) {
       const sprite = this.sprites[slot.index];
-      if (!sprite) continue;
-      if (!slot.active) {
-        sprite.visible = false;
+      const bell = this.bells[slot.index];
+      if (!sprite || !bell) continue;
+      sprite.visible = false;
+      bell.clear();
+      bell.visible = false;
+      if (!slot.active) continue;
+
+      if (slot.style === 'bell') {
+        // Toll waves are a brass note and an expanding ring, not a recoloured fireball.
+        const age = Math.max(0, slot.maxLifeTicks - slot.ticksLeft);
+        const t = Math.min(1, age / Math.max(1, slot.maxLifeTicks));
+        const direction = slot.vx < 0 ? -1 : 1;
+        bell.circle(slot.x, slot.y, 5 + t * 5).stroke({
+          width: 2,
+          color: PALETTE.brass,
+          alpha: 0.9 - t * 0.25,
+        });
+        bell.circle(slot.x, slot.y, 2 + t * 2).stroke({
+          width: 1,
+          color: PALETTE.bone,
+          alpha: 0.85,
+        });
+        for (let i = 0; i < 3; i += 1) {
+          bell
+            .circle(slot.x - direction * (10 + i * 6), slot.y + Math.sin(age * 0.2 + i) * 2, 1.4)
+            .fill({
+              color: PALETTE.echo,
+              alpha: 0.5 - i * 0.12,
+            });
+        }
+        bell
+          .poly([slot.x, slot.y - 4, slot.x + 3, slot.y, slot.x, slot.y + 4, slot.x - 3, slot.y])
+          .fill({ color: PALETTE.bone, alpha: 0.9 });
+        bell.visible = true;
         continue;
       }
+
       sprite.visible = true;
       sprite.position.set(slot.x, slot.y);
       sprite.tint = STYLE_TINT[slot.style];
