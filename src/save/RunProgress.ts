@@ -6,11 +6,12 @@
  */
 import type { BossKind } from '../config/enemies';
 import { BOSS_KINDS } from '../config/enemies';
+import { MAP, type MapPin, type MapPinKind } from '../config/map';
 import { CHARMS, CHARM_ORDER, CHARM_SLOTS, NAIL, type CharmId } from '../config/progression';
 import { SAVE } from '../config/save';
 import { getBench, type BenchRef } from '../data/benches';
 import { getPickup, healthShardCount, isPickupId } from '../data/pickups';
-import { ALL_ROOMS, getRoom } from '../data/rooms';
+import { ALL_ROOMS, ROOMS, getRoom } from '../data/rooms';
 import type { RunDebugState, SaveDebugState } from '../debug/DebugState';
 import type { PlayerLoadout } from '../player/PlayerLoadout';
 import type { RunSave, SaveReason, SaveStorage } from './runSave';
@@ -28,6 +29,7 @@ export class RunProgress {
   private readonly visitedValue = new Set<string>();
   private readonly pickupsValue = new Set<string>();
   private readonly brokenSecretsValue = new Set<string>();
+  private readonly mapPinsValue = new Map<string, MapPinKind>();
   private readonly charmsOwnedValue = new Set<CharmId>();
   private readonly charmsEquippedValue = new Set<CharmId>();
   private readonly ordealsValue = new Set<BossKind>();
@@ -52,6 +54,7 @@ export class RunProgress {
     for (const roomId of save.visitedRooms) this.visitedValue.add(roomId);
     for (const id of save.pickups) this.pickupsValue.add(id);
     for (const roomId of save.brokenSecrets) this.brokenSecretsValue.add(roomId);
+    for (const pin of save.mapPins) this.mapPinsValue.set(pin.roomId, pin.kind);
     for (const charm of save.charmsOwned) this.charmsOwnedValue.add(charm);
     for (const charm of save.charmsEquipped) this.charmsEquippedValue.add(charm);
     for (const ordeal of save.ordeals) this.ordealsValue.add(ordeal);
@@ -82,6 +85,7 @@ export class RunProgress {
     this.visitedValue.clear();
     this.pickupsValue.clear();
     this.brokenSecretsValue.clear();
+    this.mapPinsValue.clear();
     this.charmsOwnedValue.clear();
     this.charmsEquippedValue.clear();
     this.ordealsValue.clear();
@@ -131,6 +135,34 @@ export class RunProgress {
 
   get brokenSecrets(): readonly string[] {
     return [...this.brokenSecretsValue].sort();
+  }
+
+  /** The chart is earned once; every later visit opens the same glass. */
+  get hasTideglass(): boolean {
+    return this.pickupsValue.has('terrace-tideglass');
+  }
+
+  get mapPins(): readonly MapPin[] {
+    return ALL_ROOMS.filter((room) => this.mapPinsValue.has(room.id)).map((room) => ({
+      roomId: room.id,
+      kind: this.mapPinsValue.get(room.id) ?? 'mark',
+    }));
+  }
+
+  hasMapPin(roomId: string): boolean {
+    return this.mapPinsValue.has(roomId);
+  }
+
+  /**
+   * Adds or removes one wax mark. Unknown rooms, unseen rooms and a full tablet are
+   * rejected without touching the document, so a failed press is never persisted.
+   */
+  toggleMapPin(roomId: string): 'added' | 'removed' | 'full' | 'unknown' {
+    if (!ROOMS[roomId] || !this.visitedValue.has(roomId)) return 'unknown';
+    if (this.mapPinsValue.delete(roomId)) return 'removed';
+    if (this.mapPinsValue.size >= MAP.pinLimit) return 'full';
+    this.mapPinsValue.set(roomId, 'mark');
+    return 'added';
   }
 
   get charmsOwned(): readonly CharmId[] {
@@ -300,6 +332,7 @@ export class RunProgress {
       checkpointBenchId: this.checkpointValue?.id ?? null,
       pickups: this.pickups,
       brokenSecrets: this.brokenSecrets,
+      mapPins: this.mapPins,
       charmsOwned: this.charmsOwned,
       charmsEquipped: this.charmsEquipped,
       nailLevel: this.nailLevelValue,
@@ -329,6 +362,7 @@ export class RunProgress {
       shards: this.shardsValue,
       pickups: [...this.pickups],
       brokenSecrets: [...this.brokenSecrets],
+      mapPins: [...this.mapPins],
       healthShards: this.healthShards,
       nailLevel: this.nailLevelValue,
       charmsOwned: [...this.charmsOwned],

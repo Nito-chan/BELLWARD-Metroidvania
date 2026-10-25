@@ -28,6 +28,7 @@ export type TouchControlsOptions = {
   readonly enabled: boolean;
   readonly onAction: (action: TouchAction, down: boolean) => void;
   readonly onPause: () => void;
+  readonly onMap: () => void;
 };
 
 export type TouchDebugState = {
@@ -70,6 +71,7 @@ export class TouchControls {
   private readonly buttons = new Map<TouchAction, HTMLButtonElement>();
   private readonly swapButton: HTMLButtonElement;
   private readonly swapName: HTMLElement;
+  private readonly mapButton: HTMLButtonElement;
   private weaponValue: WeaponId = 'nail';
   private mounted = false;
   private visibleValue = false;
@@ -86,16 +88,18 @@ export class TouchControls {
     this.swapName.className = 'touch-swap-name';
     this.swapName.textContent = WEAPON_LABELS.nail;
     this.swapButton = this.buildSwapButton(this.swapName);
+    this.mapButton = this.buildMapButton();
 
-    // Swap and Hook live in a utility row above the action pad. Keeping the pad three
-    // columns wide is what lets both thumbs fit comfortably at 375 px.
+    // Swap, Hook and Map live in a utility row above the action pad. Keeping the pad
+    // three columns wide is what lets both thumbs fit comfortably at 375 px.
     const utility = document.createElement('div');
     utility.className = 'touch-utility';
     utility.setAttribute('role', 'group');
-    utility.setAttribute('aria-label', 'Weapons');
+    utility.setAttribute('aria-label', 'Weapons and chart');
     utility.append(
       this.swapButton,
       this.buildButton({ action: 'cast', label: 'Hookline', text: 'Hook' }),
+      this.mapButton,
     );
     this.root.append(
       utility,
@@ -146,6 +150,11 @@ export class TouchControls {
     this.active.clear();
     for (const active of pressed) this.options.onAction(active.action, false);
   };
+
+  /** The chart is earned; hide its key until the Tideglass is in hand. */
+  setMapVisible(visible: boolean): void {
+    this.mapButton.hidden = !visible;
+  }
 
   /** Shows or hides an owned ability without changing the action-pad geometry. */
   setActionVisible(action: TouchAction, visible: boolean): void {
@@ -238,6 +247,31 @@ export class TouchControls {
     button.addEventListener('pointercancel', (event) => this.release(event.pointerId));
     button.addEventListener('lostpointercapture', (event) => this.release(event.pointerId));
     this.buttons.set('weapon', button);
+    return button;
+  }
+
+  private buildMapButton(): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'touch-button touch-map';
+    button.setAttribute('aria-label', 'Open the Tideglass');
+    button.tabIndex = -1;
+    button.hidden = true;
+    const kicker = document.createElement('span');
+    kicker.className = 'touch-map-kicker';
+    kicker.setAttribute('aria-hidden', 'true');
+    kicker.textContent = 'Chart';
+    const name = document.createElement('span');
+    name.className = 'touch-map-name';
+    name.setAttribute('aria-hidden', 'true');
+    name.textContent = 'Map';
+    button.append(kicker, name);
+    button.addEventListener('pointerdown', (event) => {
+      if (!this.visibleValue || event.button !== 0) return;
+      event.preventDefault();
+      this.releaseAll();
+      this.options.onMap();
+    });
     return button;
   }
 

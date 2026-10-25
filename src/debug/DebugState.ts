@@ -1,6 +1,7 @@
 /** The read-only debug snapshot. This is the contract E2E tests and the F1 overlay use. */
 import type { AudioDebugState } from '../audio/AudioManager';
 import type { Bindings } from '../input/bindings';
+import type { MapPin } from '../config/map';
 import type { SaveReason } from '../save/runSave';
 import type { CaptureTarget, MenuScreen } from '../ui/menu/menuTypes';
 
@@ -189,6 +190,8 @@ export type RunDebugState = {
   pickups: string[];
   /** Rooms whose breakable secret wall has been shattered. */
   brokenSecrets: string[];
+  /** Wax marks on the Tideglass. */
+  mapPins: MapPin[];
   /** Number of mask shards found toward the next mask. */
   healthShards: number;
   /** Nail upgrade level (0..2). */

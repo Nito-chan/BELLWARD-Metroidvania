@@ -10,6 +10,7 @@ import type { MenuDebugState } from '../../debug/DebugState';
 import type { ActionName } from '../../config/input';
 import type { SfxKey } from '../../data/audio';
 import type { Bindings } from '../../input/bindings';
+import type { MapPinResult } from '../map/mapScreen';
 import type { MapSnapshot } from '../map/mapTypes';
 import { MenuModel } from './MenuModel';
 import { MenuPad, type MenuDirection } from './MenuPad';
@@ -28,6 +29,8 @@ export type MenuSystemOptions = {
   onScreenShakeChanged?: (enabled: boolean) => void;
   /** Current chart data, built when the map screen renders. */
   getMap: () => MapSnapshot;
+  /** Persists one wax mark through the run, not the menu. */
+  onMapPin: (roomId: string) => MapPinResult;
   /** Live keyboard codes for the map action, so M toggles the map closed too. */
   mapKeyCodes: () => readonly string[];
 };
@@ -51,6 +54,7 @@ export class MenuSystem {
       onCommand: (command) => this.onCommand(command),
       onVolume: (bus, value) => this.model.setVolume(bus, value),
       getMap: () => this.options.getMap(),
+      onMapPin: (roomId) => this.options.onMapPin(roomId),
     });
     this.pad = new MenuPad({
       captureKind: () => this.model.capture?.kind ?? null,
@@ -86,14 +90,20 @@ export class MenuSystem {
     document.addEventListener('keydown', this.onKeyDown, { capture: true });
   }
 
-  open(screen: MenuScreen = 'pause'): void {
+  open(screen: MenuScreen = 'pause', options: { mapBoot?: boolean } = {}): void {
     if (this.openValue) return;
     this.openValue = true;
+    this.view.setMapBoot(options.mapBoot ?? false);
     this.model.open(screen);
     this.view.show();
     this.setGameInert(true);
     this.view.render(this.model, null, true);
     this.pad.start();
+  }
+
+  /** A fresh climb earns the Tideglass reveal again. */
+  resetMapMoment(): void {
+    this.view.resetMapMoment();
   }
 
   close(): void {
@@ -242,6 +252,13 @@ export class MenuSystem {
     // the action updates the code list live, so this is never a hard-coded M.
     if (this.model.screen === 'map' && this.options.mapKeyCodes().includes(code)) {
       this.handleBack();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    // The chart owns fit, locate and zoom while it is open; these never reach gameplay.
+    if (this.model.screen === 'map' && this.view.handleMapKey(code)) {
       event.preventDefault();
       event.stopPropagation();
       return;

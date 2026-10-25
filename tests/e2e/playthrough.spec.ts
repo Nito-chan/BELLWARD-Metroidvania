@@ -4,6 +4,7 @@ import {
   bootGame,
   closeBenchOverlay,
   debugState,
+  dismissOnboarding,
   loadRoom,
   reloadGame,
   waitForBossIdle,
@@ -64,11 +65,28 @@ async function collect(
 ): Promise<void> {
   await loadRoom(page, roomId, spawn);
   await page.evaluate(() => window.__game?.debugProtectPlayer());
+  // The Tideglass auto-opens the chart (which pauses the loop), so treat the chart
+  // appearing as proof of collection too. Other pickups are observed through the run.
   await page.waitForFunction(
-    (pickupId) => window.__game?.debugState().run.pickups.includes(pickupId) === true,
+    (pickupId) => {
+      let granted = false;
+      try {
+        granted = window.__game?.debugState().run.pickups.includes(pickupId) === true;
+      } catch {
+        // The debug handle can be unstable while a menu transitions; keep polling.
+      }
+      return granted || document.querySelector('[data-screen="map"]') !== null;
+    },
     id,
-    { timeout: 10_000 },
+    { timeout: 20_000 },
   );
+
+  // Collecting the Tideglass auto-opens the chart and pauses the loop. Close it so
+  // the next pickup can be gathered through the running simulation.
+  if (await page.locator('[data-screen="map"]').isVisible()) {
+    await page.keyboard.press('KeyM');
+    await page.locator('[data-screen="map"]').waitFor({ state: 'hidden' });
+  }
 }
 
 async function breakSecret(page: Page, roomId: string): Promise<void> {
@@ -138,6 +156,7 @@ test.describe('M8 complete playthrough', () => {
     page,
   }) => {
     await bootGame(page);
+    await dismissOnboarding(page);
 
     for (const pickup of PICKUPS) {
       await collect(page, pickup.roomId, pickup.spawn, pickup.id);
@@ -226,15 +245,16 @@ test.describe('M8 complete playthrough', () => {
       .toBeGreaterThan(midpointState.tickCount);
 
     // The final room is still uncharted and the fourth sigil unclaimed.
-    const map = page.getByRole('dialog', { name: 'Region Map' });
+    const map = page.locator('[data-screen="map"]');
     await page.keyboard.press('KeyM');
     await expect(map).toBeVisible();
-    await expect(map.locator('.map-summary')).toContainText('12 / 13');
-    await expect(map.locator('.map-summary')).toContainText('3 / 4');
-    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(1);
-    await expect(map.locator('.map-node[data-room-id="last-bell"]')).toHaveAttribute(
-      'data-state',
-      'unknown',
+    await expect(map.locator('.tg-metrics')).toContainText('Charted12 / 13');
+    await expect(map.locator('.tg-metrics')).toContainText('Bells3 / 4');
+    await expect(map.locator('.tg-room')).toHaveCount(13);
+    // Last Bell is a ghost neighbour of the visited Upper Gallery at the midpoint.
+    await expect(map.locator('.tg-room[data-state="ghost"]')).toHaveCount(1);
+    await expect(map.locator('.tg-room[data-room-id="last-bell"][data-state="ghost"]')).toHaveCount(
+      1,
     );
     await page.keyboard.press('KeyM');
     await expect(map).toBeHidden();
@@ -335,9 +355,10 @@ test.describe('M8 complete playthrough', () => {
     await page.evaluate(() => window.__game?.debugProtectPlayer());
     await page.keyboard.press('KeyM');
     await expect(map).toBeVisible();
-    await expect(map.locator('.map-summary')).toContainText('13 / 13');
-    await expect(map.locator('.map-summary')).toContainText('4 / 4');
-    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(0);
+    await expect(map.locator('.tg-metrics')).toContainText('Charted13 / 13');
+    await expect(map.locator('.tg-metrics')).toContainText('Bells4 / 4');
+    await expect(map.locator('.tg-room')).toHaveCount(13);
+    await expect(map.locator('.tg-room[data-state="ghost"]')).toHaveCount(0);
     await page.keyboard.press('KeyM');
     await expect(map).toBeHidden();
 

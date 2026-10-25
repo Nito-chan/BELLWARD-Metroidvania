@@ -1,7 +1,6 @@
 /** The DOM shell and screen renderers for the pause flow. All text is set via textContent. */
 import type { AudioBus } from '../../audio/AudioManager';
-import { formatKeyCode } from '../../input/bindingLabels';
-import { buildMapScreen } from '../map/mapScreen';
+import { buildMapScreen, type MapPinResult, type TideglassScreen } from '../map/mapScreen';
 import type { MapSnapshot } from '../map/mapTypes';
 import type { MenuModel } from './MenuModel';
 import type { MenuScreen } from './menuTypes';
@@ -14,6 +13,8 @@ export type MenuViewHandlers = {
   onVolume(bus: AudioBus, value: number): void;
   /** Built on demand: the chart must reflect the current run, not the menu's open time. */
   getMap(): MapSnapshot;
+  /** Persists one wax mark; the chart updates only after the run accepts it. */
+  onMapPin(roomId: string): MapPinResult;
 };
 
 export class MenuView {
@@ -26,6 +27,9 @@ export class MenuView {
   private readonly body: HTMLElement;
   private readonly footer: HTMLElement;
   private readonly world: HTMLElement;
+  private mapScreen: TideglassScreen | null = null;
+  private mapBoot = false;
+  private mapSeen = false;
 
   constructor(private readonly handlers: MenuViewHandlers) {
     this.root = el('div', 'menu-root');
@@ -74,14 +78,39 @@ export class MenuView {
   }
 
   hide(): void {
+    this.mapScreen?.destroy();
+    this.mapScreen = null;
     this.root.hidden = true;
+  }
+
+  /** The next map render is the first reveal after collecting the Tideglass. */
+  setMapBoot(boot: boolean): void {
+    this.mapBoot = boot;
+  }
+
+  /** A new climb should get the first-reveal moment again. */
+  resetMapMoment(): void {
+    this.mapSeen = false;
+    this.mapBoot = false;
+  }
+
+  /** Camera and zoom shortcuts are local to the chart. */
+  handleMapKey(code: string): boolean {
+    return this.mapScreen?.handleKey(code) ?? false;
   }
 
   /** Renders one screen and moves focus to `focusId` (or that screen's default). */
   render(model: MenuModel, focusId: string | null, animate = false): void {
     const screen = model.screen;
     if (!screen) return;
+    this.mapScreen?.destroy();
+    this.mapScreen = null;
     this.panel.dataset.screen = screen;
+    this.panel.setAttribute('aria-labelledby', screen === 'map' ? 'tg-map-title' : 'menu-title');
+    this.panel.setAttribute(
+      'aria-describedby',
+      screen === 'map' ? 'tg-map-subtitle' : 'menu-subtitle',
+    );
     const copy = SCREEN_COPY[screen];
     this.eyebrow.textContent = copy.eyebrow;
     this.title.textContent = copy.title;
@@ -91,28 +120,39 @@ export class MenuView {
     this.body.classList.toggle('is-entering', animate);
 
     const snapshot = screen === 'map' || screen === 'pause' ? this.handlers.getMap() : null;
-    if (screen === 'pause') this.body.append(buildPauseScreen());
+    if (screen === 'pause') this.body.append(buildPauseScreen(Boolean(snapshot?.tideglass)));
     if (screen === 'settings') this.body.append(buildSettingsScreen(model));
     if (screen === 'controls') this.body.append(buildControlsScreen(model));
-    if (screen === 'map' && snapshot) this.body.append(buildMapScreen(snapshot));
+    if (screen === 'map' && snapshot) {
+      const boot = this.mapBoot;
+      const remembering = this.mapSeen;
+      this.mapBoot = false;
+      this.mapSeen = true;
+      this.mapScreen = buildMapScreen(snapshot, {
+        boot,
+        remembering,
+        onPin: (roomId) => this.handlers.onMapPin(roomId),
+      });
+      this.body.append(this.mapScreen.root);
+    }
     this.renderWorld(screen, snapshot);
 
-    const hints =
-      screen === 'map'
-        ? [
-            { keys: 'Esc', label: 'Close' },
-            {
-              keys: model.bindings.keyboard.map.map((code) => formatKeyCode(code)).join(' / '),
-              label: 'Close',
-            },
-          ]
-        : copy.hints;
-    this.footer.replaceChildren(
-      ...hints
-        .filter((hint) => hint.keys.length > 0)
-        .map((hint) => makeHint(hint.keys, hint.label)),
-    );
-    this.focus(focusId ?? defaultFocusId(screen));
+    this.footer.hidden = screen === 'map';
+    if (screen === 'map') {
+      this.footer.replaceChildren();
+    } else {
+      this.footer.replaceChildren(
+        ...copy.hints
+          .filter((hint) => hint.keys.length > 0)
+          .map((hint) => makeHint(hint.keys, hint.label)),
+      );
+    }
+    const focus =
+      focusId ??
+      (screen === 'map' && snapshot
+        ? `map:room:${snapshot.currentRoomId}`
+        : defaultFocusId(screen));
+    this.focus(focus);
   }
 
   /** Keeps the visible slider, output and aria value in sync after a fader move. */
@@ -142,7 +182,7 @@ export class MenuView {
 
   /** Spatial navigation: up/down keeps the nearest column, left/right walks the row. */
   moveFocus(direction: 'up' | 'down' | 'left' | 'right'): void {
-    const nodes = [...this.panel.querySelectorAll<HTMLElement>('[data-nav]')];
+    const nodes = this.navNodes();
     if (nodes.length === 0) return;
     const active = document.activeElement;
     const current =
@@ -207,7 +247,7 @@ export class MenuView {
 
   /** Keeps Tab inside the dialog while it is modal. */
   trapTab(shift: boolean): void {
-    const nodes = [...this.panel.querySelectorAll<HTMLElement>('[data-nav]')];
+    const nodes = this.navNodes();
     if (nodes.length === 0) return;
     const active = document.activeElement;
     const nav = active instanceof HTMLElement ? active.closest<HTMLElement>('[data-nav]') : null;
@@ -220,6 +260,16 @@ export class MenuView {
   private focusNode(node: HTMLElement): void {
     node.focus({ preventScroll: true });
     node.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Visible, enabled nav nodes only; hidden tabs must not steal directional focus. */
+  private navNodes(): HTMLElement[] {
+    return [...this.panel.querySelectorAll<HTMLElement>('[data-nav]')].filter(
+      (node) =>
+        !node.hasAttribute('disabled') &&
+        node.closest('[hidden]') === null &&
+        node.closest('[inert]') === null,
+    );
   }
 
   private readonly onClick = (event: MouseEvent): void => {
@@ -250,7 +300,7 @@ export class MenuView {
       return;
     }
 
-    const current = snapshot.nodes.find((node) => node.roomId === snapshot.currentRoomId);
+    const current = snapshot.rooms.find((room) => room.roomId === snapshot.currentRoomId);
     const crest = el('div', 'menu-world-crest');
     crest.append(makeBellMark(), el('span', 'menu-world-crest-label', 'The bell keeps'));
     const kicker = el('p', 'menu-world-kicker', 'Current chamber');
@@ -259,11 +309,11 @@ export class MenuView {
       'menu-world-room',
       current ? `${current.kicker} · ${current.label}` : 'Uncharted',
     );
-    const detail = el('p', 'menu-world-detail', current?.detail ?? 'The chart is blank here.');
+    const detail = el('p', 'menu-world-detail', current?.note ?? 'The chart is blank here.');
     const rule = el('span', 'menu-world-rule');
     const stats = el('dl', 'menu-world-stats');
     stats.append(
-      worldStat('Charted', `${snapshot.visitedCount} / ${snapshot.totalCount}`),
+      worldStat('Charted', `${snapshot.chartedCount} / ${snapshot.totalCount}`),
       worldStat('Sigils', `${snapshot.sigilCount} / ${snapshot.bossCount}`),
       worldStat('Last rest', snapshot.checkpoint?.name ?? 'None'),
     );

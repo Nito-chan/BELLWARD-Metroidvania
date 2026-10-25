@@ -93,6 +93,7 @@ export class Game {
       enabled: this.isTouch,
       onAction: (action, down) => this.input.setVirtual(action, down),
       onPause: () => this.openMenu('pause'),
+      onMap: () => this.openMenu('map'),
     });
     this.menu = new MenuSystem({
       bindings: this.bindings,
@@ -111,6 +112,7 @@ export class Game {
       onClose: () => this.resumeFromMenu(),
       onScreenShakeChanged: (enabled) => this.run.scene?.setScreenShake(enabled),
       getMap: () => this.run.mapSnapshot(),
+      onMapPin: (roomId) => this.run.toggleMapPin(roomId),
       mapKeyCodes: () => this.bindings.keyboard.map,
     });
     this.bench = new BenchController({
@@ -293,12 +295,15 @@ export class Game {
       this.lastWholeSecond = wholeSecond;
       this.events.emit('secondElapsed', { seconds: wholeSecond });
     }
+    let revealChart = false;
     if (this.run.scene) {
       const events = this.run.tick(this.loop.stats.tickCount, snapshot);
       for (const event of events) this.audio.onPlayerEvent(event);
+      revealChart = this.run.consumeMapReveal();
       const loadout = this.run.progress.loadout;
       this.touch.setActionVisible('cast', loadout.hookline || loadout.longline);
       this.touch.setActionVisible('weapon', loadout.censer || loadout.toll);
+      this.touch.setMapVisible(this.run.progress.hasTideglass);
       const weapon = this.run.scene?.currentWeapon ?? 'nail';
       if (weapon !== this.lastWeapon) {
         this.lastWeapon = weapon;
@@ -307,15 +312,20 @@ export class Game {
       }
     }
     this.audio.tick(this.loop.stats.tickCount);
+    if (revealChart) this.openMenu('map', { mapBoot: true });
   }
 
   /** Freezes the simulation but keeps rendering the scene behind the overlay. */
-  private openMenu(screen: MenuScreen): void {
+  private openMenu(screen: MenuScreen, options: { mapBoot?: boolean } = {}): void {
     if (this.title.isOpen || this.bench.isOpen || this.endingOverlay.isOpen) return;
+    if (screen === 'map' && !this.run.progress.hasTideglass) {
+      this.run.scene?.showNotice('THE GLASS IS DARK', 'The Tideglass waits on the Belfry Terrace.');
+      return;
+    }
     this.touch.hide();
     this.input.reset();
     this.loop.pause();
-    this.menu.open(screen);
+    this.menu.open(screen, options);
   }
 
   /** The title card's only save-facing copy: counts, never a hidden spoiler. */
@@ -335,7 +345,10 @@ export class Game {
    * audio gesture, so the unlock is deliberate and the opening sound plays after it.
    */
   private beginRun(newRun: boolean): void {
-    if (newRun) this.run.newRun();
+    if (newRun) {
+      this.run.newRun();
+      this.menu.resetMapMoment();
+    }
     this.run.scene?.setGameplayUiVisible(true);
     this.input.reset();
     this.menuKeysDown.clear();
@@ -343,6 +356,7 @@ export class Game {
     this.loop.resume();
     this.app.canvas.focus();
     this.touch.show();
+    this.touch.setMapVisible(this.run.progress.hasTideglass);
     if (newRun || !this.resumedRun) this.onboarding.show();
     // The run is only persisted once the player actually crosses the threshold.
     this.run.saveStart();
@@ -362,6 +376,7 @@ export class Game {
     this.loop.resume();
     this.app.canvas.focus();
     this.touch.show();
+    this.touch.setMapVisible(this.run.progress.hasTideglass);
   }
 
   private openEnding(ending: EndingCopy): void {

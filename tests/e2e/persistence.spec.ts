@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { bootGame, closeBenchOverlay, debugState, loadRoom, reloadGame } from './support';
+import {
+  bootGame,
+  closeBenchOverlay,
+  collectPickup,
+  debugState,
+  loadRoom,
+  reloadGame,
+} from './support';
 
 test.describe('M7 persistence and the region loop', () => {
   // Reloads re-decode the packed score under SwiftShader, so give these three flows headroom.
@@ -55,8 +62,23 @@ test.describe('M7 persistence and the region loop', () => {
     expect(rested.save).toMatchObject({ present: true, lastWrite: 'bench' });
     await closeBenchOverlay(page);
 
+    // The Tideglass is earned on the terrace; collecting it opens the glass once.
+    await collectPickup(page, 'belfry-terrace', { x: 648, y: 320 }, 'terrace-tideglass');
     await page.keyboard.press('KeyM');
-    const map = page.getByRole('dialog', { name: 'Region Map' });
+    await expect(page.locator('[data-screen="map"]')).toBeHidden();
+
+    // Return to the bench so the reload target is the saved rest position. Give the
+    // menu latch one frame to clear before the map shortcut is pressed again.
+    await loadRoom(page, 'belfry-terrace', { x: 566, y: 320 });
+    await page.waitForFunction(
+      () => window.__game?.debugState().scene?.player.x === 566,
+      undefined,
+      { timeout: 5_000 },
+    );
+    await page.waitForTimeout(100);
+
+    await page.keyboard.press('KeyM');
+    const map = page.locator('[data-screen="map"]');
     await expect(map).toBeVisible();
     // The panel slides up 8 px on entry. Measure the settled plate, not a frame of its
     // entrance, or the transient offset reads as a viewport overflow.
@@ -69,20 +91,14 @@ test.describe('M7 persistence and the region loop', () => {
     expect((mapBox?.y ?? 0) + (mapBox?.height ?? 999)).toBeLessThanOrEqual(360);
     expect((mapBox?.x ?? 0) + (mapBox?.width ?? 999)).toBeLessThanOrEqual(640);
     await expect(map).toHaveAttribute('data-screen', 'map');
-    await expect(map.locator('.menu-footer')).toContainText('Esc');
-    await expect(map.locator('.menu-footer')).toContainText('M');
-    await expect(map.locator('.map-node[data-state="current"]')).toHaveAttribute(
-      'data-room-id',
-      'belfry-terrace',
-    );
-    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(12);
-    await expect(map.locator('.map-summary')).toContainText('1 / 13');
-    await expect(map.locator('.map-summary')).toContainText('0 / 4');
-    await expect(map.locator('.map-summary')).toContainText('The Weeping Stone');
-    await expect(map.locator('.map-node[data-room-id="belfry-terrace"]')).toHaveAttribute(
-      'aria-current',
-      'location',
-    );
+    await expect(map.locator('.tg-counts')).toContainText('CHARTED 1 / 13');
+    await expect(map.locator('.tg-counts')).toContainText('WAX 0 / 5');
+    await expect(
+      map.locator('.tg-room[data-room-id="belfry-terrace"][aria-current="true"]'),
+    ).toBeVisible();
+    await expect(map.locator('.tg-room[data-state="ghost"]')).toHaveCount(2);
+    await expect(map.locator('[data-testid="tideglass-ledger"]')).toBeVisible();
+    await expect(map.locator('.tg-ledger-kicker--room')).toContainText('THE BELL NAVE · ENTRY');
 
     const frozen = await debugState(page);
     expect(frozen.menu.screen).toBe('map');
@@ -99,13 +115,13 @@ test.describe('M7 persistence and the region loop', () => {
       .poll(async () => (await debugState(page)).tickCount)
       .toBeGreaterThan(frozen.tickCount);
 
-    // The pause flow's Map entry and Back control close straight back to the run.
+    // The pause flow's Map entry closes straight back to the run.
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Paused' })).toBeVisible();
     await page.getByRole('button', { name: 'Map', exact: true }).click();
     await expect(map).toBeVisible();
-    expect((await debugState(page)).menu.focus).toBe('screen:back');
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    expect((await debugState(page)).menu.focus).toBe('map:room:belfry-terrace');
+    await page.keyboard.press('KeyM');
     await expect(map).toBeHidden();
     await expect
       .poll(async () => (await debugState(page)).tickCount)
@@ -185,7 +201,12 @@ test.describe('M7 persistence and the region loop', () => {
     page,
   }, testInfo) => {
     await bootGame(page);
+    await collectPickup(page, 'belfry-terrace', { x: 648, y: 320 }, 'terrace-tideglass');
+    await page.keyboard.press('KeyM');
+    await expect(page.locator('[data-screen="map"]')).toBeHidden();
+
     await loadRoom(page, 'bellbearer-arena');
+    await page.waitForTimeout(100);
     await page.evaluate(() => window.__game?.debugDefeatBoss());
     await page.waitForFunction(
       () => {
@@ -220,18 +241,18 @@ test.describe('M7 persistence and the region loop', () => {
     expect(resumed.save).toMatchObject({ present: true, loaded: true });
 
     await loadRoom(page, 'belfry-antechamber');
+    await page.waitForTimeout(100);
     await page.keyboard.press('KeyM');
-    const map = page.getByRole('dialog', { name: 'Region Map' });
+    const map = page.locator('[data-screen="map"]');
     await expect(map).toBeVisible();
-    await expect(map.locator('.map-summary')).toContainText('3 / 13');
-    await expect(map.locator('.map-summary')).toContainText('1 / 4');
-    await expect(map.locator('.map-node[data-room-id="bellbearer-arena"]')).toHaveAttribute(
-      'data-state',
-      'visited',
-    );
-    await expect(map.locator('.map-node[data-room-id="bellbearer-arena"]')).toContainText(
-      'Sigil claimed',
-    );
+    await expect(map.locator('.tg-counts')).toContainText('CHARTED 3 / 13');
+    await expect(map.locator('.tg-metrics')).toContainText('Bells1 / 4');
+    await expect(
+      map.locator('.tg-room[data-room-id="belfry-antechamber"][aria-current="true"]'),
+    ).toBeVisible();
+    // Charted: terrace, antechamber, bellbearer. Ghosts: drowned-gallery, warden,
+    // bellthief and bellows — unvisited neighbours of charted rooms.
+    await expect(map.locator('.tg-room[data-state="ghost"]')).toHaveCount(4);
     await testInfo.attach('m7-sigil-map.png', {
       body: await page.screenshot(),
       contentType: 'image/png',

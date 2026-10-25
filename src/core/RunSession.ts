@@ -43,6 +43,8 @@ export class RunSession {
   private roomIdValue = DEFAULT_ROOM_ID;
   /** Last safe feet position in the current room; written to storage with the run. */
   private roomSpawn: RoomSpawn = { ...getRoom(DEFAULT_ROOM_ID).spawn };
+  /** One-shot bridge from the terrace pickup to the first Tideglass opening. */
+  private mapRevealValue = false;
 
   get scene(): RoomScene | null {
     return this.sceneValue;
@@ -67,6 +69,7 @@ export class RunSession {
   /** Discards the restored run and mounts a fresh one at the terrace. */
   newRun(): void {
     this.progress.reset();
+    this.mapRevealValue = false;
     this.enter(DEFAULT_ROOM_ID, undefined, undefined, null);
   }
 
@@ -92,6 +95,7 @@ export class RunSession {
       const gained = this.progress.maxHp - beforeMax;
       if (gained > 0) scene.grantMaxHp(gained);
       scene.applyProgress(this.progress.loadout, this.progress.shards);
+      if (pickupId === 'terrace-tideglass') this.mapRevealValue = true;
       this.persist('reward');
     }
 
@@ -162,12 +166,44 @@ export class RunSession {
 
   mapSnapshot(): MapSnapshot {
     const checkpoint = this.progress.checkpoint;
+    const loadout = this.progress.loadout;
     return buildMapSnapshot({
       currentRoomId: this.roomIdValue,
+      playerPosition: this.sceneValue?.playerFeet ?? null,
       visitedRoomIds: this.progress.visitedRooms,
       sigils: this.progress.sigils,
       checkpoint: checkpoint ? { name: checkpoint.name, roomId: checkpoint.roomId } : null,
+      pickups: this.progress.pickups,
+      brokenSecrets: this.progress.brokenSecrets,
+      pins: this.progress.mapPins,
+      tideglass: this.progress.hasTideglass,
+      tideDoorOpened: this.progress.tideDoorOpened,
+      endingSeen: this.progress.endingSeen,
+      arsenal: loadout.censer && loadout.toll,
+      hasTideBell: this.progress.hasPickup('bellthief-tide-bell'),
     });
+  }
+
+  /** True once, immediately after collecting the Tideglass on the terrace. */
+  consumeMapReveal(): boolean {
+    if (!this.mapRevealValue) return false;
+    this.mapRevealValue = false;
+    return true;
+  }
+
+  /** Adds/removes a wax mark and writes the run document immediately. */
+  toggleMapPin(roomId: string): 'added' | 'removed' | 'full' | 'unknown' {
+    const result = this.progress.toggleMapPin(roomId);
+    if (result === 'added' || result === 'removed') {
+      const scene = this.sceneValue;
+      this.progress.save({
+        roomId: this.roomIdValue,
+        spawn: this.roomSpawn,
+        hp: scene?.vitals.hp ?? this.progress.maxHp,
+        reason: 'map',
+      });
+    }
+    return result;
   }
 
   /** DEV-only: jump straight into a room (optionally at a validated spawn) for E2E. */

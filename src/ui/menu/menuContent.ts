@@ -47,12 +47,13 @@ export const SCREEN_COPY: Readonly<
     ],
   },
   map: {
-    eyebrow: 'The Drowned Belfry',
-    title: 'Region Map',
-    subtitle: 'Every bell has a room; every room remembers.',
+    eyebrow: 'The Drowned Belfry · Keeper’s Chart',
+    title: 'The Tideglass',
+    subtitle: 'A chart of what the water has taken.',
     hints: [
       { keys: 'Esc', label: 'Close' },
-      { keys: 'M', label: 'Close' },
+      { keys: 'F', label: 'Fit' },
+      { keys: '+ / −', label: 'Zoom' },
     ],
   },
 };
@@ -106,7 +107,7 @@ export function bindingFocusId(action: ActionName, kind: BindingKind, slot: numb
 export function defaultFocusId(screen: MenuScreen): string {
   if (screen === 'pause') return 'pause:resume';
   if (screen === 'settings') return 'settings:master';
-  if (screen === 'map') return BACK_FOCUS_ID;
+  if (screen === 'map') return 'map:tab:chart';
   return bindingFocusId('jump', 'key', 0);
 }
 

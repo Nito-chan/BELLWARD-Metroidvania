@@ -8,7 +8,7 @@ import { el, makeButton, markNav } from './menuDom';
 
 const BUSES: readonly AudioBus[] = ['master', 'music', 'sfx'];
 
-export function buildPauseScreen(): HTMLElement {
+export function buildPauseScreen(hasTideglass = false): HTMLElement {
   const nav = el('nav', 'menu-options');
   nav.setAttribute('aria-label', 'Pause menu');
   const items = [
@@ -25,7 +25,16 @@ export function buildPauseScreen(): HTMLElement {
       command: 'controls',
       focusId: 'pause:controls',
     },
-    { label: 'Map', detail: 'The drowned region', command: 'map', focusId: 'pause:map' },
+    ...(hasTideglass
+      ? [
+          {
+            label: 'Map',
+            detail: 'The Keeper’s Tideglass',
+            command: 'map',
+            focusId: 'pause:map',
+          },
+        ]
+      : []),
   ];
   items.forEach((item, index) => {
     const button = makeButton('', item.command, 'menu-option');

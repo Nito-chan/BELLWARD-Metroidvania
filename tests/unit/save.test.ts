@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MAP } from '../../src/config/map';
 import { SAVE } from '../../src/config/save';
 import { getBench } from '../../src/data/benches';
+import { ALL_ROOMS } from '../../src/data/rooms';
 import { RunProgress } from '../../src/save/RunProgress';
 import {
   loadRunSave,
@@ -36,6 +38,7 @@ function validSave(overrides: Partial<RunSave> = {}): RunSave {
     checkpointBenchId: null,
     pickups: [],
     brokenSecrets: [],
+    mapPins: [],
     charmsOwned: [],
     charmsEquipped: [],
     nailLevel: 0,
@@ -90,7 +93,8 @@ describe('run save validation', () => {
     expect(migrated).toMatchObject({
       version: SAVE.version,
       roomId: 'belfry-terrace',
-      pickups: [],
+      pickups: ['terrace-tideglass'],
+      mapPins: [],
       charmsOwned: [],
       nailLevel: 0,
       shards: 0,
@@ -103,7 +107,87 @@ describe('run save validation', () => {
     const storage = new MemoryStorage();
     storage.setItem(SAVE.storageKey, JSON.stringify(v1));
     expect(loadRunSave(storage)?.version).toBe(SAVE.version);
-    expect(loadRunSave(storage)?.pickups).toEqual([]);
+    expect(loadRunSave(storage)?.pickups).toEqual(['terrace-tideglass']);
+  });
+
+  it('migrates a v3 document and grants the Tideglass to a terrace visitor', () => {
+    const base = {
+      version: 3,
+      roomId: 'belfry-terrace',
+      spawn: { x: 420, y: 320 },
+      hp: 5,
+      sigils: [],
+      visitedRooms: ['belfry-terrace'],
+      checkpointBenchId: null,
+      pickups: [],
+      brokenSecrets: [],
+      charmsOwned: [],
+      charmsEquipped: [],
+      nailLevel: 0,
+      shards: 0,
+      ordeals: [],
+      tideDoorOpened: false,
+      endingSeen: false,
+    };
+    const migrated = migrateRunSave(base);
+    expect(migrated).toMatchObject({
+      version: SAVE.version,
+      mapPins: [],
+      pickups: ['terrace-tideglass'],
+    });
+    expect(parseRunSave(migrated)).not.toBeNull();
+
+    const neverVisited = migrateRunSave({ ...base, visitedRooms: ['belfry-antechamber'] });
+    expect(neverVisited).toMatchObject({ version: SAVE.version, mapPins: [], pickups: [] });
+  });
+
+  it('accepts wax marks only on charted rooms', () => {
+    const charted = validSave({
+      visitedRooms: ['belfry-terrace', 'drowned-gallery'],
+      mapPins: [{ roomId: 'drowned-gallery', kind: 'mark' }],
+    });
+    expect(parseRunSave(charted)).not.toBeNull();
+
+    expect(
+      parseRunSave(
+        validSave({
+          visitedRooms: ['belfry-terrace'],
+          mapPins: [{ roomId: 'drowned-gallery', kind: 'mark' }],
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseRunSave(validSave({ mapPins: [{ roomId: 'missing-room', kind: 'mark' }] })),
+    ).toBeNull();
+    expect(
+      parseRunSave(
+        validSave({
+          mapPins: [{ roomId: 'belfry-terrace', kind: 'impostor' as 'mark' }],
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseRunSave(
+        validSave({
+          mapPins: [
+            { roomId: 'belfry-terrace', kind: 'mark' },
+            { roomId: 'belfry-terrace', kind: 'mark' },
+          ],
+        }),
+      ),
+    ).toBeNull();
+    const tooMany = ALL_ROOMS.slice(0, MAP.savePinLimit + 1).map((room) => ({
+      roomId: room.id,
+      kind: 'mark' as const,
+    }));
+    expect(
+      parseRunSave(
+        validSave({
+          visitedRooms: tooMany.map((pin) => pin.roomId),
+          mapPins: tooMany,
+        }),
+      ),
+    ).toBeNull();
   });
 
   it('rejects impossible pickup, charm and Ordeal combinations', () => {
@@ -246,6 +330,57 @@ describe('RunProgress', () => {
     expect(progress.sigils).toEqual(['bellbearer']);
     expect(progress.visitedRooms).toEqual(save.visitedRooms);
     expect(progress.checkpoint?.id).toBe('terrace-weeping-stone');
+  });
+
+  it('presses and removes wax only on charted rooms and persists it', () => {
+    const storage = new MemoryStorage();
+    const progress = new RunProgress(storage);
+    progress.visit('belfry-terrace');
+    progress.visit('drowned-gallery');
+
+    expect(progress.hasTideglass).toBe(false);
+    expect(progress.collectPickup('terrace-tideglass')).toBe(true);
+    expect(progress.hasTideglass).toBe(true);
+    expect(progress.toggleMapPin('bellbearer-arena')).toBe('unknown');
+    expect(progress.toggleMapPin('missing-room')).toBe('unknown');
+    expect(progress.toggleMapPin('drowned-gallery')).toBe('added');
+    expect(progress.hasMapPin('drowned-gallery')).toBe(true);
+    expect(progress.mapPins).toEqual([{ roomId: 'drowned-gallery', kind: 'mark' }]);
+
+    expect(
+      progress.save({
+        roomId: 'belfry-terrace',
+        spawn: { x: 420, y: 320 },
+        hp: 5,
+        reason: 'map',
+      }),
+    ).toBe(true);
+    expect(loadRunSave(storage)?.mapPins).toEqual([{ roomId: 'drowned-gallery', kind: 'mark' }]);
+
+    expect(progress.toggleMapPin('drowned-gallery')).toBe('removed');
+    expect(progress.hasMapPin('drowned-gallery')).toBe(false);
+  });
+
+  it('stops at the wax limit until a mark is removed', () => {
+    const progress = new RunProgress(new MemoryStorage());
+    const rooms = [
+      'belfry-terrace',
+      'belfry-antechamber',
+      'drowned-gallery',
+      'sunless-aqueduct',
+      'bellows',
+      'wall-claw-shaft',
+    ];
+    for (const roomId of rooms) progress.visit(roomId);
+
+    for (const roomId of rooms.slice(0, MAP.pinLimit)) {
+      expect(progress.toggleMapPin(roomId)).toBe('added');
+    }
+    expect(progress.toggleMapPin(rooms[MAP.pinLimit] ?? 'wall-claw-shaft')).toBe('full');
+    expect(progress.mapPins).toHaveLength(MAP.pinLimit);
+
+    expect(progress.toggleMapPin(rooms[0] ?? 'belfry-terrace')).toBe('removed');
+    expect(progress.toggleMapPin(rooms[MAP.pinLimit] ?? 'wall-claw-shaft')).toBe('added');
   });
 
   it('collects shards, charms, secret walls and Ordeals without double-granting', () => {

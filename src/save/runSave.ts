@@ -12,6 +12,7 @@ import { BOSS_REWARDS } from '../config/bossTypes';
 import { COMBAT } from '../config/combat';
 import { BOSS_KINDS, type BossKind } from '../config/enemies';
 import { PLAYER } from '../config/player';
+import { MAP, isMapPinKind, type MapPin } from '../config/map';
 import { CHARMS, CHARM_SLOTS, CHARM_ORDER, NAIL, type CharmId } from '../config/progression';
 import { SAVE } from '../config/save';
 import { BellwardError } from '../core/Errors';
@@ -20,7 +21,8 @@ import { healthShardCount, isPickupId, PICKUPS, getPickup } from '../data/pickup
 import { ALL_ROOMS, ROOMS } from '../data/rooms';
 import { createRoom, isStandingPoint, type RoomSpawn } from '../world/Room';
 
-export type SaveReason = 'boot' | 'room' | 'bench' | 'reward' | 'respawn' | 'debug' | 'ending';
+export type SaveReason =
+  'boot' | 'room' | 'bench' | 'reward' | 'respawn' | 'debug' | 'ending' | 'map';
 
 export type RunSave = {
   readonly version: number;
@@ -32,6 +34,8 @@ export type RunSave = {
   readonly checkpointBenchId: string | null;
   readonly pickups: readonly string[];
   readonly brokenSecrets: readonly string[];
+  /** Wax marks pressed into the Tideglass. */
+  readonly mapPins: readonly MapPin[];
   readonly charmsOwned: readonly CharmId[];
   readonly charmsEquipped: readonly CharmId[];
   readonly nailLevel: number;
@@ -92,14 +96,10 @@ export function loadRunSave(storage = defaultRunStorage()): RunSave | null {
 }
 
 /**
- * The v1 document is a strict subset of v2: every old fact keeps its meaning, and every
- * new durable set starts empty. This is exported so the unit suite can prove the exact
- * old shape survives a migration instead of merely trusting a version number.
- */
-/**
- * The v1 document is a strict subset of v2; every old fact keeps its meaning. v2 adds
- * nothing new beyond the v1 shape. v3 renames the one-shot slice flag into tideDoorOpened
- * and adds endingSeen for the earned final ending. Every old fact survives migration.
+ * Every old fact keeps its meaning. v2 introduced the collectible document, v3 renamed
+ * the one-shot slice flag into tideDoorOpened and added endingSeen, and v4 adds wax marks
+ * plus the Tideglass itself. A v3 save that had already stood on the terrace is granted
+ * the Tideglass so existing climbers do not lose the chart they have earned.
  */
 export function migrateRunSave(value: unknown): unknown {
   if (!isRecord(value)) return value;
@@ -120,13 +120,30 @@ export function migrateRunSave(value: unknown): unknown {
     return migrateRunSave(v2);
   }
   if (version === 2) {
-    return {
+    const v3 = {
       ...value,
-      version: SAVE.version,
+      version: 3,
       /** The old one-shot slice flag becomes the Tide-door opening. */
       tideDoorOpened: !!value.sliceComplete,
       /** The earned final ending is unseen until the Last Keeper is solved. */
       endingSeen: false,
+    };
+    return migrateRunSave(v3);
+  }
+  if (version === 3) {
+    const visited = Array.isArray(value.visitedRooms)
+      ? value.visitedRooms.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+    const pickups = Array.isArray(value.pickups)
+      ? value.pickups.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+    const inheritGlass =
+      visited.includes('belfry-terrace') && !pickups.includes('terrace-tideglass');
+    return {
+      ...value,
+      version: SAVE.version,
+      pickups: inheritGlass ? [...pickups, 'terrace-tideglass'] : pickups,
+      mapPins: [],
     };
   }
   return value;
@@ -179,6 +196,8 @@ export function parseRunSave(value: unknown): RunSave | null {
 
   const visitedRooms = parseVisited(value.visitedRooms);
   if (!visitedRooms || !visitedRooms.includes(roomId)) return null;
+  const mapPins = parseMapPins(value.mapPins, visitedRooms);
+  if (!mapPins) return null;
 
   let checkpointBenchId: string | null = null;
   if (value.checkpointBenchId !== null) {
@@ -224,6 +243,7 @@ export function parseRunSave(value: unknown): RunSave | null {
     checkpointBenchId,
     pickups,
     brokenSecrets,
+    mapPins,
     charmsOwned,
     charmsEquipped,
     nailLevel: value.nailLevel,
@@ -239,6 +259,22 @@ function parseSpawn(value: unknown): RoomSpawn | null {
   if (typeof value.x !== 'number' || typeof value.y !== 'number') return null;
   if (!Number.isFinite(value.x) || !Number.isFinite(value.y)) return null;
   return { x: value.x, y: value.y };
+}
+
+function parseMapPins(value: unknown, visitedRooms: readonly string[]): MapPin[] | null {
+  if (!Array.isArray(value) || value.length > MAP.savePinLimit) return null;
+  const pins: MapPin[] = [];
+  const rooms = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry)) return null;
+    if (typeof entry.roomId !== 'string' || !ROOMS[entry.roomId]) return null;
+    if (!isMapPinKind(entry.kind)) return null;
+    if (rooms.has(entry.roomId)) return null;
+    if (!visitedRooms.includes(entry.roomId)) return null;
+    rooms.add(entry.roomId);
+    pins.push({ roomId: entry.roomId, kind: entry.kind });
+  }
+  return pins;
 }
 
 function parseSigils(value: unknown): BossKind[] | null {

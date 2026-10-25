@@ -40,6 +40,7 @@ const FULL_ARSENAL_SAVE: RunSave = {
     'terrace-tideglass',
   ],
   brokenSecrets: [],
+  mapPins: [],
   charmsOwned: [],
   charmsEquipped: [],
   nailLevel: 0,

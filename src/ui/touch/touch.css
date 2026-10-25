@@ -81,8 +81,27 @@
   letter-spacing: 0.14em;
 }
 
-.touch-swap {
+.touch-swap,
+.touch-map {
   gap: 0.1rem;
+}
+
+.touch-map {
+  border-color: rgb(141 181 163 / 42%);
+  color: #b9d6c9;
+}
+
+.touch-map-kicker {
+  color: var(--touch-muted);
+  font-family: var(--touch-mono);
+  font-size: 0.42rem;
+  letter-spacing: 0.12em;
+}
+
+.touch-map-name {
+  color: #b9d6c9;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
 }
 
 .touch-swap-kicker {

@@ -303,6 +303,17 @@ export class RoomScene {
     return { hp: this.player.hp, maxHp: this.player.maxHp };
   }
 
+  /** Feet position in room pixels; the Tideglass plots the Keeper's place. */
+  get playerFeet(): { x: number; y: number } {
+    return this.player.feet;
+  }
+
+  /** Shows a short world banner and announces the same copy to assistive tech. */
+  showNotice(title: string, subtitle: string): void {
+    this.banner.show(title, subtitle);
+    this.announce(`${title}. ${subtitle}.`);
+  }
+
   /** The attack-cycle weapon currently selected by the hero. */
   get currentWeapon(): WeaponId {
     return this.player.currentWeapon;
