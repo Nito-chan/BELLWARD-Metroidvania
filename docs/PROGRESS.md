@@ -1368,3 +1368,97 @@ by content beyond the twelve-room region if the slice is greenlit.
   and 844×390; a real phone/controller pass is still outstanding.
 - **The Hookline uses procedural presentation and an existing SFX.** A bespoke rope/ring art pass is P0
   work, not a hidden mechanic stub.
+
+---
+
+## G3 — The Last Bell and the final act (2026-10-25)
+
+**Commit:** `4e245b8` (final-act audit `02532b1` through the timing test). **Status:** complete, all
+gates green. This closes G2's Censer/Toll, Last Keeper and earned-ending content list; the Tideglass
+map UI and the P0 final-art pass remain deferred.
+
+### Shipped
+
+- **Censer and Toll, four-weapon combat:** Nail → Censer → Toll on attack, Hookline on `cast`, and
+  `Q` / gamepad LB / touch **Swap** for the cycle. The Censer is found in the Reliquary, the Toll on
+  the Upper Gallery, and the Ward of Four seals the Last Bell until all four weapons are owned. Both
+  weapons have real hitboxes, waves, resonance, cooldowns, HUD state and touch actions.
+- **The Last Keeper, three phases:** phase 1 **The Vigil** (40 HP posture fight), phase 2 **The
+  Drowning Toll** (health seals at 1; three Toll → Censer chains; flood levels `[304, 256, 224]`; 3
+  authored chain rings), phase 3 **The Answer** (terminal `ritual`, invulnerable, three timed Toll
+  answers in 24-tick windows, one answer per projectile spawn id, misses telegraph a floor shockwave
+  and use normal i-frames). The great bell's final interaction sits at the authored centre hang with
+  a 96 px radius.
+- **The earned ending:** the midpoint **THE TIDE-BELL ANSWERS** card at the Tide door and the final
+  **THE BELL REMEMBERS** card after the great bell. `Continue the climb` and `Return to the belfry`
+  remain exact labels; the ending is one-shot (`endingSeen`) and never replays after reload. The
+  title card hides gameplay overlays and keeps the banner timers intact across the open/close.
+- **Save v3 and bindings v3:** v3 adds `tideDoorOpened` and `endingSeen`; v2 migrates in place, v1
+  chains through both. Bindings v3 inserts the `weapon` action (keyboard `Q`, gamepad LB) while
+  preserving custom binds; v1/v2 documents migrate through both steps. `terrace-tideglass` is a real
+  pickup and save fact; the Tideglass map UI itself is still the next feature.
+- **Audit fixes and hardening:** the final bell no longer needs a frame-perfect jump; phase 3 cannot
+  crash or be damaged; one Toll wave answers one note; the flood is telegraphed and uses normal
+  i-frames; touch **Swap** is placed and sized at 375/768/1440; gameplay HUD state is isolated from
+  the title; the full-arsenal gate, Reliquary/Upper Gallery rewards and 13-room progression are
+  covered end to end.
+- **Real-input phase 3 timing test:** the permanent E2E hooks the centre ring during the tell, jumps
+  off it and fires the Toll inside all three windows. The scripted perfect phase measures **367 ticks
+  (~6.1s)** from ritual start to the Keeper's defeat, with every answer landing **7 ticks into the
+  24-tick window** and zero misses. The timeline is attached to the test report.
+
+### Gates (final state)
+
+| Gate                          | Result                                                                     |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `npm run typecheck`           | clean                                                                      |
+| `npm run lint`                | clean, zero warnings                                                       |
+| `npm run test`                | 350/350 passed (29 files, ~9.2 s)                                          |
+| `npm run build`               | ✓ 874 modules, 592.28 kB JS / 166.79 kB gzip, 83.16 kB CSS / 15.71 kB gzip |
+| `npm run test:e2e`            | 50/50 passed in the full sweep (13.1 min)                                  |
+| `npm run level:check`         | OK — 13 rooms, 27 pickups, 38 anchors, 3 benches, 3 Ordeals                |
+| `npm run assets:check:strict` | OK — 1,914 files, 0 warnings                                               |
+| `npm run format:check`        | clean                                                                      |
+
+### E2E coverage added
+
+1. **Full 13-room playthrough:** collects all 27 pickups and both secrets, clears three bosses and
+   three Ordeals, rests/equips at the bench, crosses the Tide-door midpoint, enters the Last Bell,
+   solves the phase 3 ritual, rings the great bell through real inputs, asserts the earned-ending
+   stats, charts 13/13 rooms and 4/4 sigils, and reloads with `maxHp 10`, `endingSeen` and
+   `save.lastWrite 'ending'`.
+2. **Real phase 3:** three real Toll answers, one per window, with the 367-tick timeline and
+   per-answer margins recorded; the existing final-bell test still proves the ending card and its
+   required labels.
+3. **Midpoint and persistence:** the m8 Tide-door test expects the midpoint card and `3 / 4`; the
+   persistence suite charts 13 rooms / 4 sigils; the Last Keeper's flood/HP lock and phase-name
+   checks remain.
+4. **375 final act:** the title overlay, gameplay-overlay isolation, primary action bounds and
+   landscape touch targets are checked at 375 px.
+
+### Adjustments
+
+- **The 10–15 minute target is still unverified.** The scripted perfect phase 3 is ~6.1s, so the
+  earlier 2–3 minute phase-3 estimate was withdrawn. `FINAL_ACT.md` now labels phase 1/2 and the
+  full-run target as design targets; only phase 3 has a measured simulation time. A timed human
+  full run is still required before claiming 10–15 minutes.
+- **The 24-tick window stays.** Real answers land with 7 ticks to spare, so the window was not
+  retuned. A miss adds one note cycle (~150 ticks / 2.5s) before the retry.
+- **The map remains the intentional placeholder.** The current Region Map still charts rooms,
+  sigils and the current position; the full Tideglass MVP in `docs/design/TIDEGLASS_MAP.md` is a
+  separate feature and was not partially wired into this milestone.
+- **No new final assets.** The Censer, Toll, Last Keeper, flood and ending tableau still use the
+  procedural placeholders and the existing CC0 audio. `assets:check:strict` remains 1,914 files /
+  0 warnings.
+
+### Explicitly deferred / risks
+
+- **P0 final art:** Censer, Toll, Last Keeper, flood and ending tableau need the asset pass. The
+  build is playable with procedural placeholders; do not ship them as final.
+- **Tideglass map UI:** the full wax-tablet MVP (true room geometry, atlas, ghost/sealed/swept
+  states, ledger, lead thread, pan/zoom, list view, first-pickup boot) remains deferred; the pickup
+  and save fact are already in place.
+- **Timed full run:** phases 1 and 2 are player-skill dependent and have not been timed; the
+  10–15 minute first-clear target remains a target, not a claim.
+- **Physical gamepad and touch hardware:** Playwright covers the input paths at 640×360, 844×390
+  and 375/768/1440; a real phone/controller pass is still outstanding.
