@@ -165,14 +165,24 @@ counter in phase 3.
 
 ### Target difficulty and length
 
-These are design targets, not yet confirmed by a recorded full run.
+These are design targets, not yet confirmed by a timed full run. Only phase 3 has been
+timed in simulation; the full-run 10–15 minute target is still unverified.
 
-- Phase 1: 3–4 minutes, fair and readable.
+- Phase 1: 3–4 minutes, fair and readable (target).
 - Phase 2: 6–9 minutes, deterministic flood/chain execution; the player learns the safe
-  route and the Toll → Censer cadence.
-- Phase 3: 2–3 minutes, three timed answers and the final interaction.
-- First clear: aim for 10–15 minutes; learning: 1–3 hours, dominated by phase 2 and the
-  answer timing. The bench runback is one room, so failure is a lesson, not a walk.
+  route and the Toll → Censer cadence (target).
+- Phase 3: **measured** at 367 ticks (~6.1s) from ritual start to the Keeper's defeat for
+  three perfect Toll answers. The earlier 2–3 minute estimate is withdrawn; duration comes
+  from missed notes, not the authored cadence.
+- First clear: aim for 10–15 minutes (target, not a claim); learning: 1–3 hours, dominated
+  by phase 2 and the answer timing. The bench runback is one room, so failure is a lesson,
+  not a walk.
+
+Measured phase 3 cadence (real-input E2E, 2026-10-25): kneel 60 / ring 30 / window 24 /
+recover 36 ticks. All three answers landed **7 ticks** into their 24-tick windows, so the
+authored window is reachable with 17 ticks to spare. A missed note adds one full note cycle
+(~150 ticks / 2.5s) before the retry. The timeline is attached to
+`tests/e2e/last-keeper.spec.ts` as `last-keeper-real-answers.json`.
 
 ## The earned ending
 
@@ -219,8 +229,9 @@ be remembered.` The map UI is not wired yet; the pickup and save fact are added 
   resonance and cooldown; bindings v3 migration; save v2→v3; ending flag; Last Keeper phase
   gates, chain windows and answer windows; room validation for the new door and arsenal.
 - E2E: both pickups equip and persist; Censer/Toll in real combat; the Ward of Four locks
-  and opens; the three phases via debug; phase 2 chain sequence; phase 3 invulnerable then
-  three Toll answers; the final card exactly once and no replay after reload; touch Swap at
+  and opens; the three phases via debug; phase 2 chain sequence; phase 3 invulnerable, then
+  three real-input Toll answers inside the 24-tick windows (measured 7-tick margin, 367-tick
+  phase); the final card exactly once and no replay after reload; touch Swap at
   375/768/1440; focus trap and reduced motion.
 - Existing m8/playthrough/persistence expectations change from "Tide door ending" to
   "Tide door midpoint + Last Bell final ending".
@@ -241,6 +252,7 @@ be remembered.` The map UI is not wired yet; the pickup and save fact are added 
 2. Phase 2 chain cadence: Toll opens, Censer breaks, three times, with the water rising after
    each. The alternative pure survival timer was not taken.
 3. Phase 3 answer window: 24 ticks, three notes, reset-current-on-miss. The one longer final
-   note was not taken.
+   note was not taken. Real-input E2E answers land 7 ticks into the window on all three
+   notes, so the window stays 24.
 4. Censer/Toll placements (Reliquary / Upper Gallery) and the Ward of Four collection gate
    are used as written above.

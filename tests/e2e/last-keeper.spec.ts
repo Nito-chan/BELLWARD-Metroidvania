@@ -86,6 +86,187 @@ async function waitForKeeper(
   );
 }
 
+type RitualAnswer = {
+  readonly note: number;
+  readonly windowTick: number;
+  readonly answerTick: number;
+  readonly margin: number;
+};
+
+type RitualRun = {
+  readonly outcome: 'solved' | 'timeout' | 'no-game';
+  readonly timeline: readonly string[];
+  readonly answers: readonly RitualAnswer[];
+  readonly phaseTicks: number;
+  readonly misses: number;
+};
+
+/**
+ * Plays the Answer with real inputs: hook the centre ring during the tell, jump off it
+ * inside the window, and fire the Toll. Returns the measured tick timeline so the test
+ * proves the 24-tick window is reachable instead of bypassing it with a debug solve.
+ */
+async function playRitualWithToll(page: Page): Promise<RitualRun> {
+  return page.evaluate(async () => {
+    const game = window.__game;
+    if (!game) {
+      return {
+        outcome: 'no-game' as const,
+        timeline: [] as string[],
+        answers: [] as { note: number; windowTick: number; answerTick: number; margin: number }[],
+        phaseTicks: 0,
+        misses: 0,
+      };
+    }
+
+    game.debugEnterKeeperRitual();
+    const timeline: string[] = [];
+    const answers: { note: number; windowTick: number; answerTick: number; margin: number }[] = [];
+    let phaseStart = 0;
+    let note = 0;
+    let state: 'reposition' | 'ring' | 'hooked' | 'fired' = 'reposition';
+    let noteDeadline = 0;
+    let windowStartTick = 0;
+    let hookedThisNote = false;
+    let fireTick = 0;
+    let misses = 0;
+    const started = performance.now();
+
+    const release = (code: string): void => {
+      window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+    };
+    const press = (code: string): void => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+    };
+    const resetNote = (): void => {
+      release('ArrowLeft');
+      release('ArrowRight');
+      release('Space');
+      release('KeyX');
+      state = 'reposition';
+      hookedThisNote = false;
+      noteDeadline = 0;
+    };
+
+    while (performance.now() - started < 30_000) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const snapshot = game.debugState();
+      const boss = snapshot.scene?.boss;
+      const player = snapshot.scene?.player;
+      const tick = snapshot.tickCount;
+      if (!boss || !player) continue;
+
+      if (phaseStart === 0 && boss.phase === 2 && boss.state === 'ritual') {
+        phaseStart = tick;
+        timeline.push(`ritual start tick=${tick}`);
+      }
+
+      if (note >= 3) {
+        if (boss.alive === false) {
+          timeline.push(`boss dead tick=${tick} phaseTicks=${tick - phaseStart} misses=${misses}`);
+          return {
+            outcome: 'solved' as const,
+            timeline,
+            answers,
+            phaseTicks: tick - phaseStart,
+            misses,
+          };
+        }
+        continue;
+      }
+
+      if (state !== 'reposition' && noteDeadline > 0 && tick > noteDeadline) {
+        misses += 1;
+        timeline.push(`note timeout note=${note + 1} tick=${tick}`);
+        resetNote();
+        continue;
+      }
+
+      if (state === 'reposition') {
+        const dx = 480 - player.x;
+        if (Math.abs(dx) > 8) {
+          if (dx > 0) {
+            window.dispatchEvent(
+              new KeyboardEvent('keydown', { code: 'ArrowRight', bubbles: true }),
+            );
+            release('ArrowLeft');
+          } else {
+            window.dispatchEvent(
+              new KeyboardEvent('keydown', { code: 'ArrowLeft', bubbles: true }),
+            );
+            release('ArrowRight');
+          }
+        } else {
+          release('ArrowLeft');
+          release('ArrowRight');
+          if (player.grounded) {
+            state = 'ring';
+            timeline.push(`ready tick=${tick} x=${player.x} y=${player.y}`);
+          }
+        }
+        continue;
+      }
+
+      if (state === 'ring') {
+        if (
+          boss.ritualStage === 'ring' &&
+          player.hook.state === 'idle' &&
+          player.hook.cooldown === 0 &&
+          !hookedThisNote
+        ) {
+          hookedThisNote = true;
+          state = 'hooked';
+          noteDeadline = tick + 120;
+          timeline.push(`hook tick=${tick} x=${player.x} y=${player.y}`);
+          press('KeyI');
+        }
+        continue;
+      }
+
+      if (state === 'hooked') {
+        if (player.hook.state === 'hang' && boss.answerWindow === true) {
+          state = 'fired';
+          fireTick = tick;
+          windowStartTick = tick;
+          timeline.push(
+            `fire tick=${tick} windowTicks=${boss.answerWindowTicks} x=${player.x} y=${player.y}`,
+          );
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', bubbles: true }));
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX', bubbles: true }));
+          release('KeyX');
+          release('Space');
+        }
+        continue;
+      }
+
+      if (state === 'fired') {
+        if ((boss.answerCount ?? 0) > note) {
+          answers.push({
+            note,
+            windowTick: windowStartTick,
+            answerTick: tick,
+            margin: tick - windowStartTick,
+          });
+          timeline.push(
+            `answer ${note + 1} tick=${tick} margin=${tick - windowStartTick} x=${player.x} y=${player.y}`,
+          );
+          note += 1;
+          resetNote();
+          continue;
+        }
+        if (boss.answerWindow === false && tick - fireTick > 24) {
+          misses += 1;
+          timeline.push(`miss note=${note + 1} tick=${tick}`);
+          resetNote();
+        }
+      }
+    }
+
+    return { outcome: 'timeout' as const, timeline, answers, phaseTicks: 0, misses };
+  });
+}
+
 test.describe('Last Keeper final act', () => {
   test.describe.configure({ timeout: 180_000 });
 
@@ -170,6 +351,54 @@ test.describe('Last Keeper final act', () => {
       contentType: 'image/png',
     });
     expect((await debugState(page)).errors).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('the Answer cadence is solvable with three real Toll windows', async ({
+    page,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+
+    await seedLastBell(page);
+
+    // The swap cycle is the real input path: Nail -> Censer -> Toll.
+    for (let swap = 0; swap < 3; swap += 1) {
+      if ((await debugState(page)).touch.weapon === 'toll') break;
+      await page.keyboard.press('KeyQ');
+      await page.waitForTimeout(100);
+    }
+    expect((await debugState(page)).touch.weapon).toBe('toll');
+
+    const run = await playRitualWithToll(page);
+    await testInfo.attach('last-keeper-real-answers.json', {
+      body: JSON.stringify(run, null, 2),
+      contentType: 'application/json',
+    });
+
+    expect(run.outcome).toBe('solved');
+    expect(run.answers).toHaveLength(3);
+    for (const answer of run.answers) {
+      expect(answer.margin).toBeGreaterThan(0);
+      expect(answer.margin).toBeLessThanOrEqual(24);
+    }
+    expect(run.misses).toBe(0);
+    expect(run.phaseTicks).toBeGreaterThan(250);
+    expect(run.phaseTicks).toBeLessThan(600);
+
+    await page.waitForFunction(
+      () => window.__game?.debugState().run.sigils.includes('lastKeeper') === true,
+      undefined,
+      { timeout: 5_000 },
+    );
+    const after = await debugState(page);
+    expect(after.scene?.boss?.alive).toBe(false);
+    expect(after.scene?.boss?.answerCount).toBe(3);
+    expect(after.run.sigils).toContain('lastKeeper');
+    expect(after.errors).toEqual([]);
     expect(errors).toEqual([]);
   });
 
