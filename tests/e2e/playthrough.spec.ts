@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { bootGame, closeBenchOverlay, debugState, loadRoom, reloadGame } from './support';
+import {
+  bootGame,
+  closeBenchOverlay,
+  debugState,
+  loadRoom,
+  reloadGame,
+  waitForBossIdle,
+} from './support';
 
 type StandingPoint = { readonly x: number; readonly y: number };
 
@@ -9,6 +16,7 @@ const PICKUPS: readonly {
   readonly spawn: StandingPoint;
   readonly id: string;
 }[] = [
+  { roomId: 'belfry-terrace', spawn: { x: 648, y: 320 }, id: 'terrace-tideglass' },
   { roomId: 'drowned-gallery', spawn: { x: 300, y: 256 }, id: 'gallery-shard-low' },
   { roomId: 'drowned-gallery', spawn: { x: 680, y: 320 }, id: 'gallery-shard-high' },
   { roomId: 'drowned-gallery', spawn: { x: 480, y: 208 }, id: 'gallery-quick-mend' },
@@ -28,7 +36,9 @@ const PICKUPS: readonly {
   { roomId: 'wall-claw-shaft', spawn: { x: 820, y: 80 }, id: 'shaft-longline' },
   { roomId: 'upper-gallery', spawn: { x: 300, y: 256 }, id: 'upper-shard-low' },
   { roomId: 'upper-gallery', spawn: { x: 820, y: 208 }, id: 'upper-shard-high' },
+  { roomId: 'upper-gallery', spawn: { x: 780, y: 208 }, id: 'upper-toll' },
   { roomId: 'reliquary', spawn: { x: 496, y: 208 }, id: 'reliquary-long-reach' },
+  { roomId: 'reliquary', spawn: { x: 440, y: 208 }, id: 'reliquary-censer' },
   { roomId: 'reliquary', spawn: { x: 340, y: 256 }, id: 'reliquary-health-shard' },
   { roomId: 'reliquary', spawn: { x: 760, y: 320 }, id: 'reliquary-shard' },
 ];
@@ -119,7 +129,7 @@ async function clearOrdeal(
  * The milestone playthrough. It uses the DEV room loader to skip locomotion between
  * authored encounters (movement and transitions have their own suites) while every
  * reward, secret, boss, bench purchase and the ending travel the real simulation,
- * save and DOM paths. One continuous run must be able to finish all 12 rooms.
+ * save and DOM paths. One continuous run must be able to finish all 13 rooms.
  */
 test.describe('M8 complete playthrough', () => {
   test.describe.configure({ timeout: 360_000 });
@@ -171,27 +181,138 @@ test.describe('M8 complete playthrough', () => {
     );
     await closeBenchOverlay(page);
 
-    // The Tide-Bell opens the sealed door; the ending card must appear once.
+    // The Tide-Bell opens the sealed door to the midpoint card; the Last Bell holds the ending.
     await loadRoom(page, 'upper-gallery', { x: 600, y: 320 });
-    const ending = page.getByRole('dialog', { name: /the bell remembers/i });
-    await expect(ending).toBeVisible();
-    const statValues = ending.locator('.ending-stat-value');
-    await expect(statValues.nth(0)).toHaveText('3 / 3');
-    await expect(statValues.nth(1)).toHaveText('225');
-    await expect(statValues.nth(2)).toHaveText('5');
-    await ending.getByRole('button', { name: 'Return to the belfry' }).click();
-    await expect(ending).toBeHidden();
+    const midpoint = page.getByRole('dialog', { name: /the tide-bell answers/i });
+    await expect(midpoint).toBeVisible();
+    const midpointValues = midpoint.locator('.ending-stat-value');
+    await expect(midpointValues.nth(0)).toHaveText('3 / 4');
+    await expect(midpointValues.nth(1)).toHaveText('225');
+    await expect(midpointValues.nth(2)).toHaveText('5');
+    await expect(midpoint.locator('.ending-stat', { hasText: 'ARSENAL' })).toContainText('4 / 4');
+    await expect(midpoint.locator('.ending-stat', { hasText: 'TIDEGLASS' })).toContainText('Found');
+    await midpoint.getByRole('button', { name: 'Return to the belfry' }).click();
+    await expect(midpoint).toBeHidden();
+
+    const midpointState = await debugState(page);
+    expect(midpointState.run.visitedRooms).toHaveLength(12);
+    expect(midpointState.run.pickups).toEqual(
+      [...PICKUPS, ...KEYED_PICKUPS].map((pickup) => pickup.id).sort(),
+    );
+    expect(midpointState.run.brokenSecrets).toEqual(['drowned-gallery', 'upper-gallery']);
+    expect(midpointState.run.sigils).toEqual(['bellbearer', 'wardenMoss', 'bellThief']);
+    expect(midpointState.run.ordeals).toEqual(['bellbearer', 'wardenMoss', 'bellThief']);
+    expect(midpointState.run.healthShards).toBe(4);
+    expect(midpointState.run.maxHp).toBe(9);
+    expect(midpointState.run.charmsOwned).toEqual([
+      'quickMend',
+      'longReach',
+      'lightStep',
+      'emberGreed',
+      'sturdyShell',
+    ]);
+    expect(midpointState.run.charmsEquipped).toEqual(['quickMend', 'lightStep', 'emberGreed']);
+    expect(midpointState.run.nailLevel).toBe(2);
+    expect(midpointState.run.shards).toBe(225);
+    expect(midpointState.run.hookline).toBe(true);
+    expect(midpointState.run.longline).toBe(true);
+    expect(midpointState.run.checkpoint?.benchId).toBe('terrace-weeping-stone');
+    expect(midpointState.run.tideDoorOpened).toBe(true);
+    expect(midpointState.save.lastWrite).toBe('reward');
+    expect(midpointState.errors).toEqual([]);
+
+    await expect
+      .poll(async () => (await debugState(page)).tickCount)
+      .toBeGreaterThan(midpointState.tickCount);
+
+    // The final room is still uncharted and the fourth sigil unclaimed.
+    const map = page.getByRole('dialog', { name: 'Region Map' });
+    await page.keyboard.press('KeyM');
+    await expect(map).toBeVisible();
+    await expect(map.locator('.map-summary')).toContainText('12 / 13');
+    await expect(map.locator('.map-summary')).toContainText('3 / 4');
+    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(1);
+    await expect(map.locator('.map-node[data-room-id="last-bell"]')).toHaveAttribute(
+      'data-state',
+      'unknown',
+    );
+    await page.keyboard.press('KeyM');
+    await expect(map).toBeHidden();
+
+    // The Last Keeper ritual, the great bell and the earned ending travel real paths.
+    await loadRoom(page, 'last-bell', { x: 480, y: 320 });
+    await page.evaluate(() => window.__game?.debugProtectPlayer());
+    await waitForBossIdle(page);
+    expect(await page.evaluate(() => window.__game?.debugEnterKeeperRitual())).toBe(true);
+    await page.waitForFunction(
+      () => {
+        const boss = window.__game?.debugState().scene?.boss;
+        return boss?.phase === 2 && boss.state === 'ritual' && boss.answerWindow === true;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+    expect(await page.evaluate(() => window.__game?.debugSolveKeeperRitual())).toBe(true);
+    await page.waitForFunction(
+      () => window.__game?.debugState().scene?.boss?.alive === false,
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    // Hook the authored centre ring and ring the final note. Both inputs go through the
+    // real window listeners; the loop only avoids Playwright IPC missing the 18-tick hang.
+    const finalNote = await page.evaluate(async () => {
+      const started = performance.now();
+      let interacted = false;
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyI', bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyI', bubbles: true }));
+      while (performance.now() - started < 10_000) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const scene = window.__game?.debugState().scene;
+        if (!scene) return { outcome: 'no-scene' as const };
+        if (scene.finalBellPrompt && !interacted) {
+          interacted = true;
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true }));
+          window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', bubbles: true }));
+        }
+        const ending = document.querySelector('[data-screen="ending"]')?.closest('[role="dialog"]');
+        if (interacted && ending instanceof HTMLElement && !ending.hidden) {
+          return { outcome: 'ending' as const };
+        }
+      }
+      return { outcome: 'timeout' as const };
+    });
+    expect(finalNote.outcome).toBe('ending');
+
+    const finalEnding = page.getByRole('dialog', { name: 'THE BELL REMEMBERS' });
+    await expect(finalEnding).toBeVisible();
+    await expect(finalEnding.locator('.menu-eyebrow')).toHaveText('THE LAST BELL');
+    await expect(finalEnding.locator('#ending-subtitle')).toHaveText(
+      'The Keeper sets down the bell. The water is still.',
+    );
+    const finalValues = finalEnding.locator('.ending-stat-value');
+    await expect(finalValues.nth(0)).toHaveText('4 / 4');
+    await expect(finalValues.nth(1)).toHaveText('225');
+    await expect(finalValues.nth(2)).toHaveText('5');
+    await expect(finalEnding.locator('.ending-stat', { hasText: 'ARSENAL' })).toContainText(
+      '4 / 4',
+    );
+    await expect(finalEnding.locator('.ending-stat', { hasText: 'TIDEGLASS' })).toContainText(
+      'Found',
+    );
+    await finalEnding.getByRole('button', { name: 'Continue the climb' }).click();
+    await expect(finalEnding).toBeHidden();
 
     const completed = await debugState(page);
-    expect(completed.run.visitedRooms).toHaveLength(12);
+    expect(completed.run.visitedRooms).toHaveLength(13);
     expect(completed.run.pickups).toEqual(
       [...PICKUPS, ...KEYED_PICKUPS].map((pickup) => pickup.id).sort(),
     );
     expect(completed.run.brokenSecrets).toEqual(['drowned-gallery', 'upper-gallery']);
-    expect(completed.run.sigils).toEqual(['bellbearer', 'wardenMoss', 'bellThief']);
+    expect(completed.run.sigils).toEqual(['bellbearer', 'wardenMoss', 'bellThief', 'lastKeeper']);
     expect(completed.run.ordeals).toEqual(['bellbearer', 'wardenMoss', 'bellThief']);
     expect(completed.run.healthShards).toBe(4);
-    expect(completed.run.maxHp).toBe(9);
+    expect(completed.run.maxHp).toBe(10);
     expect(completed.run.charmsOwned).toEqual([
       'quickMend',
       'longReach',
@@ -206,33 +327,34 @@ test.describe('M8 complete playthrough', () => {
     expect(completed.run.longline).toBe(true);
     expect(completed.run.checkpoint?.benchId).toBe('terrace-weeping-stone');
     expect(completed.run.tideDoorOpened).toBe(true);
-    expect(completed.save.lastWrite).toBe('reward');
+    expect(completed.run.endingSeen).toBe(true);
+    expect(completed.save.lastWrite).toBe('ending');
     expect(completed.errors).toEqual([]);
 
-    await expect
-      .poll(async () => (await debugState(page)).tickCount)
-      .toBeGreaterThan(completed.tickCount);
+    // Protect the hero while the resumed world settles, then chart the finished run.
+    await page.evaluate(() => window.__game?.debugProtectPlayer());
     await page.keyboard.press('KeyM');
-    const map = page.getByRole('dialog', { name: 'Region Map' });
     await expect(map).toBeVisible();
-    await expect(map.locator('.map-summary')).toContainText('12 / 12');
-    await expect(map.locator('.map-summary')).toContainText('3 / 3');
+    await expect(map.locator('.map-summary')).toContainText('13 / 13');
+    await expect(map.locator('.map-summary')).toContainText('4 / 4');
     await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(0);
     await page.keyboard.press('KeyM');
     await expect(map).toBeHidden();
 
     await reloadGame(page);
     const resumed = await debugState(page);
-    expect(resumed.run.visitedRooms).toHaveLength(12);
-    expect(resumed.run.pickups).toHaveLength(24);
-    expect(resumed.run.sigils).toHaveLength(3);
+    expect(resumed.run.visitedRooms).toHaveLength(13);
+    expect(resumed.run.pickups).toHaveLength(27);
+    expect(resumed.run.sigils).toEqual(['bellbearer', 'wardenMoss', 'bellThief', 'lastKeeper']);
     expect(resumed.run.ordeals).toHaveLength(3);
-    expect(resumed.run.maxHp).toBe(9);
+    expect(resumed.run.maxHp).toBe(10);
     expect(resumed.run.nailLevel).toBe(2);
     expect(resumed.run.shards).toBe(225);
     expect(resumed.run.hookline).toBe(true);
     expect(resumed.run.longline).toBe(true);
     expect(resumed.run.tideDoorOpened).toBe(true);
+    expect(resumed.run.endingSeen).toBe(true);
+    expect(resumed.scene?.boss).toBeNull();
     expect(resumed.save).toMatchObject({ present: true, loaded: true });
     await page.waitForTimeout(400);
     await expect(page.locator('.ending-root')).toBeHidden();

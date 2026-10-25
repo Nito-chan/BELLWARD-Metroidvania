@@ -75,9 +75,9 @@ test.describe('M7 persistence and the region loop', () => {
       'data-room-id',
       'belfry-terrace',
     );
-    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(11);
-    await expect(map.locator('.map-summary')).toContainText('1 / 12');
-    await expect(map.locator('.map-summary')).toContainText('0 / 3');
+    await expect(map.locator('.map-node[data-state="unknown"]')).toHaveCount(12);
+    await expect(map.locator('.map-summary')).toContainText('1 / 13');
+    await expect(map.locator('.map-summary')).toContainText('0 / 4');
     await expect(map.locator('.map-summary')).toContainText('The Weeping Stone');
     await expect(map.locator('.map-node[data-room-id="belfry-terrace"]')).toHaveAttribute(
       'aria-current',
@@ -223,8 +223,8 @@ test.describe('M7 persistence and the region loop', () => {
     await page.keyboard.press('KeyM');
     const map = page.getByRole('dialog', { name: 'Region Map' });
     await expect(map).toBeVisible();
-    await expect(map.locator('.map-summary')).toContainText('3 / 12');
-    await expect(map.locator('.map-summary')).toContainText('1 / 3');
+    await expect(map.locator('.map-summary')).toContainText('3 / 13');
+    await expect(map.locator('.map-summary')).toContainText('1 / 4');
     await expect(map.locator('.map-node[data-room-id="bellbearer-arena"]')).toHaveAttribute(
       'data-state',
       'visited',

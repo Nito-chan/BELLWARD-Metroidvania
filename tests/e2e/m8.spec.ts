@@ -294,7 +294,7 @@ test.describe('M8 progression, secrets and the ending', () => {
     expect(cleared.errors).toEqual([]);
   });
 
-  test('the Tide door needs its bell, then opens the ending exactly once', async ({ page }) => {
+  test('the Tide door needs its bell, then opens the midpoint exactly once', async ({ page }) => {
     await bootGame(page);
     await loadRoom(page, 'bellthief-arena');
     await page.evaluate(() => window.__game?.debugDefeatBoss());
@@ -317,21 +317,21 @@ test.describe('M8 progression, secrets and the ending', () => {
     await collectPickup(page, 'bellthief-arena', { x: 760, y: 320 }, 'bellthief-tide-bell');
 
     await loadRoom(page, 'upper-gallery', { x: 600, y: 320 });
-    const ending = page.getByRole('dialog', { name: /the tide-bell answers/i });
-    await expect(ending).toBeVisible();
-    await expect(ending.locator('.ending-stats')).toContainText('1 / 3');
-    await expect(ending.locator('.ending-stats')).toContainText('CHARMS');
+    const midpoint = page.getByRole('dialog', { name: /the tide-bell answers/i });
+    await expect(midpoint).toBeVisible();
+    await expect(midpoint.locator('.ending-stats')).toContainText('1 / 4');
+    await expect(midpoint.locator('.ending-stats')).toContainText('CHARMS');
     const completed = await debugState(page);
     expect(completed.run.tideDoorOpened).toBe(true);
     expect(completed.scene?.sealOpen).toBe(true);
     expect(completed.save.lastWrite).toBe('reward');
 
     const beforeClose = completed.tickCount;
-    await ending.getByRole('button', { name: 'Return to the belfry' }).click();
-    await expect(ending).toBeHidden();
+    await midpoint.getByRole('button', { name: 'Return to the belfry' }).click();
+    await expect(midpoint).toBeHidden();
     // The trigger is one-shot: standing in it after closing must not reopen the card.
     await page.waitForTimeout(500);
-    await expect(ending).toBeHidden();
+    await expect(midpoint).toBeHidden();
     await expect.poll(async () => (await debugState(page)).tickCount).toBeGreaterThan(beforeClose);
 
     await reloadGame(page);
