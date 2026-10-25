@@ -1,15 +1,16 @@
-# The Final Act — design proposal
+# The Final Act — design and implementation
 
-Status: **proposal, not implemented**. This document covers Censer and Toll, the Ward of
+Status: **implemented**. Censer and Toll, the Ward of Four, the three-phase Last Keeper,
+save v3 and the earned ending are in the build. The Tideglass map UI and the P0 final art
+remain deferred (see Explicitly deferred). This document covers Censer and Toll, the Ward of
 Four, the three-phase Last Keeper, the earned ending, save v3 and the Tideglass pickup.
-The Tideglass map UI remains deferred until all gameplay/content and the P0 art review are
-complete.
 
 ## Goals
 
 - Finish the four-weapon, grapple-first arsenal: **Nail, Hookline, Censer, Toll**.
-- Make the final fight a 10–15 minute test that takes 1–3 hours to learn: phase 2 nearly
-  impossible but fair, phase 3 invulnerable and solved by a method rather than damage.
+- Aim for a 10–15 minute clear (design target, not yet verified in a timed run); the fight
+  should take 1–3 hours to learn: phase 2 nearly impossible but fair, phase 3 invulnerable
+  and solved by a method rather than damage.
 - Give the story a complete, earned ending with no cliffhanger. Adapt the **themes** of
   Ra.One (2011) — a created guardian bound to a role, the creator/creation bond, sacrifice,
   and a remembered world becoming real — not its plot or characters.
@@ -32,17 +33,17 @@ The **Hookline** is the fourth weapon and stays on `cast`. It is always availabl
 traversal and for the Last Keeper's flooded arena. The HUD shows a small four-slot arsenal
 plaque; the current attack weapon is lit, and the Hookline slot is lit when owned.
 
-- New action `weapon`: keyboard `Q`, gamepad Y/Triangle (button 3), touch **Swap**.
+- New action `weapon`: keyboard `Q`, gamepad LB (button 4), touch **Swap**.
 - The touch Swap plaque is at least 44×44 px, sits above the action pad, shows the current
   weapon's icon/name and cycles on tap.
 - Switching is allowed while idle, running, airborne or on a cooldown. It is ignored while
   an attack, guard, hook, dash or heal owns the hero. The new weapon starts on the next
   attack press; it never cancels a swing.
 - The binding document moves to v3. v2 documents gain the default `weapon` binding; v1
-  still migrates through v2.
-- The controls screen, pause binding editor and touch onboarding name **Cycle weapon**.
-  The HUD and pickup banners use the exact weapon names **Nail**, **Censer**, **Toll** and
-  **Hookline**.
+  migrates through v2 to v3.
+- The controls screen and pause binding editor name **Swap weapon**; the touch plaque
+  shortens that to **Swap**. The HUD and pickup banners use the exact weapon names
+  **Nail**, **Censer**, **Toll** and **Hookline**.
 
 Ownership derives from pickups, so no save field is needed:
 
@@ -116,7 +117,7 @@ replay the midpoint card. The final ending gets a new `endingSeen` flag.
 ### Arena
 
 **The Last Bell** is the unseen thirteenth room above the tower: a 60×24 arena with a
-great bell, a flooded floor, two high ledges and four authored Hookline rings. The entrance
+great bell, a flooded floor, two high ledges and three authored Hookline rings. The entrance
 is on the left, the Keeper waits beneath the bell. The Upper Gallery's `upper-tide-watch`
 bench is the runback; there is no bench inside the arena. The exit locks while the Keeper
 is alive, so the fight is a commitment.
@@ -128,9 +129,10 @@ with the normal invulnerability window. The ledges and rings are always the safe
 ### Phase 1 — The Vigil (100%–60% health)
 
 The Keeper fights with the bell-hammer and the chain: readable sweeps, a chain lash, a
-ringing shockwave and a toll that marks the floor. Sixty health; the player learns the
-Censer's commitment and the Toll's resonance. Roughly 3–4 minutes for a first-time player.
-The Keeper can be posture-broken and KNELLed normally; his guard is the bell-hammer.
+ringing shockwave and a toll that marks the floor. Forty health; the player learns the
+Censer's commitment and the Toll's resonance. A first-time player should take roughly 3–4
+minutes (timing target). The Keeper can be posture-broken and KNELLed normally; his guard is
+the bell-hammer.
 
 ### Phase 2 — The Drowning Toll (locked health, three chains)
 
@@ -144,7 +146,7 @@ The Nail cannot break iron; attacking the ward does nothing. The Keeper's patter
 faster and the water rises after each chain. The Toll's resonance can stagger the Keeper and
 buy the Censer wind-up. The Hookline is the only reliable way between the rising ledges.
 The phase ends when the third chain breaks; there is no health race and no random one-shot.
-This is the 6–9 minute "nearly impossible but fair" phase: it is a deterministic execution
+This is the long "nearly impossible but fair" phase: it is a deterministic execution
 test of all four weapons.
 
 ### Phase 3 — The Answer (invulnerable)
@@ -163,11 +165,13 @@ counter in phase 3.
 
 ### Target difficulty and length
 
+These are design targets, not yet confirmed by a recorded full run.
+
 - Phase 1: 3–4 minutes, fair and readable.
 - Phase 2: 6–9 minutes, deterministic flood/chain execution; the player learns the safe
   route and the Toll → Censer cadence.
 - Phase 3: 2–3 minutes, three timed answers and the final interaction.
-- First clear: about 11–16 minutes; learning: 1–3 hours, dominated by phase 2 and the
+- First clear: aim for 10–15 minutes; learning: 1–3 hours, dominated by phase 2 and the
   answer timing. The bench runback is one room, so failure is a lesson, not a walk.
 
 ## The earned ending
@@ -206,8 +210,8 @@ card; the title screen marks the run complete and still offers `Continue the cli
   `ability`, name **Tideglass**, description `A black wax tablet. The belfry's rooms wait to
 be remembered.` The map UI is not wired yet; the pickup and save fact are added now, and
   the existing placeholder map stays untouched until the map phase.
-- `level:check` grows to 13 rooms, 37 anchors and the three new pickups. The Last Bell has
-  two rings, like each boss arena. The mid-fight bench is the existing `upper-tide-watch`.
+- `level:check` reports 13 rooms, 38 anchors, 27 pickups, 3 benches and 3 Ordeals. The Last
+  Bell has three rings, one per chain. The mid-fight bench is the existing `upper-tide-watch`.
 
 ## Tests and proof
 
@@ -230,12 +234,13 @@ be remembered.` The map UI is not wired yet; the pickup and save fact are added 
   procedural placeholders and the existing CC0 audio.
 - Any fast-travel or additional map lenses.
 
-## Open decisions
+## Decisions
 
-1. Weapon switch: the cycle above (`Q` / Y / touch **Swap**) vs. a bench-only loadout. The
-   cycle is recommended because the Last Keeper tests all four weapons in one fight.
+1. Weapon switch: the cycle above (`Q` / gamepad LB / touch **Swap**). The cycle is used
+   because the Last Keeper tests all four weapons in one fight.
 2. Phase 2 chain cadence: Toll opens, Censer breaks, three times, with the water rising after
-   each. The alternative is a pure survival timer.
-3. Phase 3 answer window: 24 ticks, three notes, reset-current-on-miss. The alternative is
-   one longer final note.
-4. Censer/Toll placements (Reliquary / Upper Gallery) and the Ward of Four collection gate.
+   each. The alternative pure survival timer was not taken.
+3. Phase 3 answer window: 24 ticks, three notes, reset-current-on-miss. The one longer final
+   note was not taken.
+4. Censer/Toll placements (Reliquary / Upper Gallery) and the Ward of Four collection gate
+   are used as written above.

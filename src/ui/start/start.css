@@ -785,7 +785,7 @@
 @keyframes title-action-in {
   from {
     opacity: 0;
-    transform: translateX(-0.85rem);
+    transform: translateX(-0.5rem);
   }
 
   to {

@@ -114,6 +114,12 @@ test.describe('Last Keeper final act', () => {
     }));
     expect(width.document).toBeLessThanOrEqual(width.viewport);
 
+    // The entrance animation must not push the primary frame off the left edge at 375 px.
+    const primary = await page.locator('[data-action="primary"]').boundingBox();
+    expect(primary).not.toBeNull();
+    expect(primary!.x).toBeGreaterThanOrEqual(0);
+    expect(primary!.x + primary!.width).toBeLessThanOrEqual(width.viewport + 0.5);
+
     await testInfo.attach('last-keeper-title-375.png', {
       body: await page.screenshot(),
       contentType: 'image/png',
