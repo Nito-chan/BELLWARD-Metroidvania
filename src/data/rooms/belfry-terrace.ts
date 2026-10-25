@@ -80,6 +80,11 @@ function westDoor(row: string): string {
   return `    ${row.slice(4)}`;
 }
 
+/** Carves an east doorway into a row without changing its width. */
+function eastDoor(row: string): string {
+  return `${row.slice(0, -4)}    `;
+}
+
 export const belfryTerrace: RoomDefinition = {
   id: 'belfry-terrace',
   name: 'The Belfry Terrace',
@@ -100,10 +105,10 @@ export const belfryTerrace: RoomDefinition = {
     OPEN_ROW,
     ASCENT_ROW_14,
     OPEN_ROW,
-    ASCENT_ROW_16,
-    westDoor(DAIS_FILL),
-    westDoor(ASCENT_ROW_18),
-    westDoor(STEP_ROW_19),
+    eastDoor(ASCENT_ROW_16),
+    eastDoor(westDoor(DAIS_FILL)),
+    eastDoor(westDoor(ASCENT_ROW_18)),
+    eastDoor(westDoor(STEP_ROW_19)),
     WALK_ROW,
     FILL_ROW,
     FILL_ROW,

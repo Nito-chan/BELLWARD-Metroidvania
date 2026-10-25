@@ -16,7 +16,7 @@ describe('createRoom', () => {
     expect(room.tilemap.width).toBe(60);
     expect(room.tilemap.height).toBe(24);
     expect(room.bounds).toEqual({ x: 0, y: 0, w: 960, h: 384 });
-    expect(room.tilemap.tileCount).toBe(437);
+    expect(room.tilemap.tileCount).toBe(421);
     expect(room.spawn).toEqual({ x: 420, y: 320 });
   });
 
@@ -107,7 +107,7 @@ describe('createRoom', () => {
     expect(() =>
       createRoom({
         ...belfryTerrace,
-        enemies: [{ kind: 'parishioner', x: 950, y: 320 }],
+        enemies: [{ kind: 'adept', x: 30, y: 320 }],
       }),
     ).toThrow(/body overlaps wall/);
   });
