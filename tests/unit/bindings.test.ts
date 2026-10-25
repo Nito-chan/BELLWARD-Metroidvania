@@ -77,6 +77,69 @@ describe('binding document', () => {
     expect(loaded.gamepad.buttons.guard).toEqual([6, 7]);
   });
 
+  it('migrates a v2 document, keeping custom binds and adding the weapon defaults', () => {
+    const storage = new MapStorage();
+    const document = JSON.parse(JSON.stringify(defaultBindings())) as {
+      version: number;
+      keyboard: Record<string, string[]>;
+      gamepad: { buttons: Record<string, number[]>; axes: Record<string, unknown> };
+    };
+    document.version = 2;
+    document.keyboard.jump = ['KeyQ', 'Space'];
+    document.gamepad.buttons.jump = [10];
+    delete document.keyboard.weapon;
+    delete document.gamepad.buttons.weapon;
+    storage.setItem(INPUT.storageKey, JSON.stringify(document));
+
+    const loaded = loadBindings(storage);
+    expect(loaded.version).toBe(INPUT.bindingFormatVersion);
+    expect(loaded.keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(loaded.gamepad.buttons.jump).toEqual([10]);
+    expect(loaded.keyboard.weapon).toEqual(['KeyQ']);
+    expect(loaded.gamepad.buttons.weapon).toEqual([4]);
+  });
+
+  it('keeps a v2 document that already has weapon, only bumping the version', () => {
+    const storage = new MapStorage();
+    const document = JSON.parse(JSON.stringify(defaultBindings())) as {
+      version: number;
+      keyboard: Record<string, string[]>;
+      gamepad: { buttons: Record<string, number[]>; axes: Record<string, unknown> };
+    };
+    document.version = 2;
+    document.keyboard.jump = ['KeyQ', 'Space'];
+    storage.setItem(INPUT.storageKey, JSON.stringify(document));
+
+    const loaded = loadBindings(storage);
+    expect(loaded.version).toBe(INPUT.bindingFormatVersion);
+    expect(loaded.keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(loaded.keyboard.weapon).toEqual(['KeyQ']);
+  });
+
+  it('migrates a chained v1 document straight to v3', () => {
+    const storage = new MapStorage();
+    const document = JSON.parse(JSON.stringify(defaultBindings())) as {
+      version: number;
+      keyboard: Record<string, string[]>;
+      gamepad: { buttons: Record<string, number[]>; axes: Record<string, unknown> };
+    };
+    document.version = 1;
+    document.keyboard.jump = ['KeyQ', 'Space'];
+    delete document.keyboard.guard;
+    delete document.gamepad.buttons.guard;
+    delete document.keyboard.weapon;
+    delete document.gamepad.buttons.weapon;
+    storage.setItem(INPUT.storageKey, JSON.stringify(document));
+
+    const loaded = loadBindings(storage);
+    expect(loaded.version).toBe(INPUT.bindingFormatVersion);
+    expect(loaded.keyboard.jump).toEqual(['KeyQ', 'Space']);
+    expect(loaded.keyboard.guard).toEqual(['KeyF']);
+    expect(loaded.keyboard.weapon).toEqual(['KeyQ']);
+    expect(loaded.gamepad.buttons.guard).toEqual([6, 7]);
+    expect(loaded.gamepad.buttons.weapon).toEqual([4]);
+  });
+
   it('falls back to defaults for malformed, partial and future documents', () => {
     const storage = new MapStorage();
     withoutWarnings(() => {

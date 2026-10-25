@@ -71,8 +71,8 @@ export function defaultBindingsStorage(): BindingsStorage | null {
 /**
  * Reads the saved document. Any corrupt, partial or future-versioned document falls
  * back to the shipped defaults with a warning; the game never boots into half a control
- * scheme. A v1 document is migrated in place: the guard action arrives with its default
- * binds and every other choice survives.
+ * scheme. Documents are migrated forward through each format version, preserving every
+ * custom key and button while inserting newly introduced defaults.
  */
 export function loadBindings(storage = defaultBindingsStorage()): Bindings {
   if (!storage) return defaultBindings();
@@ -89,22 +89,45 @@ export function loadBindings(storage = defaultBindingsStorage()): Bindings {
 }
 
 /**
- * The guard action arrived in binding format v2. A v1 document keeps every custom key
- * and gains the shipped guard defaults, so the hand the player trained does not reset.
+ * Migrates a saved binding document forward through each format version, preserving every
+ * custom key and button while inserting newly introduced defaults.
+ *
+ * v1 → v2: the `guard` action arrived with its default binds.
+ * v2 → v3: the `weapon` action arrived with its default binds (keyboard `Q`, gamepad LB).
+ *
+ * A document at or above the current version is returned unchanged; older or malformed
+ * documents are passed through so `isBindings` can reject them cleanly.
  */
 export function migrateBindings(value: unknown): unknown {
-  if (!isRecord(value) || value.version !== 1) return value;
-  if (!isRecord(value.keyboard)) return value;
+  if (!isRecord(value)) return value;
+  let migrated: Record<string, unknown> = value;
+  const declared =
+    typeof migrated.version === 'number' ? migrated.version : INPUT.bindingFormatVersion;
 
-  const keyboard: Record<string, unknown> = { ...value.keyboard };
-  if (keyboard.guard === undefined) keyboard.guard = [...KEY_BINDINGS.guard];
+  // v1 → v2: insert the guard action defaults where missing.
+  if (declared === 1) {
+    const keyboard = { ...(isRecord(migrated.keyboard) ? migrated.keyboard : {}) };
+    if (keyboard.guard === undefined) keyboard.guard = [...KEY_BINDINGS.guard];
+    const gamepad = isRecord(migrated.gamepad) ? { ...migrated.gamepad } : {};
+    const buttons = isRecord(gamepad.buttons) ? { ...gamepad.buttons } : {};
+    if (buttons.guard === undefined) buttons.guard = [...(PAD_BUTTONS.guard ?? [])];
+    gamepad.buttons = buttons;
+    migrated = { ...migrated, version: 2, keyboard, gamepad };
+  }
 
-  const gamepad: Record<string, unknown> = isRecord(value.gamepad) ? { ...value.gamepad } : {};
-  const buttons: Record<string, unknown> = isRecord(gamepad.buttons) ? { ...gamepad.buttons } : {};
-  if (buttons.guard === undefined) buttons.guard = [...(PAD_BUTTONS.guard ?? [])];
-  gamepad.buttons = buttons;
+  // v2 → v3: insert the weapon action defaults where missing. A v1 document also
+  // passes through here after its guard migration so it lands on the current version.
+  if (declared <= 2) {
+    const keyboard = { ...(isRecord(migrated.keyboard) ? migrated.keyboard : {}) };
+    if (keyboard.weapon === undefined) keyboard.weapon = [...KEY_BINDINGS.weapon];
+    const gamepad = isRecord(migrated.gamepad) ? { ...migrated.gamepad } : {};
+    const buttons = isRecord(gamepad.buttons) ? { ...gamepad.buttons } : {};
+    if (buttons.weapon === undefined) buttons.weapon = [...(PAD_BUTTONS.weapon ?? [])];
+    gamepad.buttons = buttons;
+    migrated = { ...migrated, version: 3, keyboard, gamepad };
+  }
 
-  return { ...value, version: INPUT.bindingFormatVersion, keyboard, gamepad };
+  return migrated;
 }
 
 /** Persists the document. A blocked storage must never break the game. */

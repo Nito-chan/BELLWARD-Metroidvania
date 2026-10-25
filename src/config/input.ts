@@ -33,7 +33,7 @@ export const INPUT = {
   /** Standard-mapping gamepad polled each tick; the first connected pad wins. */
   gamepadIndex: 0,
   /** Version of the serialized binding document (the M5 binding editor reads this). */
-  bindingFormatVersion: 2,
+  bindingFormatVersion: 3,
   /** localStorage key for the persisted binding document. Reads/writes are try/catch. */
   storageKey: 'bellward.bindings.v1',
 } as const;
